@@ -17,15 +17,20 @@ entry:
   store i8 99, ptr %5
   %6 = getelementptr [4 x i8], ptr %v1, i32 0, i32 3
   store i8 0, ptr %6
-  %7 = getelementptr [3 x i32], ptr %v0, i32 0, i32 1
-  %8 = load i32, ptr %7
-  %9 = getelementptr [4 x i8], ptr %v1, i32 0, i32 0
-  %10 = load i8, ptr %9
-  %11 = getelementptr [4 x i8], ptr %v1, i32 0, i32 2
-  %12 = load i8, ptr %11
-  %13 = sext i8 %10 to i32
-  %14 = sext i8 %12 to i32
-  %15 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %8, i32 %13, i32 %14)
+  %7 = getelementptr [19 x i8], ptr @.str.0, i32 0, i32 0
+  %8 = getelementptr [3 x i32], ptr %v0, i32 0, i32 0
+  %9 = mul i32 1, 4
+  %10 = getelementptr i8, ptr %8, i32 %9
+  %11 = load i32, ptr %10
+  %12 = getelementptr [4 x i8], ptr %v1, i32 0, i32 0
+  %13 = getelementptr i8, ptr %12, i32 0
+  %14 = load i8, ptr %13
+  %15 = getelementptr [4 x i8], ptr %v1, i32 0, i32 0
+  %16 = getelementptr i8, ptr %15, i32 2
+  %17 = load i8, ptr %16
+  %18 = sext i8 %14 to i32
+  %19 = sext i8 %17 to i32
+  %20 = call i32 (ptr, ...) @printf(ptr %7, i32 %11, i32 %18, i32 %19)
   ret i32 0
 }
 

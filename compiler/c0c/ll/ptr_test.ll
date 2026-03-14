@@ -12,18 +12,27 @@ entry:
   store i32 %3, ptr %0
   %v2 = alloca [3 x i32]
   %4 = getelementptr [3 x i32], ptr %v2, i32 0, i32 0
-  store i32 1, ptr %4
-  %5 = getelementptr [3 x i32], ptr %v2, i32 0, i32 1
-  store i32 2, ptr %5
-  %6 = getelementptr [3 x i32], ptr %v2, i32 0, i32 2
-  store i32 3, ptr %6
+  %5 = mul i32 0, 4
+  %6 = getelementptr i8, ptr %4, i32 %5
+  store i32 1, ptr %6
+  %7 = getelementptr [3 x i32], ptr %v2, i32 0, i32 0
+  %8 = mul i32 1, 4
+  %9 = getelementptr i8, ptr %7, i32 %8
+  store i32 2, ptr %9
+  %10 = getelementptr [3 x i32], ptr %v2, i32 0, i32 0
+  %11 = mul i32 2, 4
+  %12 = getelementptr i8, ptr %10, i32 %11
+  store i32 3, ptr %12
   %v3 = alloca i32
-  %7 = getelementptr [3 x i32], ptr %v2, i32 0, i32 1
-  %8 = load i32, ptr %7
-  store i32 %8, ptr %v3
-  %9 = load i32, ptr %v0
-  %10 = load i32, ptr %v3
-  %11 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %9, i32 %10)
+  %13 = getelementptr [3 x i32], ptr %v2, i32 0, i32 0
+  %14 = mul i32 1, 4
+  %15 = getelementptr i8, ptr %13, i32 %14
+  %16 = load i32, ptr %15
+  store i32 %16, ptr %v3
+  %17 = getelementptr [11 x i8], ptr @.str.0, i32 0, i32 0
+  %18 = load i32, ptr %v0
+  %19 = load i32, ptr %v3
+  %20 = call i32 (ptr, ...) @printf(ptr %17, i32 %18, i32 %19)
   ret i32 0
 }
 

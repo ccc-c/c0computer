@@ -3,27 +3,38 @@ define i32 @main() {
 entry:
   %v0 = alloca [3 x i32]
   %0 = getelementptr [3 x i32], ptr %v0, i32 0, i32 0
-  store i32 10, ptr %0
-  %1 = getelementptr [3 x i32], ptr %v0, i32 0, i32 1
-  store i32 20, ptr %1
-  %2 = getelementptr [3 x i32], ptr %v0, i32 0, i32 2
-  store i32 30, ptr %2
-  %v1 = alloca ptr
+  %1 = mul i32 0, 4
+  %2 = getelementptr i8, ptr %0, i32 %1
+  store i32 10, ptr %2
   %3 = getelementptr [3 x i32], ptr %v0, i32 0, i32 0
-  store ptr %3, ptr %v1
+  %4 = mul i32 1, 4
+  %5 = getelementptr i8, ptr %3, i32 %4
+  store i32 20, ptr %5
+  %6 = getelementptr [3 x i32], ptr %v0, i32 0, i32 0
+  %7 = mul i32 2, 4
+  %8 = getelementptr i8, ptr %6, i32 %7
+  store i32 30, ptr %8
+  %v1 = alloca ptr
+  %9 = getelementptr [3 x i32], ptr %v0, i32 0, i32 0
+  %10 = mul i32 0, 4
+  %11 = getelementptr i8, ptr %9, i32 %10
+  store ptr %11, ptr %v1
   %v2 = alloca i32
-  %4 = load ptr, ptr %v1
-  %5 = getelementptr i32, ptr %4, i32 1
-  %6 = load i32, ptr %5
-  store i32 %6, ptr %v2
+  %12 = load ptr, ptr %v1
+  %13 = mul i32 1, 4
+  %14 = getelementptr i8, ptr %12, i32 %13
+  %15 = load i32, ptr %14
+  store i32 %15, ptr %v2
   %v3 = alloca i32
-  %7 = load ptr, ptr %v1
-  %8 = getelementptr i32, ptr %7, i32 2
-  %9 = load i32, ptr %8
-  store i32 %9, ptr %v3
-  %10 = load i32, ptr %v2
-  %11 = load i32, ptr %v3
-  %12 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %10, i32 %11)
+  %16 = load ptr, ptr %v1
+  %17 = mul i32 2, 4
+  %18 = getelementptr i8, ptr %16, i32 %17
+  %19 = load i32, ptr %18
+  store i32 %19, ptr %v3
+  %20 = getelementptr [11 x i8], ptr @.str.0, i32 0, i32 0
+  %21 = load i32, ptr %v2
+  %22 = load i32, ptr %v3
+  %23 = call i32 (ptr, ...) @printf(ptr %20, i32 %21, i32 %22)
   ret i32 0
 }
 

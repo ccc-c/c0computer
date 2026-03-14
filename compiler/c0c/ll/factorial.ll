@@ -22,8 +22,9 @@ entry:
   %v0 = alloca i32
   %0 = call i32 @fact(i32 5)
   store i32 %0, ptr %v0
-  %1 = load i32, ptr %v0
-  %2 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %1)
+  %1 = getelementptr [12 x i8], ptr @.str.0, i32 0, i32 0
+  %2 = load i32, ptr %v0
+  %3 = call i32 (ptr, ...) @printf(ptr %1, i32 %2)
   ret i32 0
 }
 

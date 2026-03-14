@@ -44,6 +44,7 @@ typedef struct {
     char ir[64];
     CType ty;
     int array_len;
+    int struct_id;
 } VarSlot;
 
 static VarSlot var_slots[512];
@@ -51,8 +52,13 @@ static int var_cnt = 0;
 static int scope_marks[128];
 static int scope_depth = 0;
 
-static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR; }
-static CType base_of(CType ty) { return (ty == TY_CHAR_PTR) ? TY_CHAR : TY_INT; }
+static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR; }
+static CType base_of(CType ty) {
+    if (ty == TY_CHAR_PTR) return TY_CHAR;
+    if (ty == TY_INT_PTR) return TY_INT;
+    if (ty == TY_STRUCT_PTR) return TY_STRUCT;
+    return TY_INT;
+}
 static const char* llvm_type(CType ty) {
     if (ty == TY_CHAR) return "i8";
     if (ty == TY_INT) return "i32";
@@ -61,7 +67,9 @@ static const char* llvm_type(CType ty) {
 }
 static const char* llvm_elem_type(CType ty) {
     CType base = is_ptr(ty) ? base_of(ty) : ty;
-    return (base == TY_CHAR) ? "i8" : "i32";
+    if (base == TY_CHAR) return "i8";
+    if (base == TY_INT) return "i32";
+    return "i8";
 }
 
 static int stmt_ends_with_return(ASTNode *node);
@@ -70,6 +78,7 @@ static int stmt_may_fallthrough(ASTNode *node);
 static int stmt_list_may_fallthrough(ASTNode *node);
 static Value gen_cond(ASTNode *node);
 static Value gen_expr(ASTNode *node);
+static Value gen_lvalue_addr(ASTNode *node);
 
 static int is_param(ASTNode *params, const char *name) {
     ASTNode *pnode = params;
@@ -96,12 +105,13 @@ static void var_pop_scope(void) {
     var_cnt = scope_marks[--scope_depth];
 }
 
-static void var_add(const char *name, const char *ir, CType ty, int array_len) {
+static void var_add(const char *name, const char *ir, CType ty, int array_len, int struct_id) {
     if (var_cnt >= 512) error("變數表已滿");
     strcpy(var_slots[var_cnt].name, name);
     strcpy(var_slots[var_cnt].ir, ir);
     var_slots[var_cnt].ty = ty;
     var_slots[var_cnt].array_len = array_len;
+    var_slots[var_cnt].struct_id = struct_id;
     var_cnt++;
 }
 
@@ -111,6 +121,24 @@ static VarSlot* var_find(const char *name) {
     }
     error("找不到變數宣告");
     return NULL;
+}
+
+static int struct_size(int struct_id) {
+    if (struct_id < 0 || struct_id >= g_struct_def_cnt) error("struct id 錯誤");
+    return g_struct_defs[struct_id].size;
+}
+
+static int type_size(CType ty, int struct_id) {
+    if (ty == TY_CHAR) return 1;
+    if (ty == TY_INT) return 4;
+    if (ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR) return 8;
+    if (ty == TY_STRUCT) return struct_size(struct_id);
+    return 0;
+}
+
+static int elem_size(CType ptr_ty, int struct_id) {
+    if (!is_ptr(ptr_ty)) return 0;
+    return type_size(base_of(ptr_ty), struct_id);
 }
 
 static void build_func_sigs(ASTNode *funcs) {
@@ -235,6 +263,91 @@ static Value to_i8(Value v) {
     return value_from_reg(res, VT_I8);
 }
 
+static Value gen_lvalue_addr(ASTNode *node) {
+    if (node->type == AST_VAR) {
+        VarSlot *slot = var_find(node->name);
+        if (slot->array_len > 0) {
+            int r = reg_cnt++;
+            if (base_of(slot->ty) == TY_STRUCT) {
+                int total = slot->array_len * struct_size(slot->struct_id);
+                fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 0\n",
+                        r, total, slot->ir);
+            } else {
+                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
+                        r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
+            }
+            char *res = malloc(64);
+            sprintf(res, "%%%d", r);
+            return value_from_reg(res, VT_PTR);
+        }
+        char *res = malloc(64);
+        sprintf(res, "%%%s", slot->ir);
+        return value_from_reg(res, VT_PTR);
+    }
+    if (node->type == AST_DEREF) {
+        return gen_expr(node->left);
+    }
+    if (node->type == AST_INDEX) {
+        ASTNode *base = node->left;
+        Value base_ptr;
+        if (base->type == AST_VAR) {
+            VarSlot *slot = var_find(base->name);
+            if (slot->array_len > 0) {
+                int r = reg_cnt++;
+                if (base_of(slot->ty) == TY_STRUCT) {
+                    int total = slot->array_len * struct_size(slot->struct_id);
+                    fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 0\n",
+                            r, total, slot->ir);
+                } else {
+                    fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
+                            r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
+                }
+                char *res = malloc(64);
+                sprintf(res, "%%%d", r);
+                base_ptr = value_from_reg(res, VT_PTR);
+            } else {
+                base_ptr = gen_expr(base);
+            }
+        } else {
+            base_ptr = gen_expr(base);
+        }
+        Value idx = to_i32(gen_expr(node->right));
+        int esz = elem_size(base->ty, base->struct_id);
+        if (esz <= 0) esz = 1;
+        if (esz != 1) {
+            int r_mul = reg_cnt++;
+            fprintf(out_fp, "  %%%d = mul i32 %s, %d\n", r_mul, idx.reg, esz);
+            free(idx.reg);
+            char *mul_reg = malloc(64);
+            sprintf(mul_reg, "%%%d", r_mul);
+            idx = value_from_reg(mul_reg, VT_I32);
+        }
+        int r = reg_cnt++;
+        fprintf(out_fp, "  %%%d = getelementptr i8, ptr %s, i32 %s\n", r, base_ptr.reg, idx.reg);
+        free(base_ptr.reg);
+        free(idx.reg);
+        char *res = malloc(64);
+        sprintf(res, "%%%d", r);
+        return value_from_reg(res, VT_PTR);
+    }
+    if (node->type == AST_MEMBER) {
+        Value base_ptr;
+        if (node->op) {
+            base_ptr = gen_expr(node->left);
+        } else {
+            base_ptr = gen_lvalue_addr(node->left);
+        }
+        int r = reg_cnt++;
+        fprintf(out_fp, "  %%%d = getelementptr i8, ptr %s, i32 %d\n", r, base_ptr.reg, node->val);
+        free(base_ptr.reg);
+        char *res = malloc(64);
+        sprintf(res, "%%%d", r);
+        return value_from_reg(res, VT_PTR);
+    }
+    error("不支援的取址");
+    return value_from_reg(NULL, VT_PTR);
+}
+
 static Value gen_expr(ASTNode *node) {
     if (node->type == AST_NUM) {
         char *res = malloc(64);
@@ -243,17 +356,32 @@ static Value gen_expr(ASTNode *node) {
     } else if (node->type == AST_STR) {
         int id = string_cnt++;
         strcpy(string_table[id], node->str_val);
+        int len = (int)strlen(node->str_val) + 1;
+        int r = reg_cnt++;
+        fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr @.str.%d, i32 0, i32 0\n",
+                r, len, id);
         char *res = malloc(64);
-        sprintf(res, "@.str.%d", id);
+        sprintf(res, "%%%d", r);
         return value_from_reg(res, VT_PTR);
     } else if (node->type == AST_VAR) {
         VarSlot *slot = var_find(node->name);
         if (slot->array_len > 0) {
             int r = reg_cnt++;
-            fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
-                    r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
+            if (base_of(slot->ty) == TY_STRUCT) {
+                int total = slot->array_len * struct_size(slot->struct_id);
+                fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 0\n",
+                        r, total, slot->ir);
+            } else {
+                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
+                        r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
+            }
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
+            return value_from_reg(res, VT_PTR);
+        }
+        if (slot->ty == TY_STRUCT) {
+            char *res = malloc(64);
+            sprintf(res, "%%%s", slot->ir);
             return value_from_reg(res, VT_PTR);
         }
         int r = reg_cnt++;
@@ -328,51 +456,12 @@ static Value gen_expr(ASTNode *node) {
         if (!is_printf && sig && sig->ret == TY_CHAR) return value_from_reg(res, VT_I8);
         return value_from_reg(res, VT_I32);
     } else if (node->type == AST_ADDR) {
-        ASTNode *lv = node->left;
-        if (lv->type == AST_DEREF) {
-            return gen_expr(lv->left);
-        }
-        if (lv->type == AST_VAR) {
-            VarSlot *slot = var_find(lv->name);
-            if (slot->array_len > 0) {
-                int r = reg_cnt++;
-                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
-                        r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
-                char *res = malloc(64);
-                sprintf(res, "%%%d", r);
-                return value_from_reg(res, VT_PTR);
-            }
-            char *res = malloc(64);
-            sprintf(res, "%%%s", slot->ir);
-            return value_from_reg(res, VT_PTR);
-        }
-        if (lv->type == AST_INDEX) {
-            ASTNode *base = lv->left;
-            Value idx = to_i32(gen_expr(lv->right));
-            int r = reg_cnt++;
-            if (base->type == AST_VAR) {
-                VarSlot *slot = var_find(base->name);
-                if (slot->array_len > 0) {
-                    fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 %s\n",
-                            r, slot->array_len, llvm_elem_type(slot->ty), slot->ir, idx.reg);
-                } else {
-                    fprintf(out_fp, "  %%%d = getelementptr %s, ptr %%%s, i32 %s\n",
-                            r, llvm_elem_type(slot->ty), slot->ir, idx.reg);
-                }
-            } else {
-                Value base_ptr = gen_expr(base);
-                fprintf(out_fp, "  %%%d = getelementptr %s, ptr %s, i32 %s\n",
-                        r, llvm_elem_type(base->ty), base_ptr.reg, idx.reg);
-                free(base_ptr.reg);
-            }
-            free(idx.reg);
-            char *res = malloc(64);
-            sprintf(res, "%%%d", r);
-            return value_from_reg(res, VT_PTR);
-        }
-        error("不支援的取址");
+        return gen_lvalue_addr(node->left);
     } else if (node->type == AST_DEREF) {
         Value ptr = gen_expr(node->left);
+        if (node->ty == TY_STRUCT) {
+            return ptr;
+        }
         int r = reg_cnt++;
         fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r, llvm_elem_type(node->ty), ptr.reg);
         free(ptr.reg);
@@ -380,7 +469,21 @@ static Value gen_expr(ASTNode *node) {
         sprintf(res, "%%%d", r);
         return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
     } else if (node->type == AST_INDEX) {
-        Value addr = gen_expr(&(ASTNode){.type=AST_ADDR,.left=node});
+        Value addr = gen_lvalue_addr(node);
+        if (node->ty == TY_STRUCT) {
+            return addr;
+        }
+        int r = reg_cnt++;
+        fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r, llvm_elem_type(node->ty), addr.reg);
+        free(addr.reg);
+        char *res = malloc(64);
+        sprintf(res, "%%%d", r);
+        return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
+    } else if (node->type == AST_MEMBER) {
+        Value addr = gen_lvalue_addr(node);
+        if (node->ty == TY_STRUCT) {
+            return addr;
+        }
         int r = reg_cnt++;
         fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r, llvm_elem_type(node->ty), addr.reg);
         free(addr.reg);
@@ -425,6 +528,10 @@ static Value gen_expr(ASTNode *node) {
             Value l = gen_expr(node->left);
             Value r;
             if (is_ptr(node->left->ty) && is_ptr(node->right->ty)) {
+                if (node->left->ty != node->right->ty ||
+                    (node->left->ty == TY_STRUCT_PTR && node->left->struct_id != node->right->struct_id)) {
+                    error("指標比較型別不相容");
+                }
                 r = gen_expr(node->right);
             } else {
                 ASTNode *other = is_ptr(node->left->ty) ? node->right : node->left;
@@ -448,34 +555,91 @@ static Value gen_expr(ASTNode *node) {
 
         if ((node->op == TK_LT || node->op == TK_GT || node->op == TK_LE || node->op == TK_GE) &&
             (is_ptr(node->left->ty) || is_ptr(node->right->ty))) {
-            error("不支援指標大小比較");
+            if (!is_ptr(node->left->ty) || !is_ptr(node->right->ty)) {
+                error("指標只能與指標比較");
+            }
+            if (node->left->ty != node->right->ty ||
+                (node->left->ty == TY_STRUCT_PTR && node->left->struct_id != node->right->struct_id)) {
+                error("指標比較型別不相容");
+            }
+            Value l = gen_expr(node->left);
+            Value r = gen_expr(node->right);
+            int rl = reg_cnt++;
+            int rr = reg_cnt++;
+            fprintf(out_fp, "  %%%d = ptrtoint ptr %s to i64\n", rl, l.reg);
+            fprintf(out_fp, "  %%%d = ptrtoint ptr %s to i64\n", rr, r.reg);
+            int rcmp = reg_cnt++;
+            const char *op = (node->op == TK_LT) ? "slt" :
+                             (node->op == TK_LE) ? "sle" :
+                             (node->op == TK_GT) ? "sgt" : "sge";
+            fprintf(out_fp, "  %%%d = icmp %s i64 %%%d, %%%d\n", rcmp, op, rl, rr);
+            free(l.reg);
+            free(r.reg);
+            char *res = malloc(64);
+            sprintf(res, "%%%d", rcmp);
+            return value_from_reg(res, VT_I1);
         }
 
         if ((node->op == TK_PLUS || node->op == TK_MINUS) &&
             (is_ptr(node->left->ty) || is_ptr(node->right->ty))) {
-            ASTNode *ptr_node = is_ptr(node->left->ty) ? node->left : node->right;
-            ASTNode *int_node = is_ptr(node->left->ty) ? node->right : node->left;
-            if (node->op == TK_MINUS && is_ptr(node->right->ty)) {
-                error("不支援指標相減");
-            }
-            Value base = gen_expr(ptr_node);
-            Value idx = to_i32(gen_expr(int_node));
-            if (node->op == TK_MINUS && is_ptr(node->left->ty)) {
-                int rneg = reg_cnt++;
-                fprintf(out_fp, "  %%%d = sub i32 0, %s\n", rneg, idx.reg);
+            if (is_ptr(node->left->ty) && is_ptr(node->right->ty)) {
+                if (node->op != TK_MINUS) error("不支援指標相加");
+                if (node->left->ty != node->right->ty ||
+                    (node->left->ty == TY_STRUCT_PTR && node->left->struct_id != node->right->struct_id)) {
+                    error("指標相減型別不相容");
+                }
+                Value l = gen_expr(node->left);
+                Value r = gen_expr(node->right);
+                int rl = reg_cnt++;
+                int rr = reg_cnt++;
+                fprintf(out_fp, "  %%%d = ptrtoint ptr %s to i64\n", rl, l.reg);
+                fprintf(out_fp, "  %%%d = ptrtoint ptr %s to i64\n", rr, r.reg);
+                int rdiff = reg_cnt++;
+                fprintf(out_fp, "  %%%d = sub i64 %%%d, %%%d\n", rdiff, rl, rr);
+                int esz = elem_size(node->left->ty, node->left->struct_id);
+                int rdiv = rdiff;
+                if (esz > 1) {
+                    rdiv = reg_cnt++;
+                    fprintf(out_fp, "  %%%d = sdiv i64 %%%d, %d\n", rdiv, rdiff, esz);
+                }
+                int rtr = reg_cnt++;
+                fprintf(out_fp, "  %%%d = trunc i64 %%%d to i32\n", rtr, rdiv);
+                free(l.reg);
+                free(r.reg);
+                char *res = malloc(64);
+                sprintf(res, "%%%d", rtr);
+                return value_from_reg(res, VT_I32);
+            } else {
+                ASTNode *ptr_node = is_ptr(node->left->ty) ? node->left : node->right;
+                ASTNode *int_node = is_ptr(node->left->ty) ? node->right : node->left;
+                Value base = gen_expr(ptr_node);
+                Value idx = to_i32(gen_expr(int_node));
+                if (node->op == TK_MINUS && is_ptr(node->left->ty)) {
+                    int rneg = reg_cnt++;
+                    fprintf(out_fp, "  %%%d = sub i32 0, %s\n", rneg, idx.reg);
+                    free(idx.reg);
+                    char *neg = malloc(64);
+                    sprintf(neg, "%%%d", rneg);
+                    idx = value_from_reg(neg, VT_I32);
+                }
+                int esz = elem_size(ptr_node->ty, ptr_node->struct_id);
+                if (esz > 1) {
+                    int r_mul = reg_cnt++;
+                    fprintf(out_fp, "  %%%d = mul i32 %s, %d\n", r_mul, idx.reg, esz);
+                    free(idx.reg);
+                    char *mul = malloc(64);
+                    sprintf(mul, "%%%d", r_mul);
+                    idx = value_from_reg(mul, VT_I32);
+                }
+                int r = reg_cnt++;
+                fprintf(out_fp, "  %%%d = getelementptr i8, ptr %s, i32 %s\n",
+                        r, base.reg, idx.reg);
+                free(base.reg);
                 free(idx.reg);
-                char *neg = malloc(64);
-                sprintf(neg, "%%%d", rneg);
-                idx = value_from_reg(neg, VT_I32);
+                char *res = malloc(64);
+                sprintf(res, "%%%d", r);
+                return value_from_reg(res, VT_PTR);
             }
-            int r = reg_cnt++;
-            fprintf(out_fp, "  %%%d = getelementptr %s, ptr %s, i32 %s\n",
-                    r, llvm_elem_type(ptr_node->ty), base.reg, idx.reg);
-            free(base.reg);
-            free(idx.reg);
-            char *res = malloc(64);
-            sprintf(res, "%%%d", r);
-            return value_from_reg(res, VT_PTR);
         }
 
         Value left = to_i32(gen_expr(node->left));
@@ -564,37 +728,54 @@ static void gen_stmt(ASTNode *node) {
             const char *llvm_ty = llvm_type(node->ty);
             char ir_name[64];
             snprintf(ir_name, sizeof(ir_name), "v%d", var_id++);
-            var_add(node->name, ir_name, node->ty, node->array_len);
+            var_add(node->name, ir_name, node->ty, node->array_len, node->struct_id);
             if (node->array_len > 0) {
-                fprintf(out_fp, "  %%%s = alloca [%d x %s]\n", ir_name, node->array_len, llvm_elem_type(node->ty));
-                if (node->init_kind == 2) {
-                    int idx = 0;
-                    ASTNode *cur = node->left;
-                    while (cur && idx < node->array_len) {
-                        Value val = gen_expr(cur);
-                        Value store_val = (base_of(node->ty) == TY_CHAR) ? to_i8(val) : to_i32(val);
-                        int r = reg_cnt++;
-                        fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 %d\n",
-                                r, node->array_len, llvm_elem_type(node->ty), ir_name, idx);
-                        fprintf(out_fp, "  store %s %s, ptr %%%d\n",
-                                (base_of(node->ty) == TY_CHAR) ? "i8" : "i32", store_val.reg, r);
-                        free(store_val.reg);
-                        cur = cur->next;
-                        idx++;
-                    }
-                } else if (node->init_kind == 3) {
-                    int len = (int)strlen(node->str_val);
-                    int limit = node->array_len;
-                    for (int i = 0; i < limit; i++) {
-                        int ch = (i < len) ? (unsigned char)node->str_val[i] : 0;
-                        if (i == len) ch = 0;
-                        int r = reg_cnt++;
-                        fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 %d\n",
-                                r, node->array_len, ir_name, i);
-                        fprintf(out_fp, "  store i8 %d, ptr %%%d\n", ch, r);
+                if (base_of(node->ty) == TY_STRUCT) {
+                    int total = node->array_len * struct_size(node->struct_id);
+                    fprintf(out_fp, "  %%%s = alloca [%d x i8]\n", ir_name, total);
+                    if (node->init_kind != 0) error("不支援 struct 陣列初始化");
+                } else {
+                    fprintf(out_fp, "  %%%s = alloca [%d x %s]\n", ir_name, node->array_len, llvm_elem_type(node->ty));
+                    if (node->init_kind == 2) {
+                        int idx = 0;
+                        ASTNode *cur = node->left;
+                        while (cur && idx < node->array_len) {
+                            Value val = gen_expr(cur);
+                            Value store_val = (base_of(node->ty) == TY_CHAR) ? to_i8(val) : to_i32(val);
+                            int r = reg_cnt++;
+                            fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 %d\n",
+                                    r, node->array_len, llvm_elem_type(node->ty), ir_name, idx);
+                            fprintf(out_fp, "  store %s %s, ptr %%%d\n",
+                                    (base_of(node->ty) == TY_CHAR) ? "i8" : "i32", store_val.reg, r);
+                            free(store_val.reg);
+                            cur = cur->next;
+                            idx++;
+                        }
+                        for (int i = idx; i < node->array_len; i++) {
+                            int r = reg_cnt++;
+                            fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 %d\n",
+                                    r, node->array_len, llvm_elem_type(node->ty), ir_name, i);
+                            fprintf(out_fp, "  store %s 0, ptr %%%d\n",
+                                    (base_of(node->ty) == TY_CHAR) ? "i8" : "i32", r);
+                        }
+                    } else if (node->init_kind == 3) {
+                        int len = (int)strlen(node->str_val);
+                        int limit = node->array_len;
+                        for (int i = 0; i < limit; i++) {
+                            int ch = (i < len) ? (unsigned char)node->str_val[i] : 0;
+                            if (i == len) ch = 0;
+                            int r = reg_cnt++;
+                            fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 %d\n",
+                                    r, node->array_len, ir_name, i);
+                            fprintf(out_fp, "  store i8 %d, ptr %%%d\n", ch, r);
+                        }
                     }
                 }
+            } else if (node->ty == TY_STRUCT) {
+                int sz = struct_size(node->struct_id);
+                fprintf(out_fp, "  %%%s = alloca [%d x i8]\n", ir_name, sz);
             } else if (is_param(current_params, node->name)) {
+                if (node->ty == TY_STRUCT) error("不支援 struct 參數");
                 fprintf(out_fp, "  %%%s = alloca %s\n", ir_name, llvm_ty);
                 fprintf(out_fp, "  store %s %%%s, ptr %%%s\n", llvm_ty, node->name, ir_name);
             } else {
@@ -611,7 +792,8 @@ static void gen_stmt(ASTNode *node) {
             }
         } else if (node->type == AST_ASSIGN) {
             const char *llvm_ty = llvm_type(node->ty);
-            Value addr = gen_expr(&(ASTNode){.type=AST_ADDR,.left=node->left});
+            if (node->ty == TY_STRUCT) error("不支援 struct 賦值");
+            Value addr = gen_lvalue_addr(node->left);
             if (node->op == TK_PLUSEQ) {
                 if (is_ptr(node->ty)) error("指標不支援 +=");
                 int r_old = reg_cnt++;
@@ -643,8 +825,10 @@ static void gen_stmt(ASTNode *node) {
             }
             free(addr.reg);
         } else if (node->type == AST_EXPR_STMT) {
-            Value val = gen_expr(node->left);
-            if (val.reg) free(val.reg);
+            if (node->left) {
+                Value val = gen_expr(node->left);
+                if (val.reg) free(val.reg);
+            }
         } else if (node->type == AST_BLOCK) {
             var_push_scope();
             gen_stmt(node->left);
@@ -904,16 +1088,27 @@ void gen_llvm_ir(ASTNode *funcs, FILE *out) {
     for (int i = 0; i < string_cnt; i++) {
         char llvm_str[512] = {0};
         int len = 0;
-        char *p = string_table[i];
+        int out = 0;
+        unsigned char *p = (unsigned char*)string_table[i];
         while (*p) {
-            if (*p == '\\' && *(p+1) == 'n') {
-                strcat(llvm_str, "\\0A");
-                len++; p += 2;
+            unsigned char c = *p++;
+            if (c == '\n') {
+                out += sprintf(llvm_str + out, "\\0A");
+            } else if (c == '\t') {
+                out += sprintf(llvm_str + out, "\\09");
+            } else if (c == '\r') {
+                out += sprintf(llvm_str + out, "\\0D");
+            } else if (c == '\\') {
+                out += sprintf(llvm_str + out, "\\5C");
+            } else if (c == '\"') {
+                out += sprintf(llvm_str + out, "\\22");
+            } else if (c < 32 || c >= 127) {
+                out += sprintf(llvm_str + out, "\\%02X", c);
             } else {
-                int l = strlen(llvm_str);
-                llvm_str[l] = *p; llvm_str[l+1] = '\0';
-                len++; p++;
+                llvm_str[out++] = (char)c;
+                llvm_str[out] = '\0';
             }
+            len++;
         }
         strcat(llvm_str, "\\00"); len++;
         fprintf(out_fp, "@.str.%d = private unnamed_addr constant [%d x i8] c\"%s\", align 1\n", i, len, llvm_str);

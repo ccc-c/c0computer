@@ -44,7 +44,20 @@ void next_token(void) {
     if (*p == '"') {
         advance_char();
         char *s = cur_tok.str_val;
-        while (*p != '\0' && *p != '"') { *s++ = *p; advance_char(); }
+        while (*p != '\0' && *p != '"') {
+            if (*p == '\\') {
+                advance_char();
+                if (*p == 'n') { *s++ = '\n'; advance_char(); }
+                else if (*p == 't') { *s++ = '\t'; advance_char(); }
+                else if (*p == 'r') { *s++ = '\r'; advance_char(); }
+                else if (*p == '\\') { *s++ = '\\'; advance_char(); }
+                else if (*p == '"') { *s++ = '"'; advance_char(); }
+                else { *s++ = *p; advance_char(); }
+            } else {
+                *s++ = *p;
+                advance_char();
+            }
+        }
         *s = '\0';
         if (*p == '"') advance_char();
         cur_tok.type = TK_STR;
@@ -61,6 +74,8 @@ void next_token(void) {
         if (strcmp(cur_tok.name, "int") == 0) cur_tok.type = TK_INT;
         else if (strcmp(cur_tok.name, "char") == 0) cur_tok.type = TK_CHAR;
         else if (strcmp(cur_tok.name, "void") == 0) cur_tok.type = TK_VOID;
+        else if (strcmp(cur_tok.name, "struct") == 0) cur_tok.type = TK_STRUCT;
+        else if (strcmp(cur_tok.name, "typedef") == 0) cur_tok.type = TK_TYPEDEF;
         else if (strcmp(cur_tok.name, "return") == 0) cur_tok.type = TK_RETURN;
         else if (strcmp(cur_tok.name, "if") == 0) cur_tok.type = TK_IF;
         else if (strcmp(cur_tok.name, "else") == 0) cur_tok.type = TK_ELSE;
@@ -113,6 +128,7 @@ void next_token(void) {
     if (p[0] == '|' && p[1] == '|') { cur_tok.type = TK_OROR; advance_char(); advance_char(); return; }
     if (p[0] == '+' && p[1] == '+') { cur_tok.type = TK_PLUSPLUS; advance_char(); advance_char(); return; }
     if (p[0] == '-' && p[1] == '-') { cur_tok.type = TK_MINUSMINUS; advance_char(); advance_char(); return; }
+    if (p[0] == '-' && p[1] == '>') { cur_tok.type = TK_ARROW; advance_char(); advance_char(); return; }
     if (p[0] == '+' && p[1] == '=') { cur_tok.type = TK_PLUSEQ; advance_char(); advance_char(); return; }
 
     cur_tok.type = (TokenType)(*p);

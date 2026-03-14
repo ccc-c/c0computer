@@ -4,7 +4,7 @@
 typedef enum {
     AST_FUNC, AST_DECL, AST_ASSIGN, AST_BINOP, AST_UNARY, AST_VAR, AST_NUM, AST_RETURN,
     AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR, AST_BREAK, AST_CONTINUE, AST_INCDEC,
-    AST_ADDR, AST_DEREF, AST_INDEX, AST_SIZEOF, AST_BLOCK, AST_SWITCH, AST_CASE, AST_DO
+    AST_ADDR, AST_DEREF, AST_INDEX, AST_SIZEOF, AST_BLOCK, AST_SWITCH, AST_CASE, AST_DO, AST_MEMBER
 } ASTNodeType;
 
 typedef enum {
@@ -12,7 +12,9 @@ typedef enum {
     TY_CHAR,
     TY_INT_PTR,
     TY_CHAR_PTR,
-    TY_VOID
+    TY_VOID,
+    TY_STRUCT,
+    TY_STRUCT_PTR
 } CType;
 
 typedef struct ASTNode {
@@ -26,6 +28,7 @@ typedef struct ASTNode {
     int init_kind;
     int is_default;
     int is_decl;
+    int struct_id;
     struct ASTNode *left, *right;
     struct ASTNode *cond, *then_body, *else_body;
     struct ASTNode *init, *update, *body;
@@ -34,5 +37,22 @@ typedef struct ASTNode {
 } ASTNode;
 
 ASTNode* new_node(ASTNodeType type);
+
+typedef struct {
+    char name[64];
+    CType ty;
+    int offset;
+    int struct_id;
+} StructField;
+
+typedef struct {
+    char name[64];
+    int size;
+    StructField fields[64];
+    int field_cnt;
+} StructDef;
+
+extern StructDef g_struct_defs[64];
+extern int g_struct_def_cnt;
 
 #endif

@@ -1,7 +1,8 @@
 ; ModuleID = 'c0c'
 define void @hello() {
 entry:
-  %0 = call i32 (ptr, ...) @printf(ptr @.str.0)
+  %0 = getelementptr [4 x i8], ptr @.str.0, i32 0, i32 0
+  %1 = call i32 (ptr, ...) @printf(ptr %0)
   ret void
 }
 
@@ -25,8 +26,9 @@ entry:
   %v0 = alloca i32
   %0 = call i32 @add(i32 3, i32 4)
   store i32 %0, ptr %v0
-  %1 = load i32, ptr %v0
-  %2 = call i32 (ptr, ...) @printf(ptr @.str.1, i32 %1)
+  %1 = getelementptr [6 x i8], ptr @.str.1, i32 0, i32 0
+  %2 = load i32, ptr %v0
+  %3 = call i32 (ptr, ...) @printf(ptr %1, i32 %2)
   ret i32 0
 }
 

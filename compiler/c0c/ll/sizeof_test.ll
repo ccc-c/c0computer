@@ -4,7 +4,8 @@ entry:
   %v0 = alloca i32
   %v1 = alloca ptr
   %v2 = alloca i8
-  %0 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 4, i32 1, i32 8)
+  %0 = getelementptr [16 x i8], ptr @.str.0, i32 0, i32 0
+  %1 = call i32 (ptr, ...) @printf(ptr %0, i32 4, i32 1, i32 8)
   ret i32 0
 }
 

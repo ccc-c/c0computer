@@ -5,10 +5,12 @@ entry:
   store i32 1, ptr %v0
   %v1 = alloca i32
   store i32 2, ptr %v1
-  %0 = load i32, ptr %v1
-  %1 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %0)
-  %2 = load i32, ptr %v0
-  %3 = call i32 (ptr, ...) @printf(ptr @.str.1, i32 %2)
+  %0 = getelementptr [10 x i8], ptr @.str.0, i32 0, i32 0
+  %1 = load i32, ptr %v1
+  %2 = call i32 (ptr, ...) @printf(ptr %0, i32 %1)
+  %3 = getelementptr [10 x i8], ptr @.str.1, i32 0, i32 0
+  %4 = load i32, ptr %v0
+  %5 = call i32 (ptr, ...) @printf(ptr %3, i32 %4)
   ret i32 0
 }
 

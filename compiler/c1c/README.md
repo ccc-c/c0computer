@@ -1,0 +1,13 @@
+幫 C 語言加上物件導向語法
+
+struct ... ...
+
+加上 
+
+class <object>....
+
+然後就可以 
+
+new <object> ...
+
+object.f().g()....

@@ -26,12 +26,13 @@ entry:
   %6 = sext i8 %5 to i32
   %7 = add i32 %4, %6
   store i32 %7, ptr %v2
-  %8 = load i8, ptr %v0
-  %9 = load i8, ptr %v1
-  %10 = load i32, ptr %v2
-  %11 = sext i8 %8 to i32
+  %8 = getelementptr [16 x i8], ptr @.str.0, i32 0, i32 0
+  %9 = load i8, ptr %v0
+  %10 = load i8, ptr %v1
+  %11 = load i32, ptr %v2
   %12 = sext i8 %9 to i32
-  %13 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %11, i32 %12, i32 %10)
+  %13 = sext i8 %10 to i32
+  %14 = call i32 (ptr, ...) @printf(ptr %8, i32 %12, i32 %13, i32 %11)
   ret i32 0
 }
 

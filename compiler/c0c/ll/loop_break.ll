@@ -32,8 +32,9 @@ L8:
   store i32 %10, ptr %v1
   br label %L0
 L2:
-  %11 = load i32, ptr %v1
-  %12 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %11)
+  %11 = getelementptr [8 x i8], ptr @.str.0, i32 0, i32 0
+  %12 = load i32, ptr %v1
+  %13 = call i32 (ptr, ...) @printf(ptr %11, i32 %12)
   ret i32 0
 }
 

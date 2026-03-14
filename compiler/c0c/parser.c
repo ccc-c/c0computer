@@ -1,11 +1,13 @@
 #include "parser.h"
 #include "lexer.h"
+#include <stdio.h>
 #include <string.h>
 
 typedef struct {
     char name[64];
     CType ty;
     int array_len;
+    int struct_id;
 } Sym;
 
 static Sym symtab[256];
@@ -19,14 +21,33 @@ typedef struct {
 static FuncSym func_tab[128];
 static int func_cnt = 0;
 static CType current_func_ret = TY_INT;
+static int last_struct_id = -1;
+
+typedef struct {
+    char name[64];
+    CType ty;
+    int struct_id;
+} TypedefSym;
+
+static TypedefSym typedef_tab[128];
+static int typedef_cnt = 0;
+
+typedef struct {
+    char name[64];
+    int struct_id;
+} StructSym;
+
+static StructSym struct_tab[64];
+static int struct_sym_cnt = 0;
 
 static void sym_reset(void) { sym_cnt = 0; }
 
-static void sym_add(const char *name, CType ty, int array_len) {
+static void sym_add(const char *name, CType ty, int array_len, int struct_id) {
     if (sym_cnt >= 256) error("符號表已滿");
     strcpy(symtab[sym_cnt].name, name);
     symtab[sym_cnt].ty = ty;
     symtab[sym_cnt].array_len = array_len;
+    symtab[sym_cnt].struct_id = struct_id;
     sym_cnt++;
 }
 
@@ -47,6 +68,62 @@ static CType func_find(const char *name) {
     return TY_INT;
 }
 
+static void typedef_add(const char *name, CType ty, int struct_id) {
+    if (typedef_cnt >= 128) error("typedef 表已滿");
+    strcpy(typedef_tab[typedef_cnt].name, name);
+    typedef_tab[typedef_cnt].ty = ty;
+    typedef_tab[typedef_cnt].struct_id = struct_id;
+    typedef_cnt++;
+}
+
+static int typedef_find(const char *name, CType *ty, int *struct_id) {
+    for (int i = typedef_cnt - 1; i >= 0; i--) {
+        if (strcmp(typedef_tab[i].name, name) == 0) {
+            *ty = typedef_tab[i].ty;
+            *struct_id = typedef_tab[i].struct_id;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int struct_find(const char *name) {
+    for (int i = 0; i < struct_sym_cnt; i++) {
+        if (strcmp(struct_tab[i].name, name) == 0) return struct_tab[i].struct_id;
+    }
+    return -1;
+}
+
+static int add_struct_def(const char *name) {
+    if (g_struct_def_cnt >= 64) error("struct 定義過多");
+    int id = g_struct_def_cnt++;
+    strcpy(g_struct_defs[id].name, name);
+    g_struct_defs[id].size = 0;
+    g_struct_defs[id].field_cnt = 0;
+    if (struct_sym_cnt < 64) {
+        strcpy(struct_tab[struct_sym_cnt].name, name);
+        struct_tab[struct_sym_cnt].struct_id = id;
+        struct_sym_cnt++;
+    }
+    return id;
+}
+
+static StructDef* get_struct_def(int id) {
+    if (id < 0 || id >= g_struct_def_cnt) error("struct id 錯誤");
+    return &g_struct_defs[id];
+}
+
+static int type_size(CType ty, int struct_id) {
+    if (ty == TY_CHAR) return 1;
+    if (ty == TY_INT) return 4;
+    if (ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR) return 8;
+    if (ty == TY_STRUCT) {
+        StructDef *d = get_struct_def(struct_id);
+        return d->size;
+    }
+    return 0;
+}
+
 static Sym* sym_find(const char *name) {
     for (int i = sym_cnt - 1; i >= 0; i--) {
         if (strcmp(symtab[i].name, name) == 0) return &symtab[i];
@@ -55,16 +132,55 @@ static Sym* sym_find(const char *name) {
     return NULL;
 }
 
-static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR; }
-static CType ptr_of(CType ty) { return (ty == TY_CHAR) ? TY_CHAR_PTR : TY_INT_PTR; }
-static CType base_of(CType ty) { return (ty == TY_CHAR_PTR) ? TY_CHAR : TY_INT; }
+static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR; }
+static CType ptr_of(CType ty) {
+    if (ty == TY_CHAR) return TY_CHAR_PTR;
+    if (ty == TY_INT) return TY_INT_PTR;
+    if (ty == TY_STRUCT) return TY_STRUCT_PTR;
+    return ty;
+}
+static CType base_of(CType ty) {
+    if (ty == TY_CHAR_PTR) return TY_CHAR;
+    if (ty == TY_INT_PTR) return TY_INT;
+    if (ty == TY_STRUCT_PTR) return TY_STRUCT;
+    return TY_INT;
+}
 
 static CType parse_type_allow_void(int allow_void) {
     CType base;
+    last_struct_id = -1;
     if (cur_tok.type == TK_INT) { next_token(); base = TY_INT; }
     else if (cur_tok.type == TK_CHAR) { next_token(); base = TY_CHAR; }
     else if (allow_void && cur_tok.type == TK_VOID) { next_token(); base = TY_VOID; }
-    else { error("預期型別 int、char 或 void"); return TY_INT; }
+    else if (cur_tok.type == TK_STRUCT) {
+        next_token();
+        if (cur_tok.type != TK_IDENT) error("預期 struct 名稱");
+        int sid = struct_find(cur_tok.name);
+        if (sid < 0) error("未知的 struct");
+        next_token();
+        base = TY_STRUCT;
+        last_struct_id = sid;
+        if (cur_tok.type == TK_MUL) {
+            next_token();
+            return TY_STRUCT_PTR;
+        }
+        return base;
+    } else {
+        CType t;
+        int sid = -1;
+        if (cur_tok.type == TK_IDENT && typedef_find(cur_tok.name, &t, &sid)) {
+            next_token();
+            if (cur_tok.type == TK_MUL) {
+                next_token();
+                if (t == TY_STRUCT) { last_struct_id = sid; return TY_STRUCT_PTR; }
+                return ptr_of(t);
+            }
+            last_struct_id = sid;
+            return t;
+        }
+        error("預期型別 int、char 或 void");
+        return TY_INT;
+    }
     if (cur_tok.type == TK_MUL) {
         if (base == TY_VOID) error("不支援 void*");
         next_token();
@@ -83,6 +199,7 @@ static ASTNode* make_var_node(const char *name) {
     strcpy(n->name, name);
     n->ty = s->ty;
     n->array_len = s->array_len;
+    n->struct_id = s->struct_id;
     return n;
 }
 
@@ -96,8 +213,36 @@ static ASTNode* parse_break_stmt();
 static ASTNode* parse_continue_stmt();
 static ASTNode* parse_unary();
 static ASTNode* parse_lvalue();
+static ASTNode* parse_postfix();
 static ASTNode* parse_switch_stmt();
 static ASTNode* parse_do_stmt();
+static ASTNode* parse_struct_decl_or_def();
+static ASTNode* parse_typedef_stmt();
+static ASTNode* parse_decl_stmt(int expect_semi);
+
+static int is_struct_def_ahead(void) {
+    char *saved_p = p;
+    Token saved_tok = cur_tok;
+    int saved_line = cur_line;
+    int saved_col = cur_col;
+
+    next_token();
+    if (cur_tok.type != TK_IDENT) {
+        p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
+        return 0;
+    }
+    next_token();
+    int is_def = (cur_tok.type == TK_LBRACE);
+
+    p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
+    return is_def;
+}
+
+static int is_typedef_name(void) {
+    if (cur_tok.type != TK_IDENT) return 0;
+    CType t; int sid;
+    return typedef_find(cur_tok.name, &t, &sid);
+}
 
 static ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
@@ -142,28 +287,6 @@ static ASTNode* parse_primary() {
             return n;
         } else {
             ASTNode *n = make_var_node(name);
-            if (cur_tok.type == '[') {
-                next_token();
-                ASTNode *idx = parse_expr();
-                expect(']', "預期 ']'");
-                ASTNode *nidx = new_node(AST_INDEX);
-                nidx->left = n;
-                nidx->right = idx;
-                if (!is_ptr(n->ty)) error("只有指標或陣列可以使用 []");
-                nidx->ty = base_of(n->ty);
-                nidx->array_len = 0;
-                return nidx;
-            }
-            if (cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
-                if (is_ptr(n->ty)) error("++/-- 不支援指標");
-                ASTNode *inc = new_node(AST_INCDEC);
-                inc->op = cur_tok.type;
-                inc->is_prefix = 0;
-                strcpy(inc->name, name);
-                inc->ty = n->ty;
-                next_token();
-                return inc;
-            }
             return n;
         }
     } else if (cur_tok.type == TK_LPAREN) {
@@ -174,6 +297,69 @@ static ASTNode* parse_primary() {
     }
     error("預期 表達式 (Expression)");
     return NULL;
+}
+
+static ASTNode* parse_postfix() {
+    ASTNode *n = parse_primary();
+    while (1) {
+        if (cur_tok.type == '[') {
+            next_token();
+            ASTNode *idx = parse_expr();
+            expect(']', "預期 ']'");
+            ASTNode *nidx = new_node(AST_INDEX);
+            nidx->left = n;
+            nidx->right = idx;
+            if (!is_ptr(n->ty)) error("只有指標或陣列可以使用 []");
+            nidx->ty = base_of(n->ty);
+            nidx->struct_id = n->struct_id;
+            n = nidx;
+            continue;
+        }
+        if (cur_tok.type == '.' || cur_tok.type == TK_ARROW) {
+            int is_arrow = (cur_tok.type == TK_ARROW);
+            next_token();
+            if (cur_tok.type != TK_IDENT) error("預期欄位名稱");
+            ASTNode *m = new_node(AST_MEMBER);
+            m->left = n;
+            strcpy(m->name, cur_tok.name);
+            m->op = is_arrow;
+            int sid = n->struct_id;
+            if (is_arrow) {
+                if (n->ty != TY_STRUCT_PTR) error("-> 只能用在 struct 指標");
+            } else {
+                if (n->ty != TY_STRUCT) error(". 只能用在 struct");
+            }
+            StructDef *def = get_struct_def(sid);
+            int found = 0;
+            for (int i = 0; i < def->field_cnt; i++) {
+                if (strcmp(def->fields[i].name, m->name) == 0) {
+                    m->ty = def->fields[i].ty;
+                    m->val = def->fields[i].offset;
+                    m->struct_id = def->fields[i].struct_id;
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) error("找不到 struct 欄位");
+            next_token();
+            n = m;
+            continue;
+        }
+        if (cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
+            if (n->type != AST_VAR) error("++/-- 只能用在變數上");
+            if (is_ptr(n->ty)) error("++/-- 不支援指標");
+            ASTNode *inc = new_node(AST_INCDEC);
+            inc->op = cur_tok.type;
+            inc->is_prefix = 0;
+            strcpy(inc->name, n->name);
+            inc->ty = n->ty;
+            next_token();
+            n = inc;
+            continue;
+        }
+        break;
+    }
+    return n;
 }
 
 static ASTNode* parse_mul() {
@@ -191,9 +377,24 @@ static ASTNode* parse_add() {
     while (cur_tok.type == TK_PLUS || cur_tok.type == TK_MINUS) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_mul(); n = p;
-        if ((is_ptr(p->left->ty) && (p->op == TK_PLUS || p->op == TK_MINUS)) ||
-            (is_ptr(p->right->ty) && p->op == TK_PLUS)) {
-            p->ty = is_ptr(p->left->ty) ? p->left->ty : p->right->ty;
+        if (is_ptr(p->left->ty) && is_ptr(p->right->ty)) {
+            if (p->op == TK_MINUS) {
+                p->ty = TY_INT;
+                p->struct_id = p->left->struct_id;
+            } else {
+                error("不支援指標相加");
+            }
+        } else if ((is_ptr(p->left->ty) && (p->op == TK_PLUS || p->op == TK_MINUS)) ||
+                   (is_ptr(p->right->ty) && p->op == TK_PLUS)) {
+            if (is_ptr(p->left->ty)) {
+                p->ty = p->left->ty;
+                p->struct_id = p->left->struct_id;
+            } else {
+                p->ty = p->right->ty;
+                p->struct_id = p->right->struct_id;
+            }
+        } else if (!is_ptr(p->left->ty) && is_ptr(p->right->ty) && p->op == TK_MINUS) {
+            error("不支援 int - 指標");
         } else {
             p->ty = TY_INT;
         }
@@ -251,22 +452,30 @@ static ASTNode* parse_unary() {
         n->ty = TY_INT;
         if (cur_tok.type == TK_LPAREN) {
             char *saved_p = p; Token saved_tok = cur_tok;
+            int saved_line = cur_line; int saved_col = cur_col;
             next_token();
-            if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR) {
-                p = saved_p; cur_tok = saved_tok;
+            int is_type = 0;
+            if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR || cur_tok.type == TK_STRUCT) {
+                is_type = 1;
+            } else if (cur_tok.type == TK_IDENT) {
+                CType t; int sid;
+                if (typedef_find(cur_tok.name, &t, &sid)) is_type = 1;
+            }
+            if (is_type) {
+                p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
                 expect(TK_LPAREN, "預期 '('");
                 CType ty = parse_type_allow_void(0);
                 expect(TK_RPAREN, "預期 ')'");
                 n->ty = TY_INT;
-                n->val = (ty == TY_CHAR) ? 1 : (is_ptr(ty) ? 8 : 4);
+                n->val = type_size(ty, last_struct_id);
                 n->left = NULL;
                 n->op = 0;
                 return n;
             }
-            p = saved_p; cur_tok = saved_tok;
+            p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
         }
         n->left = parse_unary();
-        n->val = (n->left->ty == TY_CHAR) ? 1 : (is_ptr(n->left->ty) ? 8 : 4);
+        n->val = type_size(n->left->ty, n->left->struct_id);
         return n;
     }
     if (cur_tok.type == TK_MINUS || cur_tok.type == TK_NOT ||
@@ -279,6 +488,7 @@ static ASTNode* parse_unary() {
             ASTNode *n = new_node(AST_ADDR);
             n->left = operand;
             n->ty = ptr_of(operand->ty);
+            n->struct_id = operand->struct_id;
             return n;
         }
         if (op == TK_MUL) {
@@ -286,6 +496,7 @@ static ASTNode* parse_unary() {
             ASTNode *n = new_node(AST_DEREF);
             n->left = operand;
             n->ty = base_of(operand->ty);
+            n->struct_id = operand->struct_id;
             return n;
         }
         if (op == TK_PLUSPLUS || op == TK_MINUSMINUS) {
@@ -304,36 +515,12 @@ static ASTNode* parse_unary() {
         n->ty = TY_INT;
         return n;
     }
-    return parse_primary();
+    return parse_postfix();
 }
 
 static ASTNode* parse_lvalue() {
-    if (cur_tok.type == TK_MUL) {
-        next_token();
-        ASTNode *inner = parse_unary();
-        if (!is_ptr(inner->ty)) error("解參考只能用在指標上");
-        ASTNode *n = new_node(AST_DEREF);
-        n->left = inner;
-        n->ty = base_of(inner->ty);
-        return n;
-    }
-    if (cur_tok.type == TK_IDENT) {
-        char name[64];
-        strcpy(name, cur_tok.name);
-        next_token();
-        ASTNode *n = make_var_node(name);
-        if (cur_tok.type == '[') {
-            next_token();
-            ASTNode *idx = parse_expr();
-            expect(']', "預期 ']'");
-            ASTNode *nidx = new_node(AST_INDEX);
-            nidx->left = n;
-            nidx->right = idx;
-            if (!is_ptr(n->ty)) error("只有指標或陣列可以使用 []");
-            nidx->ty = base_of(n->ty);
-            nidx->array_len = 0;
-            return nidx;
-        }
+    ASTNode *n = parse_unary();
+    if (n->type == AST_VAR || n->type == AST_INDEX || n->type == AST_DEREF || n->type == AST_MEMBER) {
         return n;
     }
     error("預期左值");
@@ -351,6 +538,89 @@ static ASTNode* parse_block() {
     expect(TK_RBRACE, "預期 '}'");
     sym_cnt = scope_mark;
     return head;
+}
+
+static ASTNode* parse_struct_decl_or_def() {
+    expect(TK_STRUCT, "預期 'struct'");
+    if (cur_tok.type != TK_IDENT) error("預期 struct 名稱");
+    char struct_name[64];
+    strcpy(struct_name, cur_tok.name);
+    next_token();
+    if (cur_tok.type == TK_LBRACE) {
+        int sid = struct_find(struct_name);
+        if (sid < 0) sid = add_struct_def(struct_name);
+        StructDef *def = get_struct_def(sid);
+        next_token();
+        while (cur_tok.type != TK_RBRACE && cur_tok.type != TK_EOF) {
+            if (def->field_cnt >= 64) error("struct 欄位過多");
+            CType fty = parse_type_allow_void(0);
+            if (cur_tok.type != TK_IDENT) error("預期欄位名稱");
+            StructField *f = &def->fields[def->field_cnt++];
+            strcpy(f->name, cur_tok.name);
+            f->ty = fty;
+            f->offset = def->size;
+            f->struct_id = last_struct_id;
+            def->size += type_size(fty, f->struct_id);
+            next_token();
+            expect(TK_SEMI, "預期 ';'");
+        }
+        expect(TK_RBRACE, "預期 '}'");
+        expect(TK_SEMI, "預期 ';'");
+        return NULL;
+    }
+    error("struct 宣告需有定義");
+    return NULL;
+}
+
+static ASTNode* parse_typedef_stmt() {
+    expect(TK_TYPEDEF, "預期 'typedef'");
+    if (cur_tok.type == TK_STRUCT) {
+        expect(TK_STRUCT, "預期 'struct'");
+        char struct_name[64] = {0};
+        if (cur_tok.type == TK_IDENT) {
+            strcpy(struct_name, cur_tok.name);
+            next_token();
+        }
+        int sid = -1;
+        if (cur_tok.type == TK_LBRACE) {
+            if (struct_name[0] == '\0') {
+                snprintf(struct_name, sizeof(struct_name), "__anon%d", g_struct_def_cnt);
+            }
+            sid = struct_find(struct_name);
+            if (sid < 0) sid = add_struct_def(struct_name);
+            StructDef *def = get_struct_def(sid);
+            next_token();
+            while (cur_tok.type != TK_RBRACE && cur_tok.type != TK_EOF) {
+                if (def->field_cnt >= 64) error("struct 欄位過多");
+                CType fty = parse_type_allow_void(0);
+                if (cur_tok.type != TK_IDENT) error("預期欄位名稱");
+                StructField *f = &def->fields[def->field_cnt++];
+                strcpy(f->name, cur_tok.name);
+                f->ty = fty;
+                f->offset = def->size;
+                f->struct_id = last_struct_id;
+                def->size += type_size(fty, f->struct_id);
+                next_token();
+                expect(TK_SEMI, "預期 ';'");
+            }
+            expect(TK_RBRACE, "預期 '}'");
+        } else {
+            if (struct_name[0] == '\0') error("預期 struct 名稱");
+            sid = struct_find(struct_name);
+            if (sid < 0) error("未知的 struct");
+        }
+        if (cur_tok.type != TK_IDENT) error("預期別名");
+        typedef_add(cur_tok.name, TY_STRUCT, sid);
+        next_token();
+        expect(TK_SEMI, "預期 ';'");
+        return NULL;
+    }
+    CType ty = parse_type_allow_void(0);
+    if (cur_tok.type != TK_IDENT) error("預期別名");
+    typedef_add(cur_tok.name, ty, -1);
+    next_token();
+    expect(TK_SEMI, "預期 ';'");
+    return NULL;
 }
 
 static ASTNode* parse_switch_stmt() {
@@ -414,6 +684,89 @@ static ASTNode* parse_do_stmt() {
     return n;
 }
 
+static ASTNode* parse_decl_stmt(int expect_semi) {
+    CType decl_ty = parse_type();
+    ASTNode *n = new_node(AST_DECL);
+    strcpy(n->name, cur_tok.name);
+    expect(TK_IDENT, "預期變數名稱");
+    n->ty = decl_ty;
+    n->struct_id = last_struct_id;
+    n->array_len = 0;
+    n->init_kind = 0;
+
+    int unsized = 0;
+    if (cur_tok.type == '[') {
+        if (is_ptr(decl_ty)) error("指標型別不可再宣告為陣列");
+        next_token();
+        if (cur_tok.type == ']') {
+            unsized = 1;
+            n->array_len = -1;
+            next_token();
+        } else {
+            if (cur_tok.type != TK_NUM) error("陣列大小必須是數字");
+            n->array_len = cur_tok.val;
+            next_token();
+            expect(']', "預期 ']'");
+        }
+        n->ty = ptr_of(decl_ty);
+    }
+
+    if (cur_tok.type == TK_ASSIGN) {
+        next_token();
+        if (n->array_len != 0) {
+            if (cur_tok.type == TK_STR && base_of(n->ty) == TY_CHAR) {
+                n->init_kind = 3;
+                strcpy(n->str_val, cur_tok.str_val);
+                next_token();
+            } else if (cur_tok.type == '{') {
+                n->init_kind = 2;
+                next_token();
+                ASTNode *head = NULL, *tail = NULL;
+                int count = 0;
+                if (cur_tok.type != '}') {
+                    head = tail = parse_expr();
+                    count++;
+                    while (cur_tok.type == TK_COMMA) {
+                        next_token();
+                        if (cur_tok.type == '}') break;
+                        tail->next = parse_expr();
+                        tail = tail->next;
+                        count++;
+                    }
+                }
+                expect('}', "預期 '}'");
+                n->left = head;
+                if (n->array_len == -1) n->array_len = count;
+                else if (count > n->array_len) error("陣列初始值過多");
+            } else {
+                error("陣列初始化需使用 { } 或字串");
+            }
+
+            if (n->array_len == -1 && n->init_kind == 3) {
+                n->array_len = (int)strlen(n->str_val) + 1;
+            }
+            if (n->array_len == -1 || n->array_len == 0) error("無法推導陣列大小");
+
+            if (base_of(n->ty) == TY_STRUCT && n->init_kind != 0) {
+                error("不支援 struct 陣列初始化");
+            }
+            if (n->init_kind == 3) {
+                int need = (int)strlen(n->str_val) + 1;
+                if (n->array_len < need) error("陣列大小不足以容納字串");
+            }
+        } else {
+            if (n->ty == TY_STRUCT) error("不支援 struct 直接初始化");
+            n->init_kind = 1;
+            n->left = parse_expr();
+        }
+    } else if (unsized) {
+        error("無法推導陣列大小");
+    }
+
+    if (expect_semi) expect(TK_SEMI, "預期 ';'");
+    return n;
+}
+
 static ASTNode* parse_if_stmt() {
     expect(TK_IF, "預期 'if'");
     expect(TK_LPAREN, "預期 '('");
@@ -460,76 +813,42 @@ static ASTNode* parse_for_stmt() {
     ASTNode *update = NULL;
 
     if (cur_tok.type != TK_SEMI) {
-        if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR) {
-            CType decl_ty = parse_type();
-            ASTNode *decl = new_node(AST_DECL);
-            strcpy(decl->name, cur_tok.name);
-            expect(TK_IDENT, "預期變數名稱");
-            decl->ty = decl_ty;
-            decl->array_len = 0;
-            decl->init_kind = 0;
-            if (cur_tok.type == '[') {
-                if (is_ptr(decl_ty)) error("指標型別不可再宣告為陣列");
-                next_token();
-                if (cur_tok.type != TK_NUM) error("陣列大小必須是數字");
-                decl->array_len = cur_tok.val;
-                next_token();
-                expect(']', "預期 ']'");
-                decl->ty = ptr_of(decl_ty);
+        if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR || cur_tok.type == TK_STRUCT) {
+            if (cur_tok.type == TK_STRUCT && is_struct_def_ahead()) {
+                error("for 內不支援 struct 定義");
             }
-            sym_add(decl->name, decl->ty, decl->array_len);
-            if (cur_tok.type == TK_ASSIGN) {
-                next_token();
-                if (decl->array_len > 0) {
-                    if (cur_tok.type == TK_STR && base_of(decl->ty) == TY_CHAR) {
-                        decl->init_kind = 3;
-                        strcpy(decl->str_val, cur_tok.str_val);
-                        next_token();
-                    } else if (cur_tok.type == '{') {
-                        decl->init_kind = 2;
-                        next_token();
-                        ASTNode *head = NULL, *tail = NULL;
-                        if (cur_tok.type != '}') {
-                            head = tail = parse_expr();
-                            while (cur_tok.type == TK_COMMA) {
-                                next_token();
-                                tail->next = parse_expr();
-                                tail = tail->next;
-                            }
-                        }
-                        expect('}', "預期 '}'");
-                        decl->left = head;
-                    } else {
-                        error("陣列初始化需使用 { } 或字串");
-                    }
-                } else {
-                    decl->init_kind = 1;
-                    decl->left = parse_expr();
-                }
-            }
+            ASTNode *decl = parse_decl_stmt(0);
+            sym_add(decl->name, decl->ty, decl->array_len, decl->struct_id);
             init = decl;
         } else if (cur_tok.type == TK_IDENT) {
-            char *saved_p = p; Token saved_tok = cur_tok;
-            next_token();
-            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
-            p = saved_p; cur_tok = saved_tok;
-            if (is_assign) {
-                ASTNode *assign = new_node(AST_ASSIGN);
-                assign->left = make_var_node(cur_tok.name);
-                assign->ty = assign->left->ty;
-                next_token();
-                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
-                    assign->op = cur_tok.type;
-                    next_token();
-                } else {
-                    error("預期 '=' 或 '+='");
-                }
-                assign->right = parse_expr();
-                init = assign;
+            CType t; int sid;
+            if (typedef_find(cur_tok.name, &t, &sid)) {
+                ASTNode *decl = parse_decl_stmt(0);
+                sym_add(decl->name, decl->ty, decl->array_len, decl->struct_id);
+                init = decl;
             } else {
-                ASTNode *expr = parse_expr();
-                init = new_node(AST_EXPR_STMT);
-                init->left = expr;
+                char *saved_p = p; Token saved_tok = cur_tok;
+                next_token();
+                int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
+                p = saved_p; cur_tok = saved_tok;
+                if (is_assign) {
+                    ASTNode *assign = new_node(AST_ASSIGN);
+                    assign->left = make_var_node(cur_tok.name);
+                    assign->ty = assign->left->ty;
+                    next_token();
+                    if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+                        assign->op = cur_tok.type;
+                        next_token();
+                    } else {
+                        error("預期 '=' 或 '+='");
+                    }
+                    assign->right = parse_expr();
+                    init = assign;
+                } else {
+                    ASTNode *expr = parse_expr();
+                    init = new_node(AST_EXPR_STMT);
+                    init->left = expr;
+                }
             }
         } else {
             ASTNode *expr = parse_expr();
@@ -599,54 +918,21 @@ static ASTNode* parse_continue_stmt() {
 }
 
 static ASTNode* parse_stmt() {
-    if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR) {
-        CType decl_ty = parse_type();
-        ASTNode *n = new_node(AST_DECL);
-        strcpy(n->name, cur_tok.name);
-        expect(TK_IDENT, "預期變數名稱");
-        n->ty = decl_ty;
-        n->array_len = 0;
-        n->init_kind = 0;
-        if (cur_tok.type == '[') {
-            if (is_ptr(decl_ty)) error("指標型別不可再宣告為陣列");
-            next_token();
-            if (cur_tok.type != TK_NUM) error("陣列大小必須是數字");
-            n->array_len = cur_tok.val;
-            next_token();
-            expect(']', "預期 ']'");
-            n->ty = ptr_of(decl_ty);
-        }
-        sym_add(n->name, n->ty, n->array_len);
-        if (cur_tok.type == TK_ASSIGN) {
-            next_token();
-            if (n->array_len > 0) {
-                if (cur_tok.type == TK_STR && base_of(n->ty) == TY_CHAR) {
-                    n->init_kind = 3;
-                    strcpy(n->str_val, cur_tok.str_val);
-                    next_token();
-                } else if (cur_tok.type == '{') {
-                    n->init_kind = 2;
-                    next_token();
-                    ASTNode *head = NULL, *tail = NULL;
-                    if (cur_tok.type != '}') {
-                        head = tail = parse_expr();
-                        while (cur_tok.type == TK_COMMA) {
-                            next_token();
-                            tail->next = parse_expr();
-                            tail = tail->next;
-                        }
-                    }
-                    expect('}', "預期 '}'");
-                    n->left = head;
-                } else {
-                    error("陣列初始化需使用 { } 或字串");
-                }
-            } else {
-                n->init_kind = 1;
-                n->left = parse_expr();
-            }
-        }
-        expect(TK_SEMI, "預期 ';'");
+    if (cur_tok.type == TK_TYPEDEF) {
+        ASTNode *n = parse_typedef_stmt();
+        if (n) return n;
+        ASTNode *empty = new_node(AST_EXPR_STMT);
+        empty->left = NULL;
+        return empty;
+    } else if (cur_tok.type == TK_STRUCT && is_struct_def_ahead()) {
+        ASTNode *n = parse_struct_decl_or_def();
+        if (n) return n;
+        ASTNode *empty = new_node(AST_EXPR_STMT);
+        empty->left = NULL;
+        return empty;
+    } else if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR || cur_tok.type == TK_STRUCT || is_typedef_name()) {
+        ASTNode *n = parse_decl_stmt(1);
+        sym_add(n->name, n->ty, n->array_len, n->struct_id);
         return n;
     } else if (cur_tok.type == TK_LBRACE) {
         ASTNode *n = new_node(AST_BLOCK);
@@ -694,10 +980,13 @@ static ASTNode* parse_stmt() {
                 return n;
             }
         }
-        char *saved_p = p; Token saved_tok = cur_tok;
-        ASTNode *lv = parse_lvalue();
-        int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
+        char *saved_p = p; Token saved_tok = cur_tok; int saved_line = cur_line; int saved_col = cur_col;
+        ASTNode *cand = parse_unary();
+        int is_lvalue = (cand->type == AST_VAR || cand->type == AST_INDEX || cand->type == AST_DEREF || cand->type == AST_MEMBER);
+        int is_assign = is_lvalue && (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
+        p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
         if (is_assign) {
+            ASTNode *lv = parse_lvalue();
             ASTNode *n = new_node(AST_ASSIGN);
             n->left = lv;
             n->ty = lv->ty;
@@ -711,7 +1000,6 @@ static ASTNode* parse_stmt() {
             expect(TK_SEMI, "預期 ';'");
             return n;
         }
-        p = saved_p; cur_tok = saved_tok;
         ASTNode *n = new_node(AST_EXPR_STMT);
         n->left = parse_expr();
         expect(TK_SEMI, "預期 ';'");
@@ -741,7 +1029,8 @@ static ASTNode* parse_func() {
             param->ty = pty;
             param->array_len = 0;
             param->init_kind = 0;
-            sym_add(param->name, pty, 0);
+            param->struct_id = last_struct_id;
+            sym_add(param->name, pty, 0, param->struct_id);
             if (!param_head) param_head = param_tail = param;
             else { param_tail->next = param; param_tail = param; }
             if (cur_tok.type == TK_COMMA) { next_token(); continue; }
@@ -768,6 +1057,14 @@ static ASTNode* parse_func() {
 ASTNode* parse_program(void) {
     ASTNode *head = NULL, *tail = NULL;
     while (cur_tok.type != TK_EOF) {
+        if (cur_tok.type == TK_STRUCT && is_struct_def_ahead()) {
+            parse_struct_decl_or_def();
+            continue;
+        }
+        if (cur_tok.type == TK_TYPEDEF) {
+            parse_typedef_stmt();
+            continue;
+        }
         ASTNode *func = parse_func();
         if (!head) head = tail = func; else { tail->next = func; tail = func; }
     }

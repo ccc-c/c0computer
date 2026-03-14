@@ -20,8 +20,9 @@ L1:
   %6 = icmp slt i32 %5, 3
   br i1 %6, label %L0, label %L2
 L2:
-  %7 = load i32, ptr %v1
-  %8 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %7)
+  %7 = getelementptr [8 x i8], ptr @.str.0, i32 0, i32 0
+  %8 = load i32, ptr %v1
+  %9 = call i32 (ptr, ...) @printf(ptr %7, i32 %8)
   ret i32 0
 }
 
