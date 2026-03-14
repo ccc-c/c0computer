@@ -36,6 +36,18 @@ static FILE *out_fp = NULL;
 static FuncSig func_sigs[128];
 static int func_sig_cnt = 0;
 
+static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR; }
+static CType base_of(CType ty) { return (ty == TY_CHAR_PTR) ? TY_CHAR : TY_INT; }
+static const char* llvm_type(CType ty) {
+    if (ty == TY_CHAR) return "i8";
+    if (ty == TY_INT) return "i32";
+    return "ptr";
+}
+static const char* llvm_elem_type(CType ty) {
+    CType base = is_ptr(ty) ? base_of(ty) : ty;
+    return (base == TY_CHAR) ? "i8" : "i32";
+}
+
 static int stmt_ends_with_return(ASTNode *node);
 static int stmt_list_ends_with_return(ASTNode *node);
 static int stmt_may_fallthrough(ASTNode *node);
@@ -124,6 +136,8 @@ static Value to_i1(Value v) {
     int r = reg_cnt++;
     if (v.vt == VT_I8) {
         fprintf(out_fp, "  %%%d = icmp ne i8 %s, 0\n", r, v.reg);
+    } else if (v.vt == VT_PTR) {
+        fprintf(out_fp, "  %%%d = icmp ne ptr %s, null\n", r, v.reg);
     } else {
         fprintf(out_fp, "  %%%d = icmp ne i32 %s, 0\n", r, v.reg);
     }
@@ -177,8 +191,16 @@ static Value gen_expr(ASTNode *node) {
         sprintf(res, "@.str.%d", id);
         return value_from_reg(res, VT_PTR);
     } else if (node->type == AST_VAR) {
+        if (node->array_len > 0) {
+            int r = reg_cnt++;
+            fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
+                    r, node->array_len, llvm_elem_type(node->ty), node->name);
+            char *res = malloc(64);
+            sprintf(res, "%%%d", r);
+            return value_from_reg(res, VT_PTR);
+        }
         int r = reg_cnt++;
-        const char *ty = (node->ty == TY_CHAR) ? "i8" : "i32";
+        const char *ty = llvm_type(node->ty);
         if (is_param(current_params, node->name)) {
             fprintf(out_fp, "  %%%d = load %s, ptr %%%s.addr\n", r, ty, node->name);
         } else {
@@ -186,6 +208,7 @@ static Value gen_expr(ASTNode *node) {
         }
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
+        if (is_ptr(node->ty)) return value_from_reg(res, VT_PTR);
         return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
     } else if (node->type == AST_CALL) {
         Value raw_vals[10];
@@ -195,17 +218,19 @@ static Value gen_expr(ASTNode *node) {
         ASTNode *arg = node->left;
         while (arg) {
             raw_vals[arg_count] = gen_expr(arg);
-            if (arg->type == AST_STR) arg_types[arg_count] = VT_PTR;
+            if (arg->type == AST_STR || is_ptr(arg->ty)) arg_types[arg_count] = VT_PTR;
             else arg_types[arg_count] = VT_I32;
             arg = arg->next;
             arg_count++;
         }
         int is_printf = (strcmp(node->name, "printf") == 0);
         FuncSig *sig = find_func_sig(node->name);
-        const char *ret_ty = (sig && sig->ret == TY_CHAR) ? "i8" : "i32";
+        const char *ret_ty = (sig && is_ptr(sig->ret)) ? "ptr" : (sig && sig->ret == TY_CHAR) ? "i8" : "i32";
         for (int i = 0; i < arg_count; i++) {
             if (arg_types[i] == VT_PTR) {
                 final_vals[i] = raw_vals[i];
+            } else if (sig && i < sig->param_cnt && is_ptr(sig->params[i])) {
+                error("指標參數需要 ptr");
             } else if (sig && i < sig->param_cnt && sig->params[i] == TY_CHAR) {
                 final_vals[i] = to_i8(raw_vals[i]);
             } else {
@@ -234,8 +259,66 @@ static Value gen_expr(ASTNode *node) {
         fprintf(out_fp, ")\n");
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
+        if (!is_printf && sig && is_ptr(sig->ret)) return value_from_reg(res, VT_PTR);
         if (!is_printf && sig && sig->ret == TY_CHAR) return value_from_reg(res, VT_I8);
         return value_from_reg(res, VT_I32);
+    } else if (node->type == AST_ADDR) {
+        ASTNode *lv = node->left;
+        if (lv->type == AST_DEREF) {
+            return gen_expr(lv->left);
+        }
+        if (lv->type == AST_VAR && lv->array_len > 0) {
+            int r = reg_cnt++;
+            fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
+                    r, lv->array_len, llvm_elem_type(lv->ty), lv->name);
+            char *res = malloc(64);
+            sprintf(res, "%%%d", r);
+            return value_from_reg(res, VT_PTR);
+        }
+        if (lv->type == AST_VAR) {
+            char *res = malloc(64);
+            if (is_param(current_params, lv->name)) {
+                sprintf(res, "%%%s.addr", lv->name);
+            } else {
+                sprintf(res, "%%%s", lv->name);
+            }
+            return value_from_reg(res, VT_PTR);
+        }
+        if (lv->type == AST_INDEX) {
+            ASTNode *base = lv->left;
+            Value idx = to_i32(gen_expr(lv->right));
+            int r = reg_cnt++;
+            if (base->array_len > 0) {
+                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 %s\n",
+                        r, base->array_len, llvm_elem_type(base->ty), base->name, idx.reg);
+            } else {
+                Value base_ptr = gen_expr(base);
+                fprintf(out_fp, "  %%%d = getelementptr %s, ptr %s, i32 %s\n",
+                        r, llvm_elem_type(base->ty), base_ptr.reg, idx.reg);
+                free(base_ptr.reg);
+            }
+            free(idx.reg);
+            char *res = malloc(64);
+            sprintf(res, "%%%d", r);
+            return value_from_reg(res, VT_PTR);
+        }
+        error("不支援的取址");
+    } else if (node->type == AST_DEREF) {
+        Value ptr = gen_expr(node->left);
+        int r = reg_cnt++;
+        fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r, llvm_elem_type(node->ty), ptr.reg);
+        free(ptr.reg);
+        char *res = malloc(64);
+        sprintf(res, "%%%d", r);
+        return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
+    } else if (node->type == AST_INDEX) {
+        Value addr = gen_expr(&(ASTNode){.type=AST_ADDR,.left=node});
+        int r = reg_cnt++;
+        fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r, llvm_elem_type(node->ty), addr.reg);
+        free(addr.reg);
+        char *res = malloc(64);
+        sprintf(res, "%%%d", r);
+        return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
     } else if (node->type == AST_BINOP) {
         if (node->op == TK_ANDAND || node->op == TK_OROR) {
             int tmp = reg_cnt++;
@@ -355,28 +438,31 @@ static Value gen_cond(ASTNode *node) {
 static void gen_stmt(ASTNode *node) {
     while (node) {
         if (node->type == AST_DECL) {
-            const char *llvm_ty = (node->ty == TY_CHAR) ? "i8" : "i32";
-            if (is_param(current_params, node->name)) {
+            const char *llvm_ty = llvm_type(node->ty);
+            if (node->array_len > 0) {
+                fprintf(out_fp, "  %%%s = alloca [%d x %s]\n", node->name, node->array_len, llvm_elem_type(node->ty));
+            } else if (is_param(current_params, node->name)) {
                 fprintf(out_fp, "  %%%s.addr = alloca %s\n", node->name, llvm_ty);
                 fprintf(out_fp, "  store %s %%%s, ptr %%%s.addr\n", llvm_ty, node->name, node->name);
             } else {
                 fprintf(out_fp, "  %%%s = alloca %s\n", node->name, llvm_ty);
                 if (node->left) {
                     Value val = gen_expr(node->left);
-                    Value store_val = (node->ty == TY_CHAR) ? to_i8(val) : to_i32(val);
+                    Value store_val;
+                    if (is_ptr(node->ty)) store_val = val;
+                    else if (node->ty == TY_CHAR) store_val = to_i8(val);
+                    else store_val = to_i32(val);
                     fprintf(out_fp, "  store %s %s, ptr %%%s\n", llvm_ty, store_val.reg, node->name);
                     free(store_val.reg);
                 }
             }
         } else if (node->type == AST_ASSIGN) {
-            const char *llvm_ty = (node->ty == TY_CHAR) ? "i8" : "i32";
+            const char *llvm_ty = llvm_type(node->ty);
+            Value addr = gen_expr(&(ASTNode){.type=AST_ADDR,.left=node->left});
             if (node->op == TK_PLUSEQ) {
+                if (is_ptr(node->ty)) error("指標不支援 +=");
                 int r_old = reg_cnt++;
-                if (is_param(current_params, node->name)) {
-                    fprintf(out_fp, "  %%%d = load %s, ptr %%%s.addr\n", r_old, llvm_ty, node->name);
-                } else {
-                    fprintf(out_fp, "  %%%d = load %s, ptr %%%s\n", r_old, llvm_ty, node->name);
-                }
+                fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r_old, llvm_ty, addr.reg);
                 char *old_reg = malloc(64);
                 sprintf(old_reg, "%%%d", r_old);
                 Value old_val = value_from_reg(old_reg, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
@@ -391,22 +477,18 @@ static void gen_stmt(ASTNode *node) {
                 sprintf(new_reg, "%%%d", r_new);
                 Value new_val = value_from_reg(new_reg, VT_I32);
                 Value store_val = (node->ty == TY_CHAR) ? to_i8(new_val) : new_val;
-                if (is_param(current_params, node->name)) {
-                    fprintf(out_fp, "  store %s %s, ptr %%%s.addr\n", llvm_ty, store_val.reg, node->name);
-                } else {
-                    fprintf(out_fp, "  store %s %s, ptr %%%s\n", llvm_ty, store_val.reg, node->name);
-                }
+                fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, store_val.reg, addr.reg);
                 free(store_val.reg);
             } else {
                 Value val = gen_expr(node->right);
-                Value store_val = (node->ty == TY_CHAR) ? to_i8(val) : to_i32(val);
-                if (is_param(current_params, node->name)) {
-                    fprintf(out_fp, "  store %s %s, ptr %%%s.addr\n", llvm_ty, store_val.reg, node->name);
-                } else {
-                    fprintf(out_fp, "  store %s %s, ptr %%%s\n", llvm_ty, store_val.reg, node->name);
-                }
+                Value store_val;
+                if (is_ptr(node->ty)) store_val = val;
+                else if (node->ty == TY_CHAR) store_val = to_i8(val);
+                else store_val = to_i32(val);
+                fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, store_val.reg, addr.reg);
                 free(store_val.reg);
             }
+            free(addr.reg);
         } else if (node->type == AST_EXPR_STMT) {
             Value val = gen_expr(node->left);
             if (val.reg) free(val.reg);
@@ -517,8 +599,15 @@ static void gen_stmt(ASTNode *node) {
             fprintf(out_fp, "  br label %%L%d\n", continue_label_stack[loop_depth - 1]);
         } else if (node->type == AST_RETURN) {
             Value val = gen_expr(node->left);
-            Value ret_val = (current_ret_ty == TY_CHAR) ? to_i8(val) : to_i32(val);
-            fprintf(out_fp, "  ret %s %s\n", (current_ret_ty == TY_CHAR) ? "i8" : "i32", ret_val.reg);
+            Value ret_val;
+            if (is_ptr(current_ret_ty)) {
+                ret_val = val;
+            } else if (current_ret_ty == TY_CHAR) {
+                ret_val = to_i8(val);
+            } else {
+                ret_val = to_i32(val);
+            }
+            fprintf(out_fp, "  ret %s %s\n", llvm_type(current_ret_ty), ret_val.reg);
             free(ret_val.reg);
         }
         node = node->next;
@@ -531,13 +620,13 @@ void gen_llvm_ir(ASTNode *funcs, FILE *out) {
     build_func_sigs(funcs);
     ASTNode *func = funcs;
     while (func) {
-        const char *ret_ty = (func->ty == TY_CHAR) ? "i8" : "i32";
+        const char *ret_ty = llvm_type(func->ty);
         fprintf(out_fp, "define %s @%s(", ret_ty, func->name);
         ASTNode *param = func->left;
         int first = 1;
         while (param) {
             if (!first) fprintf(out_fp, ", ");
-            fprintf(out_fp, "%s %%%s", (param->ty == TY_CHAR) ? "i8" : "i32", param->name);
+            fprintf(out_fp, "%s %%%s", llvm_type(param->ty), param->name);
             first = 0;
             param = param->next;
         }

@@ -5,6 +5,7 @@
 typedef struct {
     char name[64];
     CType ty;
+    int array_len;
 } Sym;
 
 static Sym symtab[256];
@@ -20,10 +21,11 @@ static int func_cnt = 0;
 
 static void sym_reset(void) { sym_cnt = 0; }
 
-static void sym_add(const char *name, CType ty) {
+static void sym_add(const char *name, CType ty, int array_len) {
     if (sym_cnt >= 256) error("符號表已滿");
     strcpy(symtab[sym_cnt].name, name);
     symtab[sym_cnt].ty = ty;
+    symtab[sym_cnt].array_len = array_len;
     sym_cnt++;
 }
 
@@ -44,19 +46,37 @@ static CType func_find(const char *name) {
     return TY_INT;
 }
 
-static CType sym_find(const char *name) {
+static Sym* sym_find(const char *name) {
     for (int i = sym_cnt - 1; i >= 0; i--) {
-        if (strcmp(symtab[i].name, name) == 0) return symtab[i].ty;
+        if (strcmp(symtab[i].name, name) == 0) return &symtab[i];
     }
     error("找不到變數宣告");
-    return TY_INT;
+    return NULL;
 }
 
+static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR; }
+static CType ptr_of(CType ty) { return (ty == TY_CHAR) ? TY_CHAR_PTR : TY_INT_PTR; }
+static CType base_of(CType ty) { return (ty == TY_CHAR_PTR) ? TY_CHAR : TY_INT; }
+
 static CType parse_type(void) {
-    if (cur_tok.type == TK_INT) { next_token(); return TY_INT; }
-    if (cur_tok.type == TK_CHAR) { next_token(); return TY_CHAR; }
-    error("預期型別 int 或 char");
-    return TY_INT;
+    CType base;
+    if (cur_tok.type == TK_INT) { next_token(); base = TY_INT; }
+    else if (cur_tok.type == TK_CHAR) { next_token(); base = TY_CHAR; }
+    else { error("預期型別 int 或 char"); return TY_INT; }
+    if (cur_tok.type == TK_MUL) {
+        next_token();
+        return ptr_of(base);
+    }
+    return base;
+}
+
+static ASTNode* make_var_node(const char *name) {
+    Sym *s = sym_find(name);
+    ASTNode *n = new_node(AST_VAR);
+    strcpy(n->name, name);
+    n->ty = s->ty;
+    n->array_len = s->array_len;
+    return n;
 }
 
 static ASTNode* parse_expr();
@@ -68,6 +88,7 @@ static ASTNode* parse_for_stmt();
 static ASTNode* parse_break_stmt();
 static ASTNode* parse_continue_stmt();
 static ASTNode* parse_unary();
+static ASTNode* parse_lvalue();
 
 static ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
@@ -79,6 +100,7 @@ static ASTNode* parse_primary() {
     } else if (cur_tok.type == TK_STR) {
         ASTNode *n = new_node(AST_STR);
         strcpy(n->str_val, cur_tok.str_val);
+        n->ty = TY_CHAR_PTR;
         next_token();
         return n;
     } else if (cur_tok.type == TK_IDENT) {
@@ -104,10 +126,21 @@ static ASTNode* parse_primary() {
             n->left = head;
             return n;
         } else {
-            ASTNode *n = new_node(AST_VAR);
-            strcpy(n->name, name);
-            n->ty = sym_find(name);
+            ASTNode *n = make_var_node(name);
+            if (cur_tok.type == '[') {
+                next_token();
+                ASTNode *idx = parse_expr();
+                expect(']', "預期 ']'");
+                ASTNode *nidx = new_node(AST_INDEX);
+                nidx->left = n;
+                nidx->right = idx;
+                if (!is_ptr(n->ty)) error("只有指標或陣列可以使用 []");
+                nidx->ty = base_of(n->ty);
+                nidx->array_len = 0;
+                return nidx;
+            }
             if (cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
+                if (is_ptr(n->ty)) error("++/-- 不支援指標");
                 ASTNode *inc = new_node(AST_INCDEC);
                 inc->op = cur_tok.type;
                 inc->is_prefix = 0;
@@ -193,12 +226,27 @@ static ASTNode* parse_expr() { return parse_or(); }
 
 static ASTNode* parse_unary() {
     if (cur_tok.type == TK_MINUS || cur_tok.type == TK_NOT ||
-        cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
+        cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS ||
+        cur_tok.type == TK_MUL || cur_tok.type == '&') {
         TokenType op = cur_tok.type;
         next_token();
         ASTNode *operand = parse_unary();
+        if (op == '&') {
+            ASTNode *n = new_node(AST_ADDR);
+            n->left = operand;
+            n->ty = ptr_of(operand->ty);
+            return n;
+        }
+        if (op == TK_MUL) {
+            if (!is_ptr(operand->ty)) error("解參考只能用在指標上");
+            ASTNode *n = new_node(AST_DEREF);
+            n->left = operand;
+            n->ty = base_of(operand->ty);
+            return n;
+        }
         if (op == TK_PLUSPLUS || op == TK_MINUSMINUS) {
             if (!operand || operand->type != AST_VAR) error("++/-- 只能用在變數上");
+            if (is_ptr(operand->ty)) error("++/-- 不支援指標");
             ASTNode *inc = new_node(AST_INCDEC);
             inc->op = op;
             inc->is_prefix = 1;
@@ -213,6 +261,39 @@ static ASTNode* parse_unary() {
         return n;
     }
     return parse_primary();
+}
+
+static ASTNode* parse_lvalue() {
+    if (cur_tok.type == TK_MUL) {
+        next_token();
+        ASTNode *inner = parse_unary();
+        if (!is_ptr(inner->ty)) error("解參考只能用在指標上");
+        ASTNode *n = new_node(AST_DEREF);
+        n->left = inner;
+        n->ty = base_of(inner->ty);
+        return n;
+    }
+    if (cur_tok.type == TK_IDENT) {
+        char name[64];
+        strcpy(name, cur_tok.name);
+        next_token();
+        ASTNode *n = make_var_node(name);
+        if (cur_tok.type == '[') {
+            next_token();
+            ASTNode *idx = parse_expr();
+            expect(']', "預期 ']'");
+            ASTNode *nidx = new_node(AST_INDEX);
+            nidx->left = n;
+            nidx->right = idx;
+            if (!is_ptr(n->ty)) error("只有指標或陣列可以使用 []");
+            nidx->ty = base_of(n->ty);
+            nidx->array_len = 0;
+            return nidx;
+        }
+        return n;
+    }
+    error("預期左值");
+    return NULL;
 }
 
 static ASTNode* parse_block() {
@@ -278,8 +359,19 @@ static ASTNode* parse_for_stmt() {
             strcpy(decl->name, cur_tok.name);
             expect(TK_IDENT, "預期變數名稱");
             decl->ty = decl_ty;
-            sym_add(decl->name, decl_ty);
+            decl->array_len = 0;
+            if (cur_tok.type == '[') {
+                if (is_ptr(decl_ty)) error("指標型別不可再宣告為陣列");
+                next_token();
+                if (cur_tok.type != TK_NUM) error("陣列大小必須是數字");
+                decl->array_len = cur_tok.val;
+                next_token();
+                expect(']', "預期 ']'");
+                decl->ty = ptr_of(decl_ty);
+            }
+            sym_add(decl->name, decl->ty, decl->array_len);
             if (cur_tok.type == TK_ASSIGN) {
+                if (decl->array_len > 0) error("陣列不支援初始化");
                 next_token();
                 decl->left = parse_expr();
             }
@@ -291,8 +383,8 @@ static ASTNode* parse_for_stmt() {
             p = saved_p; cur_tok = saved_tok;
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
-                strcpy(assign->name, cur_tok.name);
-                assign->ty = sym_find(assign->name);
+                assign->left = make_var_node(cur_tok.name);
+                assign->ty = assign->left->ty;
                 next_token();
                 if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
                     assign->op = cur_tok.type;
@@ -328,8 +420,8 @@ static ASTNode* parse_for_stmt() {
             p = saved_p; cur_tok = saved_tok;
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
-                strcpy(assign->name, cur_tok.name);
-                assign->ty = sym_find(assign->name);
+                assign->left = make_var_node(cur_tok.name);
+                assign->ty = assign->left->ty;
                 next_token();
                 if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
                     assign->op = cur_tok.type;
@@ -381,8 +473,19 @@ static ASTNode* parse_stmt() {
         strcpy(n->name, cur_tok.name);
         expect(TK_IDENT, "預期變數名稱");
         n->ty = decl_ty;
-        sym_add(n->name, decl_ty);
+        n->array_len = 0;
+        if (cur_tok.type == '[') {
+            if (is_ptr(decl_ty)) error("指標型別不可再宣告為陣列");
+            next_token();
+            if (cur_tok.type != TK_NUM) error("陣列大小必須是數字");
+            n->array_len = cur_tok.val;
+            next_token();
+            expect(']', "預期 ']'");
+            n->ty = ptr_of(decl_ty);
+        }
+        sym_add(n->name, n->ty, n->array_len);
         if (cur_tok.type == TK_ASSIGN) {
+            if (n->array_len > 0) error("陣列不支援初始化");
             next_token();
             n->left = parse_expr();
         }
@@ -404,17 +507,26 @@ static ASTNode* parse_stmt() {
         n->left = parse_expr();
         expect(TK_SEMI, "預期 ';'");
         return n;
-    } else if (cur_tok.type == TK_IDENT) {
+    } else if (cur_tok.type == TK_IDENT || cur_tok.type == TK_MUL) {
+        if (cur_tok.type == TK_IDENT) {
+            char *saved_p2 = p; Token saved_tok2 = cur_tok;
+            next_token();
+            int is_call = (cur_tok.type == TK_LPAREN);
+            p = saved_p2; cur_tok = saved_tok2;
+            if (is_call) {
+                ASTNode *n = new_node(AST_EXPR_STMT);
+                n->left = parse_expr();
+                expect(TK_SEMI, "預期 ';'");
+                return n;
+            }
+        }
         char *saved_p = p; Token saved_tok = cur_tok;
-        next_token();
+        ASTNode *lv = parse_lvalue();
         int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
-        p = saved_p; cur_tok = saved_tok;
-
         if (is_assign) {
             ASTNode *n = new_node(AST_ASSIGN);
-            strcpy(n->name, cur_tok.name);
-            n->ty = sym_find(n->name);
-            next_token();
+            n->left = lv;
+            n->ty = lv->ty;
             if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
                 n->op = cur_tok.type;
                 next_token();
@@ -424,12 +536,12 @@ static ASTNode* parse_stmt() {
             n->right = parse_expr();
             expect(TK_SEMI, "預期 ';'");
             return n;
-        } else {
-            ASTNode *n = new_node(AST_EXPR_STMT);
-            n->left = parse_expr();
-            expect(TK_SEMI, "預期 ';'");
-            return n;
         }
+        p = saved_p; cur_tok = saved_tok;
+        ASTNode *n = new_node(AST_EXPR_STMT);
+        n->left = parse_expr();
+        expect(TK_SEMI, "預期 ';'");
+        return n;
     }
     error("未知的陳述式 (Statement)");
     return NULL;
@@ -453,7 +565,8 @@ static ASTNode* parse_func() {
             strcpy(param->name, cur_tok.name);
             expect(TK_IDENT, "預期參數名稱");
             param->ty = pty;
-            sym_add(param->name, pty);
+            param->array_len = 0;
+            sym_add(param->name, pty, 0);
             if (!param_head) param_head = param_tail = param;
             else { param_tail->next = param; param_tail = param; }
             if (cur_tok.type == TK_COMMA) { next_token(); continue; }
