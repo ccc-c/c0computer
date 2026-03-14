@@ -7,7 +7,8 @@
 // 1. 詞法分析 (Lexer)
 // ============================================================================
 typedef enum {
-    TK_EOF, TK_INT, TK_RETURN, TK_IF, TK_ELSE, TK_WHILE, TK_FOR, TK_IDENT, TK_NUM, TK_STR,
+    TK_EOF, TK_INT, TK_RETURN, TK_IF, TK_ELSE, TK_WHILE, TK_FOR, TK_BREAK, TK_CONTINUE,
+    TK_IDENT, TK_NUM, TK_STR,
     TK_ASSIGN = '=', TK_PLUS = '+', TK_MINUS = '-', TK_MUL = '*', TK_DIV = '/',
     TK_LT = '<', TK_GT = '>', TK_NOT = '!', TK_LPAREN = '(', TK_RPAREN = ')',
     TK_LBRACE = '{', TK_RBRACE = '}', TK_SEMI = ';', TK_COMMA = ','
@@ -69,6 +70,8 @@ void next_token() {
         else if (strcmp(cur_tok.name, "else") == 0) cur_tok.type = TK_ELSE;
         else if (strcmp(cur_tok.name, "while") == 0) cur_tok.type = TK_WHILE;
         else if (strcmp(cur_tok.name, "for") == 0) cur_tok.type = TK_FOR;
+        else if (strcmp(cur_tok.name, "break") == 0) cur_tok.type = TK_BREAK;
+        else if (strcmp(cur_tok.name, "continue") == 0) cur_tok.type = TK_CONTINUE;
         else cur_tok.type = TK_IDENT;
         return;
     }
@@ -98,7 +101,7 @@ void expect(TokenType type, const char *msg) {
 // ============================================================================
 typedef enum {
     AST_FUNC, AST_DECL, AST_ASSIGN, AST_BINOP, AST_VAR, AST_NUM, AST_RETURN,
-    AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR
+    AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR, AST_BREAK, AST_CONTINUE
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -125,6 +128,8 @@ ASTNode* parse_block();
 ASTNode* parse_if_stmt();
 ASTNode* parse_while_stmt();
 ASTNode* parse_for_stmt();
+ASTNode* parse_break_stmt();
+ASTNode* parse_continue_stmt();
 
 ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
@@ -343,6 +348,20 @@ ASTNode* parse_for_stmt() {
     return n;
 }
 
+ASTNode* parse_break_stmt() {
+    expect(TK_BREAK, "預期 'break'");
+    ASTNode *n = new_node(AST_BREAK);
+    expect(TK_SEMI, "預期 ';'");
+    return n;
+}
+
+ASTNode* parse_continue_stmt() {
+    expect(TK_CONTINUE, "預期 'continue'");
+    ASTNode *n = new_node(AST_CONTINUE);
+    expect(TK_SEMI, "預期 ';'");
+    return n;
+}
+
 ASTNode* parse_stmt() {
     if (cur_tok.type == TK_INT) {
         next_token();
@@ -361,6 +380,10 @@ ASTNode* parse_stmt() {
         return parse_while_stmt();
     } else if (cur_tok.type == TK_FOR) {
         return parse_for_stmt();
+    } else if (cur_tok.type == TK_BREAK) {
+        return parse_break_stmt();
+    } else if (cur_tok.type == TK_CONTINUE) {
+        return parse_continue_stmt();
     } else if (cur_tok.type == TK_RETURN) {
         next_token();
         ASTNode *n = new_node(AST_RETURN);
@@ -445,6 +468,9 @@ int stmt_list_ends_with_break(ASTNode *node);
 int stmt_ends_with_break(ASTNode *node);
 int stmt_list_may_fallthrough(ASTNode *node);
 int stmt_may_fallthrough(ASTNode *node);
+int break_label_stack[128];
+int continue_label_stack[128];
+int loop_depth = 0;
 
 int is_param(ASTNode *params, const char *name) {
     ASTNode *pnode = params;
@@ -458,6 +484,7 @@ int is_param(ASTNode *params, const char *name) {
 int stmt_ends_with_return(ASTNode *node) {
     if (!node) return 0;
     if (node->type == AST_RETURN) return 1;
+    if (node->type == AST_BREAK || node->type == AST_CONTINUE) return 1;
     if (node->type == AST_IF) {
         int then_ret = stmt_list_ends_with_return(node->then_body);
         int else_ret = stmt_list_ends_with_return(node->else_body);
@@ -493,7 +520,7 @@ int stmt_list_ends_with_break(ASTNode *node) {
 
 int stmt_may_fallthrough(ASTNode *node) {
     if (!node) return 1;
-    if (node->type == AST_RETURN) return 0;
+    if (node->type == AST_RETURN || node->type == AST_BREAK || node->type == AST_CONTINUE) return 0;
     if (node->type == AST_IF) {
         int then_ft = stmt_list_may_fallthrough(node->then_body);
         int else_ft = node->else_body ? stmt_list_may_fallthrough(node->else_body) : 1;
@@ -642,10 +669,14 @@ void gen_stmt(ASTNode *node) {
             free(cond_val);
 
             fprintf(out, "L%d:\n", body_label);
+            break_label_stack[loop_depth] = end_label;
+            continue_label_stack[loop_depth] = cond_label;
+            loop_depth++;
             gen_stmt(node->body);
             if (stmt_list_may_fallthrough(node->body)) {
                 fprintf(out, "  br label %%L%d\n", cond_label);
             }
+            loop_depth--;
 
             fprintf(out, "L%d:\n", end_label);
         } else if (node->type == AST_FOR) {
@@ -683,10 +714,14 @@ void gen_stmt(ASTNode *node) {
             }
 
             fprintf(out, "L%d:\n", body_label);
+            break_label_stack[loop_depth] = end_label;
+            continue_label_stack[loop_depth] = update_label;
+            loop_depth++;
             gen_stmt(node->body);
             if (stmt_list_may_fallthrough(node->body)) {
                 fprintf(out, "  br label %%L%d\n", update_label);
             }
+            loop_depth--;
 
             fprintf(out, "L%d:\n", update_label);
             if (node->update) {
@@ -706,6 +741,12 @@ void gen_stmt(ASTNode *node) {
             fprintf(out, "  br label %%L%d\n", cond_label);
 
             fprintf(out, "L%d:\n", end_label);
+        } else if (node->type == AST_BREAK) {
+            if (loop_depth == 0) error("break 不在迴圈內");
+            fprintf(out, "  br label %%L%d\n", break_label_stack[loop_depth - 1]);
+        } else if (node->type == AST_CONTINUE) {
+            if (loop_depth == 0) error("continue 不在迴圈內");
+            fprintf(out, "  br label %%L%d\n", continue_label_stack[loop_depth - 1]);
         } else if (node->type == AST_RETURN) {
             char *val = gen_expr(node->left);
             fprintf(out, "  ret i32 %s\n", val);
