@@ -2,6 +2,63 @@
 #include "lexer.h"
 #include <string.h>
 
+typedef struct {
+    char name[64];
+    CType ty;
+} Sym;
+
+static Sym symtab[256];
+static int sym_cnt = 0;
+
+typedef struct {
+    char name[64];
+    CType ret;
+} FuncSym;
+
+static FuncSym func_tab[128];
+static int func_cnt = 0;
+
+static void sym_reset(void) { sym_cnt = 0; }
+
+static void sym_add(const char *name, CType ty) {
+    if (sym_cnt >= 256) error("符號表已滿");
+    strcpy(symtab[sym_cnt].name, name);
+    symtab[sym_cnt].ty = ty;
+    sym_cnt++;
+}
+
+static void func_add(const char *name, CType ret) {
+    for (int i = 0; i < func_cnt; i++) {
+        if (strcmp(func_tab[i].name, name) == 0) return;
+    }
+    if (func_cnt >= 128) error("函式表已滿");
+    strcpy(func_tab[func_cnt].name, name);
+    func_tab[func_cnt].ret = ret;
+    func_cnt++;
+}
+
+static CType func_find(const char *name) {
+    for (int i = 0; i < func_cnt; i++) {
+        if (strcmp(func_tab[i].name, name) == 0) return func_tab[i].ret;
+    }
+    return TY_INT;
+}
+
+static CType sym_find(const char *name) {
+    for (int i = sym_cnt - 1; i >= 0; i--) {
+        if (strcmp(symtab[i].name, name) == 0) return symtab[i].ty;
+    }
+    error("找不到變數宣告");
+    return TY_INT;
+}
+
+static CType parse_type(void) {
+    if (cur_tok.type == TK_INT) { next_token(); return TY_INT; }
+    if (cur_tok.type == TK_CHAR) { next_token(); return TY_CHAR; }
+    error("預期型別 int 或 char");
+    return TY_INT;
+}
+
 static ASTNode* parse_expr();
 static ASTNode* parse_stmt();
 static ASTNode* parse_block();
@@ -16,6 +73,7 @@ static ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
         ASTNode *n = new_node(AST_NUM);
         n->val = cur_tok.val;
+        n->ty = TY_INT;
         next_token();
         return n;
     } else if (cur_tok.type == TK_STR) {
@@ -32,6 +90,7 @@ static ASTNode* parse_primary() {
             next_token();
             ASTNode *n = new_node(AST_CALL);
             strcpy(n->name, name);
+            n->ty = func_find(name);
             ASTNode *head = NULL, *tail = NULL;
             if (cur_tok.type != TK_RPAREN) {
                 head = tail = parse_expr();
@@ -47,11 +106,13 @@ static ASTNode* parse_primary() {
         } else {
             ASTNode *n = new_node(AST_VAR);
             strcpy(n->name, name);
+            n->ty = sym_find(name);
             if (cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
                 ASTNode *inc = new_node(AST_INCDEC);
                 inc->op = cur_tok.type;
                 inc->is_prefix = 0;
                 strcpy(inc->name, name);
+                inc->ty = n->ty;
                 next_token();
                 return inc;
             }
@@ -72,6 +133,7 @@ static ASTNode* parse_mul() {
     while (cur_tok.type == TK_MUL || cur_tok.type == TK_DIV || cur_tok.type == TK_MOD) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_unary(); n = p;
+        p->ty = TY_INT;
     }
     return n;
 }
@@ -81,6 +143,7 @@ static ASTNode* parse_add() {
     while (cur_tok.type == TK_PLUS || cur_tok.type == TK_MINUS) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_mul(); n = p;
+        p->ty = TY_INT;
     }
     return n;
 }
@@ -91,6 +154,7 @@ static ASTNode* parse_rel() {
            cur_tok.type == TK_LE || cur_tok.type == TK_GE) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_add(); n = p;
+        p->ty = TY_INT;
     }
     return n;
 }
@@ -100,6 +164,7 @@ static ASTNode* parse_eq() {
     while (cur_tok.type == TK_EQ || cur_tok.type == TK_NE) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_rel(); n = p;
+        p->ty = TY_INT;
     }
     return n;
 }
@@ -109,6 +174,7 @@ static ASTNode* parse_and() {
     while (cur_tok.type == TK_ANDAND) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_eq(); n = p;
+        p->ty = TY_INT;
     }
     return n;
 }
@@ -118,6 +184,7 @@ static ASTNode* parse_or() {
     while (cur_tok.type == TK_OROR) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_and(); n = p;
+        p->ty = TY_INT;
     }
     return n;
 }
@@ -136,11 +203,13 @@ static ASTNode* parse_unary() {
             inc->op = op;
             inc->is_prefix = 1;
             strcpy(inc->name, operand->name);
+            inc->ty = operand->ty;
             return inc;
         }
         ASTNode *n = new_node(AST_UNARY);
         n->op = op;
         n->left = operand;
+        n->ty = TY_INT;
         return n;
     }
     return parse_primary();
@@ -203,11 +272,13 @@ static ASTNode* parse_for_stmt() {
     ASTNode *update = NULL;
 
     if (cur_tok.type != TK_SEMI) {
-        if (cur_tok.type == TK_INT) {
-            next_token();
+        if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR) {
+            CType decl_ty = parse_type();
             ASTNode *decl = new_node(AST_DECL);
             strcpy(decl->name, cur_tok.name);
             expect(TK_IDENT, "預期變數名稱");
+            decl->ty = decl_ty;
+            sym_add(decl->name, decl_ty);
             if (cur_tok.type == TK_ASSIGN) {
                 next_token();
                 decl->left = parse_expr();
@@ -221,6 +292,7 @@ static ASTNode* parse_for_stmt() {
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
                 strcpy(assign->name, cur_tok.name);
+                assign->ty = sym_find(assign->name);
                 next_token();
                 if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
                     assign->op = cur_tok.type;
@@ -257,6 +329,7 @@ static ASTNode* parse_for_stmt() {
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
                 strcpy(assign->name, cur_tok.name);
+                assign->ty = sym_find(assign->name);
                 next_token();
                 if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
                     assign->op = cur_tok.type;
@@ -302,11 +375,13 @@ static ASTNode* parse_continue_stmt() {
 }
 
 static ASTNode* parse_stmt() {
-    if (cur_tok.type == TK_INT) {
-        next_token();
+    if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR) {
+        CType decl_ty = parse_type();
         ASTNode *n = new_node(AST_DECL);
         strcpy(n->name, cur_tok.name);
         expect(TK_IDENT, "預期變數名稱");
+        n->ty = decl_ty;
+        sym_add(n->name, decl_ty);
         if (cur_tok.type == TK_ASSIGN) {
             next_token();
             n->left = parse_expr();
@@ -338,6 +413,7 @@ static ASTNode* parse_stmt() {
         if (is_assign) {
             ASTNode *n = new_node(AST_ASSIGN);
             strcpy(n->name, cur_tok.name);
+            n->ty = sym_find(n->name);
             next_token();
             if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
                 n->op = cur_tok.type;
@@ -360,19 +436,24 @@ static ASTNode* parse_stmt() {
 }
 
 static ASTNode* parse_func() {
-    expect(TK_INT, "函數必須回傳 int");
+    CType ret_ty = parse_type();
     ASTNode *func = new_node(AST_FUNC);
+    func->ty = ret_ty;
     strcpy(func->name, cur_tok.name);
     expect(TK_IDENT, "預期函數名稱");
+    func_add(func->name, ret_ty);
     expect(TK_LPAREN, "預期 '('");
 
+    sym_reset();
     ASTNode *param_head = NULL, *param_tail = NULL;
     if (cur_tok.type != TK_RPAREN) {
         while (1) {
-            expect(TK_INT, "參數必須是 int");
+            CType pty = parse_type();
             ASTNode *param = new_node(AST_DECL);
             strcpy(param->name, cur_tok.name);
             expect(TK_IDENT, "預期參數名稱");
+            param->ty = pty;
+            sym_add(param->name, pty);
             if (!param_head) param_head = param_tail = param;
             else { param_tail->next = param; param_tail = param; }
             if (cur_tok.type == TK_COMMA) { next_token(); continue; }

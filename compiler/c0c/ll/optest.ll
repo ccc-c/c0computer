@@ -23,9 +23,9 @@ L5:
   %5 = load i1, ptr %0
   br i1 %5, label %L1, label %L2
 L1:
-  %6 = load i32, ptr %i
-  %7 = load i32, ptr %sum
-  %8 = add i32 %7, %6
+  %6 = load i32, ptr %sum
+  %7 = load i32, ptr %i
+  %8 = add i32 %6, %7
   store i32 %8, ptr %sum
   %9 = load i32, ptr %i
   %10 = add i32 %9, 1

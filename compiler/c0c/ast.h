@@ -6,8 +6,14 @@ typedef enum {
     AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR, AST_BREAK, AST_CONTINUE, AST_INCDEC
 } ASTNodeType;
 
+typedef enum {
+    TY_INT,
+    TY_CHAR
+} CType;
+
 typedef struct ASTNode {
     ASTNodeType type;
+    CType ty;
     int val;
     char name[64];
     char str_val[256];
