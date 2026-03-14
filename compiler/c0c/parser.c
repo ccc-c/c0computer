@@ -18,6 +18,7 @@ typedef struct {
 
 static FuncSym func_tab[128];
 static int func_cnt = 0;
+static CType current_func_ret = TY_INT;
 
 static void sym_reset(void) { sym_cnt = 0; }
 
@@ -58,16 +59,22 @@ static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR; }
 static CType ptr_of(CType ty) { return (ty == TY_CHAR) ? TY_CHAR_PTR : TY_INT_PTR; }
 static CType base_of(CType ty) { return (ty == TY_CHAR_PTR) ? TY_CHAR : TY_INT; }
 
-static CType parse_type(void) {
+static CType parse_type_allow_void(int allow_void) {
     CType base;
     if (cur_tok.type == TK_INT) { next_token(); base = TY_INT; }
     else if (cur_tok.type == TK_CHAR) { next_token(); base = TY_CHAR; }
-    else { error("預期型別 int 或 char"); return TY_INT; }
+    else if (allow_void && cur_tok.type == TK_VOID) { next_token(); base = TY_VOID; }
+    else { error("預期型別 int、char 或 void"); return TY_INT; }
     if (cur_tok.type == TK_MUL) {
+        if (base == TY_VOID) error("不支援 void*");
         next_token();
         return ptr_of(base);
     }
     return base;
+}
+
+static CType parse_type(void) {
+    return parse_type_allow_void(0);
 }
 
 static ASTNode* make_var_node(const char *name) {
@@ -246,7 +253,7 @@ static ASTNode* parse_unary() {
             if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR) {
                 p = saved_p; cur_tok = saved_tok;
                 expect(TK_LPAREN, "預期 '('");
-                CType ty = parse_type();
+                CType ty = parse_type_allow_void(0);
                 expect(TK_RPAREN, "預期 ')'");
                 n->ty = TY_INT;
                 n->val = (ty == TY_CHAR) ? 1 : (is_ptr(ty) ? 8 : 4);
@@ -333,12 +340,14 @@ static ASTNode* parse_lvalue() {
 
 static ASTNode* parse_block() {
     expect(TK_LBRACE, "預期 '{'");
+    int scope_mark = sym_cnt;
     ASTNode *head = NULL, *tail = NULL;
     while (cur_tok.type != TK_RBRACE && cur_tok.type != TK_EOF) {
         ASTNode *stmt = parse_stmt();
         if (!head) head = tail = stmt; else { tail->next = stmt; tail = stmt; }
     }
     expect(TK_RBRACE, "預期 '}'");
+    sym_cnt = scope_mark;
     return head;
 }
 
@@ -395,6 +404,7 @@ static ASTNode* parse_for_stmt() {
             expect(TK_IDENT, "預期變數名稱");
             decl->ty = decl_ty;
             decl->array_len = 0;
+            decl->init_kind = 0;
             if (cur_tok.type == '[') {
                 if (is_ptr(decl_ty)) error("指標型別不可再宣告為陣列");
                 next_token();
@@ -406,9 +416,33 @@ static ASTNode* parse_for_stmt() {
             }
             sym_add(decl->name, decl->ty, decl->array_len);
             if (cur_tok.type == TK_ASSIGN) {
-                if (decl->array_len > 0) error("陣列不支援初始化");
                 next_token();
-                decl->left = parse_expr();
+                if (decl->array_len > 0) {
+                    if (cur_tok.type == TK_STR && base_of(decl->ty) == TY_CHAR) {
+                        decl->init_kind = 3;
+                        strcpy(decl->str_val, cur_tok.str_val);
+                        next_token();
+                    } else if (cur_tok.type == '{') {
+                        decl->init_kind = 2;
+                        next_token();
+                        ASTNode *head = NULL, *tail = NULL;
+                        if (cur_tok.type != '}') {
+                            head = tail = parse_expr();
+                            while (cur_tok.type == TK_COMMA) {
+                                next_token();
+                                tail->next = parse_expr();
+                                tail = tail->next;
+                            }
+                        }
+                        expect('}', "預期 '}'");
+                        decl->left = head;
+                    } else {
+                        error("陣列初始化需使用 { } 或字串");
+                    }
+                } else {
+                    decl->init_kind = 1;
+                    decl->left = parse_expr();
+                }
             }
             init = decl;
         } else if (cur_tok.type == TK_IDENT) {
@@ -509,6 +543,7 @@ static ASTNode* parse_stmt() {
         expect(TK_IDENT, "預期變數名稱");
         n->ty = decl_ty;
         n->array_len = 0;
+        n->init_kind = 0;
         if (cur_tok.type == '[') {
             if (is_ptr(decl_ty)) error("指標型別不可再宣告為陣列");
             next_token();
@@ -520,11 +555,39 @@ static ASTNode* parse_stmt() {
         }
         sym_add(n->name, n->ty, n->array_len);
         if (cur_tok.type == TK_ASSIGN) {
-            if (n->array_len > 0) error("陣列不支援初始化");
             next_token();
-            n->left = parse_expr();
+            if (n->array_len > 0) {
+                if (cur_tok.type == TK_STR && base_of(n->ty) == TY_CHAR) {
+                    n->init_kind = 3;
+                    strcpy(n->str_val, cur_tok.str_val);
+                    next_token();
+                } else if (cur_tok.type == '{') {
+                    n->init_kind = 2;
+                    next_token();
+                    ASTNode *head = NULL, *tail = NULL;
+                    if (cur_tok.type != '}') {
+                        head = tail = parse_expr();
+                        while (cur_tok.type == TK_COMMA) {
+                            next_token();
+                            tail->next = parse_expr();
+                            tail = tail->next;
+                        }
+                    }
+                    expect('}', "預期 '}'");
+                    n->left = head;
+                } else {
+                    error("陣列初始化需使用 { } 或字串");
+                }
+            } else {
+                n->init_kind = 1;
+                n->left = parse_expr();
+            }
         }
         expect(TK_SEMI, "預期 ';'");
+        return n;
+    } else if (cur_tok.type == TK_LBRACE) {
+        ASTNode *n = new_node(AST_BLOCK);
+        n->left = parse_block();
         return n;
     } else if (cur_tok.type == TK_IF) {
         return parse_if_stmt();
@@ -539,8 +602,17 @@ static ASTNode* parse_stmt() {
     } else if (cur_tok.type == TK_RETURN) {
         next_token();
         ASTNode *n = new_node(AST_RETURN);
-        n->left = parse_expr();
-        expect(TK_SEMI, "預期 ';'");
+        if (cur_tok.type == TK_SEMI) {
+            if (current_func_ret != TY_VOID) error("非 void 函式必須回傳值");
+            n->left = NULL;
+            n->ty = TY_VOID;
+            next_token();
+        } else {
+            if (current_func_ret == TY_VOID) error("void 函式不能回傳值");
+            n->left = parse_expr();
+            n->ty = current_func_ret;
+            expect(TK_SEMI, "預期 ';'");
+        }
         return n;
     } else if (cur_tok.type == TK_IDENT || cur_tok.type == TK_MUL) {
         if (cur_tok.type == TK_IDENT) {
@@ -583,7 +655,7 @@ static ASTNode* parse_stmt() {
 }
 
 static ASTNode* parse_func() {
-    CType ret_ty = parse_type();
+    CType ret_ty = parse_type_allow_void(1);
     ASTNode *func = new_node(AST_FUNC);
     func->ty = ret_ty;
     strcpy(func->name, cur_tok.name);
@@ -601,6 +673,7 @@ static ASTNode* parse_func() {
             expect(TK_IDENT, "預期參數名稱");
             param->ty = pty;
             param->array_len = 0;
+            param->init_kind = 0;
             sym_add(param->name, pty, 0);
             if (!param_head) param_head = param_tail = param;
             else { param_tail->next = param; param_tail = param; }
@@ -609,10 +682,19 @@ static ASTNode* parse_func() {
         }
     }
     expect(TK_RPAREN, "預期 ')'");
+    if (cur_tok.type == TK_SEMI) {
+        next_token();
+        func->left = param_head;
+        func->right = NULL;
+        func->is_decl = 1;
+        return func;
+    }
 
+    current_func_ret = ret_ty;
     ASTNode *body = parse_block();
     func->left = param_head;
     func->right = body;
+    func->is_decl = 0;
     return func;
 }
 

@@ -4,8 +4,10 @@ set -x
 ./c0run.sh loop_break
 ./c0run.sh optest
 ./c0run.sh ptr_test
-./c0run.sh 
 ./c0run.sh char_test
 ./c0run.sh loop
 ./c0run.sh ptr_arith
 ./c0run.sh sizeof_test
+./c0run.sh array_init
+./c0run.sh scope
+./c0run.sh proto_void

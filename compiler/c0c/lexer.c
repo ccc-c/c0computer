@@ -49,6 +49,7 @@ void next_token(void) {
 
         if (strcmp(cur_tok.name, "int") == 0) cur_tok.type = TK_INT;
         else if (strcmp(cur_tok.name, "char") == 0) cur_tok.type = TK_CHAR;
+        else if (strcmp(cur_tok.name, "void") == 0) cur_tok.type = TK_VOID;
         else if (strcmp(cur_tok.name, "return") == 0) cur_tok.type = TK_RETURN;
         else if (strcmp(cur_tok.name, "if") == 0) cur_tok.type = TK_IF;
         else if (strcmp(cur_tok.name, "else") == 0) cur_tok.type = TK_ELSE;
