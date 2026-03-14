@@ -97,6 +97,12 @@ static ASTNode* parse_primary() {
         n->ty = TY_INT;
         next_token();
         return n;
+    } else if (cur_tok.type == TK_CHAR_LIT) {
+        ASTNode *n = new_node(AST_NUM);
+        n->val = cur_tok.val;
+        n->ty = TY_CHAR;
+        next_token();
+        return n;
     } else if (cur_tok.type == TK_STR) {
         ASTNode *n = new_node(AST_STR);
         strcpy(n->str_val, cur_tok.str_val);
@@ -176,7 +182,12 @@ static ASTNode* parse_add() {
     while (cur_tok.type == TK_PLUS || cur_tok.type == TK_MINUS) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_mul(); n = p;
-        p->ty = TY_INT;
+        if ((is_ptr(p->left->ty) && (p->op == TK_PLUS || p->op == TK_MINUS)) ||
+            (is_ptr(p->right->ty) && p->op == TK_PLUS)) {
+            p->ty = is_ptr(p->left->ty) ? p->left->ty : p->right->ty;
+        } else {
+            p->ty = TY_INT;
+        }
     }
     return n;
 }
@@ -225,6 +236,30 @@ static ASTNode* parse_or() {
 static ASTNode* parse_expr() { return parse_or(); }
 
 static ASTNode* parse_unary() {
+    if (cur_tok.type == TK_SIZEOF) {
+        next_token();
+        ASTNode *n = new_node(AST_SIZEOF);
+        n->ty = TY_INT;
+        if (cur_tok.type == TK_LPAREN) {
+            char *saved_p = p; Token saved_tok = cur_tok;
+            next_token();
+            if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR) {
+                p = saved_p; cur_tok = saved_tok;
+                expect(TK_LPAREN, "預期 '('");
+                CType ty = parse_type();
+                expect(TK_RPAREN, "預期 ')'");
+                n->ty = TY_INT;
+                n->val = (ty == TY_CHAR) ? 1 : (is_ptr(ty) ? 8 : 4);
+                n->left = NULL;
+                n->op = 0;
+                return n;
+            }
+            p = saved_p; cur_tok = saved_tok;
+        }
+        n->left = parse_unary();
+        n->val = (n->left->ty == TY_CHAR) ? 1 : (is_ptr(n->left->ty) ? 8 : 4);
+        return n;
+    }
     if (cur_tok.type == TK_MINUS || cur_tok.type == TK_NOT ||
         cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS ||
         cur_tok.type == TK_MUL || cur_tok.type == '&') {

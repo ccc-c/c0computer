@@ -56,6 +56,7 @@ void next_token(void) {
         else if (strcmp(cur_tok.name, "for") == 0) cur_tok.type = TK_FOR;
         else if (strcmp(cur_tok.name, "break") == 0) cur_tok.type = TK_BREAK;
         else if (strcmp(cur_tok.name, "continue") == 0) cur_tok.type = TK_CONTINUE;
+        else if (strcmp(cur_tok.name, "sizeof") == 0) cur_tok.type = TK_SIZEOF;
         else cur_tok.type = TK_IDENT;
         return;
     }
@@ -63,6 +64,26 @@ void next_token(void) {
     if (isdigit((unsigned char)*p)) {
         cur_tok.val = strtol(p, &p, 10);
         cur_tok.type = TK_NUM;
+        return;
+    }
+
+    if (*p == '\'') {
+        p++;
+        int ch = 0;
+        if (*p == '\\') {
+            p++;
+            if (*p == 'n') { ch = '\n'; p++; }
+            else if (*p == 't') { ch = '\t'; p++; }
+            else if (*p == 'r') { ch = '\r'; p++; }
+            else if (*p == '\\') { ch = '\\'; p++; }
+            else if (*p == '\'') { ch = '\''; p++; }
+            else { ch = (unsigned char)*p++; }
+        } else {
+            ch = (unsigned char)*p++;
+        }
+        if (*p == '\'') p++;
+        cur_tok.val = ch;
+        cur_tok.type = TK_CHAR_LIT;
         return;
     }
 

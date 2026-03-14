@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 int fact(int n) {
     if (n <= 1) {
         return 1;
@@ -7,5 +9,7 @@ int fact(int n) {
 }
 
 int main() {
-    return fact(5);
+    int r = fact(5);
+    printf("fact(5)=%d\n", r);
+    return 0;
 }

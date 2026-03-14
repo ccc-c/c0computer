@@ -352,6 +352,59 @@ static Value gen_expr(ASTNode *node) {
             return value_from_reg(res, VT_I1);
         }
 
+        if ((node->op == TK_EQ || node->op == TK_NE) &&
+            (is_ptr(node->left->ty) || is_ptr(node->right->ty))) {
+            Value l = gen_expr(node->left);
+            Value r;
+            if (is_ptr(node->left->ty) && is_ptr(node->right->ty)) {
+                r = gen_expr(node->right);
+            } else {
+                ASTNode *other = is_ptr(node->left->ty) ? node->right : node->left;
+                if (other->type == AST_NUM && other->val == 0) {
+                    char *res = malloc(16);
+                    strcpy(res, "null");
+                    r = value_from_reg(res, VT_PTR);
+                } else {
+                    error("指標只能與 0 或指標比較");
+                }
+            }
+            int rcmp = reg_cnt++;
+            fprintf(out_fp, "  %%%d = icmp %s ptr %s, %s\n", rcmp,
+                    (node->op == TK_EQ) ? "eq" : "ne", l.reg, r.reg);
+            free(l.reg);
+            free(r.reg);
+            char *res = malloc(64);
+            sprintf(res, "%%%d", rcmp);
+            return value_from_reg(res, VT_I1);
+        }
+
+        if ((node->op == TK_PLUS || node->op == TK_MINUS) &&
+            (is_ptr(node->left->ty) || is_ptr(node->right->ty))) {
+            ASTNode *ptr_node = is_ptr(node->left->ty) ? node->left : node->right;
+            ASTNode *int_node = is_ptr(node->left->ty) ? node->right : node->left;
+            if (node->op == TK_MINUS && is_ptr(node->right->ty)) {
+                error("不支援指標相減");
+            }
+            Value base = gen_expr(ptr_node);
+            Value idx = to_i32(gen_expr(int_node));
+            if (node->op == TK_MINUS && is_ptr(node->left->ty)) {
+                int rneg = reg_cnt++;
+                fprintf(out_fp, "  %%%d = sub i32 0, %s\n", rneg, idx.reg);
+                free(idx.reg);
+                char *neg = malloc(64);
+                sprintf(neg, "%%%d", rneg);
+                idx = value_from_reg(neg, VT_I32);
+            }
+            int r = reg_cnt++;
+            fprintf(out_fp, "  %%%d = getelementptr %s, ptr %s, i32 %s\n",
+                    r, llvm_elem_type(ptr_node->ty), base.reg, idx.reg);
+            free(base.reg);
+            free(idx.reg);
+            char *res = malloc(64);
+            sprintf(res, "%%%d", r);
+            return value_from_reg(res, VT_PTR);
+        }
+
         Value left = to_i32(gen_expr(node->left));
         Value right = to_i32(gen_expr(node->right));
         int r = reg_cnt++;
@@ -393,6 +446,10 @@ static Value gen_expr(ASTNode *node) {
             sprintf(res, "%%%d", r);
             return value_from_reg(res, VT_I32);
         }
+    } else if (node->type == AST_SIZEOF) {
+        char *res = malloc(64);
+        sprintf(res, "%d", node->val);
+        return value_from_reg(res, VT_I32);
     } else if (node->type == AST_INCDEC) {
         int is_inc = (node->op == TK_PLUSPLUS);
         int r_old = reg_cnt++;
