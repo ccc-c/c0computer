@@ -1,6 +1,4 @@
 ; ModuleID = 'c0c'
-target triple = "arm64-apple-macosx15.0.0"
-
 define i32 @main() {
 entry:
   %a = alloca i32
@@ -15,9 +13,9 @@ entry:
   %4 = sdiv i32 %3, 2
   store i32 %4, ptr %c
   %5 = load i32, ptr %a
-  %6 = call i32 @printf(ptr ptr @.str.0, i32 %5)
+  %6 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %5)
   %7 = load i32, ptr %c
-  %8 = call i32 @printf(ptr ptr @.str.1, i32 %7)
+  %8 = call i32 (ptr, ...) @printf(ptr @.str.1, i32 %7)
   ret i32 0
 }
 

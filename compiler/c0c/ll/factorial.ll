@@ -1,6 +1,4 @@
 ; ModuleID = 'c0c'
-target triple = "arm64-apple-macosx15.0.0"
-
 define i32 @fact(i32 %n) {
 entry:
   %n.addr = alloca i32

@@ -1,6 +1,4 @@
 ; ModuleID = 'c0c'
-target triple = "arm64-apple-macosx15.0.0"
-
 define i32 @fact(i32 %n) {
 entry:
   %n.addr = alloca i32
@@ -10,7 +8,6 @@ entry:
   br i1 %1, label %L0, label %L1
 L0:
   ret i32 1
-  br label %L2
 L1:
   %2 = load i32, ptr %n.addr
   %3 = load i32, ptr %n.addr
@@ -18,14 +15,17 @@ L1:
   %5 = call i32 @fact(i32 %4)
   %6 = mul i32 %2, %5
   ret i32 %6
-  br label %L2
-L2:
 }
 
 define i32 @main() {
 entry:
+  %r = alloca i32
   %0 = call i32 @fact(i32 5)
-  ret i32 %0
+  store i32 %0, ptr %r
+  %1 = load i32, ptr %r
+  %2 = call i32 (ptr, ...) @printf(ptr @.str.0, i32 %1)
+  ret i32 0
 }
 
+@.str.0 = private unnamed_addr constant [12 x i8] c"fact(5)=%d\0A\00", align 1
 declare i32 @printf(ptr, ...)

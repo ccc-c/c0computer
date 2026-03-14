@@ -250,6 +250,10 @@ ASTNode* parse_stmt() {
         ASTNode *n = new_node(AST_DECL);
         strcpy(n->name, cur_tok.name);
         expect(TK_IDENT, "預期變數名稱");
+        if (cur_tok.type == TK_ASSIGN) {
+            next_token();
+            n->left = parse_expr();
+        }
         expect(TK_SEMI, "預期 ';'");
         return n;
     } else if (cur_tok.type == TK_IF) {
@@ -370,7 +374,7 @@ char* gen_expr(ASTNode *node) {
     } else if (node->type == AST_STR) {
         int id = string_cnt++;
         strcpy(string_table[id], node->str_val);
-        sprintf(res, "ptr @.str.%d", id);
+        sprintf(res, "@.str.%d", id);
         return res;
     } else if (node->type == AST_VAR) {
         int r = reg_cnt++;
@@ -395,7 +399,9 @@ char* gen_expr(ASTNode *node) {
             arg_count++;
         }
         int r = reg_cnt++;
-        fprintf(out, "  %%%d = call i32 @%s(", r, node->name);
+        int is_printf = (strcmp(node->name, "printf") == 0);
+        if (is_printf) fprintf(out, "  %%%d = call i32 (ptr, ...) @%s(", r, node->name);
+        else fprintf(out, "  %%%d = call i32 @%s(", r, node->name);
         for (int i = 0; i < arg_count; i++) {
             if (i > 0) fprintf(out, ", ");
             if (arg_types[i][0] == 'p') fprintf(out, "ptr %s", arg_res[i]); // ptr @.str.0
@@ -434,6 +440,11 @@ void gen_stmt(ASTNode *node) {
                 fprintf(out, "  store i32 %%%s, ptr %%%s.addr\n", node->name, node->name);
             } else {
                 fprintf(out, "  %%%s = alloca i32\n", node->name);
+                if (node->left) {
+                    char *val = gen_expr(node->left);
+                    fprintf(out, "  store i32 %s, ptr %%%s\n", val, node->name);
+                    free(val);
+                }
             }
         } else if (node->type == AST_ASSIGN) {
             char *val = gen_expr(node->right);
@@ -487,7 +498,7 @@ void gen_stmt(ASTNode *node) {
 
 void gen_llvm_ir(ASTNode *funcs) {
     fprintf(out, "; ModuleID = 'c0c'\n");
-    fprintf(out, "target triple = \"arm64-apple-macosx15.0.0\"\n\n");
+    // fprintf(out, "target triple = \"arm64-apple-macosx15.0.0\"\n\n");
     ASTNode *func = funcs;
     while (func) {
         // 印出函數簽名 (參數一律 i32)
