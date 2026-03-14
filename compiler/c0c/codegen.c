@@ -32,6 +32,8 @@ static CType current_ret_ty = TY_INT;
 static int break_label_stack[128];
 static int continue_label_stack[128];
 static int loop_depth = 0;
+static int switch_break_stack[128];
+static int switch_depth = 0;
 static FILE *out_fp = NULL;
 static FuncSig func_sigs[128];
 static int func_sig_cnt = 0;
@@ -142,6 +144,7 @@ static int stmt_ends_with_return(ASTNode *node) {
     if (!node) return 0;
     if (node->type == AST_RETURN) return 1;
     if (node->type == AST_BREAK || node->type == AST_CONTINUE) return 1;
+    if (node->type == AST_CASE) return stmt_list_ends_with_return(node->left);
     if (node->type == AST_IF) {
         int then_ret = stmt_list_ends_with_return(node->then_body);
         int else_ret = stmt_list_ends_with_return(node->else_body);
@@ -160,6 +163,7 @@ static int stmt_list_ends_with_return(ASTNode *node) {
 static int stmt_may_fallthrough(ASTNode *node) {
     if (!node) return 1;
     if (node->type == AST_RETURN || node->type == AST_BREAK || node->type == AST_CONTINUE) return 0;
+    if (node->type == AST_CASE) return stmt_list_may_fallthrough(node->left);
     if (node->type == AST_IF) {
         int then_ft = stmt_list_may_fallthrough(node->then_body);
         int else_ft = node->else_body ? stmt_list_may_fallthrough(node->else_body) : 1;
@@ -744,9 +748,85 @@ static void gen_stmt(ASTNode *node) {
             fprintf(out_fp, "  br label %%L%d\n", cond_label);
 
             fprintf(out_fp, "L%d:\n", end_label);
+        } else if (node->type == AST_DO) {
+            int body_label = label_cnt++;
+            int cond_label = label_cnt++;
+            int end_label = label_cnt++;
+
+            fprintf(out_fp, "  br label %%L%d\n", body_label);
+            fprintf(out_fp, "L%d:\n", body_label);
+            break_label_stack[loop_depth] = end_label;
+            continue_label_stack[loop_depth] = cond_label;
+            loop_depth++;
+            gen_stmt(node->body);
+            if (stmt_list_may_fallthrough(node->body)) {
+                fprintf(out_fp, "  br label %%L%d\n", cond_label);
+            }
+            loop_depth--;
+
+            fprintf(out_fp, "L%d:\n", cond_label);
+            Value cond_val = gen_cond(node->cond);
+            fprintf(out_fp, "  br i1 %s, label %%L%d, label %%L%d\n", cond_val.reg, body_label, end_label);
+            free(cond_val.reg);
+            fprintf(out_fp, "L%d:\n", end_label);
+        } else if (node->type == AST_SWITCH) {
+            Value cond_val = to_i32(gen_expr(node->cond));
+            int end_label = label_cnt++;
+            int case_count = 0;
+            for (ASTNode *c = node->left; c; c = c->next) case_count++;
+            int *case_labels = malloc(sizeof(int) * case_count);
+            int *case_is_default = malloc(sizeof(int) * case_count);
+            ASTNode **case_nodes = malloc(sizeof(ASTNode*) * case_count);
+            int default_label = -1;
+            int idx = 0;
+            for (ASTNode *c = node->left; c; c = c->next) {
+                case_labels[idx] = label_cnt++;
+                case_is_default[idx] = c->is_default;
+                if (c->is_default) default_label = case_labels[idx];
+                case_nodes[idx] = c;
+                idx++;
+            }
+
+            int first_check = label_cnt++;
+            fprintf(out_fp, "  br label %%L%d\n", first_check);
+
+            int check_label = first_check;
+            for (int i = 0; i < case_count; i++) {
+                if (case_is_default[i]) continue;
+                fprintf(out_fp, "L%d:\n", check_label);
+                int cmp = reg_cnt++;
+                fprintf(out_fp, "  %%%d = icmp eq i32 %s, %d\n", cmp, cond_val.reg, case_nodes[i]->val);
+                int next = label_cnt++;
+                fprintf(out_fp, "  br i1 %%%d, label %%L%d, label %%L%d\n", cmp, case_labels[i], next);
+                check_label = next;
+            }
+            fprintf(out_fp, "L%d:\n", check_label);
+            if (default_label >= 0) fprintf(out_fp, "  br label %%L%d\n", default_label);
+            else fprintf(out_fp, "  br label %%L%d\n", end_label);
+
+            switch_break_stack[switch_depth++] = end_label;
+            for (int i = 0; i < case_count; i++) {
+                fprintf(out_fp, "L%d:\n", case_labels[i]);
+                gen_stmt(case_nodes[i]->left);
+                if (stmt_list_may_fallthrough(case_nodes[i]->left)) {
+                    int next_label = (i + 1 < case_count) ? case_labels[i + 1] : end_label;
+                    fprintf(out_fp, "  br label %%L%d\n", next_label);
+                }
+            }
+            switch_depth--;
+            fprintf(out_fp, "L%d:\n", end_label);
+            free(cond_val.reg);
+            free(case_labels);
+            free(case_is_default);
+            free(case_nodes);
         } else if (node->type == AST_BREAK) {
-            if (loop_depth == 0) error("break 不在迴圈內");
-            fprintf(out_fp, "  br label %%L%d\n", break_label_stack[loop_depth - 1]);
+            if (loop_depth > 0) {
+                fprintf(out_fp, "  br label %%L%d\n", break_label_stack[loop_depth - 1]);
+            } else if (switch_depth > 0) {
+                fprintf(out_fp, "  br label %%L%d\n", switch_break_stack[switch_depth - 1]);
+            } else {
+                error("break 不在迴圈或 switch 內");
+            }
         } else if (node->type == AST_CONTINUE) {
             if (loop_depth == 0) error("continue 不在迴圈內");
             fprintf(out_fp, "  br label %%L%d\n", continue_label_stack[loop_depth - 1]);

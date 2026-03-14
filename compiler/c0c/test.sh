@@ -11,3 +11,5 @@ set -x
 ./c0run.sh array_init
 ./c0run.sh scope
 ./c0run.sh proto_void
+./c0run.sh switch_test
+./c0run.sh do_while

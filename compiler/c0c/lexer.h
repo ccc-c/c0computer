@@ -4,7 +4,8 @@
 #include <stddef.h>
 
 typedef enum {
-    TK_EOF, TK_INT, TK_CHAR, TK_VOID, TK_RETURN, TK_IF, TK_ELSE, TK_WHILE, TK_FOR, TK_BREAK, TK_CONTINUE,
+    TK_EOF, TK_INT, TK_CHAR, TK_VOID, TK_RETURN, TK_IF, TK_ELSE, TK_WHILE, TK_FOR, TK_DO,
+    TK_SWITCH, TK_CASE, TK_DEFAULT, TK_BREAK, TK_CONTINUE,
     TK_SIZEOF, TK_IDENT, TK_NUM, TK_STR, TK_CHAR_LIT,
     TK_ASSIGN = '=', TK_PLUS = '+', TK_MINUS = '-', TK_MUL = '*', TK_DIV = '/',
     TK_MOD = '%', TK_LT = '<', TK_GT = '>', TK_NOT = '!', TK_LPAREN = '(', TK_RPAREN = ')',
@@ -22,6 +23,8 @@ typedef struct {
 extern char *src;
 extern char *p;
 extern Token cur_tok;
+extern int cur_line;
+extern int cur_col;
 
 void error(const char *msg);
 void next_token(void);

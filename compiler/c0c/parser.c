@@ -96,6 +96,8 @@ static ASTNode* parse_break_stmt();
 static ASTNode* parse_continue_stmt();
 static ASTNode* parse_unary();
 static ASTNode* parse_lvalue();
+static ASTNode* parse_switch_stmt();
+static ASTNode* parse_do_stmt();
 
 static ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
@@ -351,6 +353,67 @@ static ASTNode* parse_block() {
     return head;
 }
 
+static ASTNode* parse_switch_stmt() {
+    expect(TK_SWITCH, "預期 'switch'");
+    expect(TK_LPAREN, "預期 '('");
+    ASTNode *cond = parse_expr();
+    expect(TK_RPAREN, "預期 ')'");
+    expect(TK_LBRACE, "預期 '{'");
+
+    ASTNode *case_head = NULL, *case_tail = NULL;
+    while (cur_tok.type != TK_RBRACE && cur_tok.type != TK_EOF) {
+        ASTNode *c = new_node(AST_CASE);
+        if (cur_tok.type == TK_CASE) {
+            next_token();
+            if (cur_tok.type != TK_NUM && cur_tok.type != TK_CHAR_LIT) error("case 只支援數字");
+            c->val = cur_tok.val;
+            c->is_default = 0;
+            next_token();
+            expect(':', "預期 ':'");
+        } else if (cur_tok.type == TK_DEFAULT) {
+            next_token();
+            c->is_default = 1;
+            expect(':', "預期 ':'");
+        } else {
+            error("switch 內只能使用 case 或 default");
+        }
+
+        ASTNode *head = NULL, *tail = NULL;
+        while (cur_tok.type != TK_CASE && cur_tok.type != TK_DEFAULT &&
+               cur_tok.type != TK_RBRACE && cur_tok.type != TK_EOF) {
+            ASTNode *stmt = parse_stmt();
+            if (!head) head = tail = stmt; else { tail->next = stmt; tail = stmt; }
+        }
+        c->left = head;
+        if (!case_head) case_head = case_tail = c; else { case_tail->next = c; case_tail = c; }
+    }
+    expect(TK_RBRACE, "預期 '}'");
+
+    ASTNode *sw = new_node(AST_SWITCH);
+    sw->cond = cond;
+    sw->left = case_head;
+    return sw;
+}
+
+static ASTNode* parse_do_stmt() {
+    expect(TK_DO, "預期 'do'");
+    ASTNode *body = NULL;
+    if (cur_tok.type == TK_LBRACE) {
+        body = parse_block();
+    } else {
+        body = parse_stmt();
+    }
+    expect(TK_WHILE, "預期 'while'");
+    expect(TK_LPAREN, "預期 '('");
+    ASTNode *cond = parse_expr();
+    expect(TK_RPAREN, "預期 ')'");
+    expect(TK_SEMI, "預期 ';'");
+    ASTNode *n = new_node(AST_DO);
+    n->cond = cond;
+    n->body = body;
+    return n;
+}
+
 static ASTNode* parse_if_stmt() {
     expect(TK_IF, "預期 'if'");
     expect(TK_LPAREN, "預期 '('");
@@ -591,6 +654,10 @@ static ASTNode* parse_stmt() {
         return n;
     } else if (cur_tok.type == TK_IF) {
         return parse_if_stmt();
+    } else if (cur_tok.type == TK_SWITCH) {
+        return parse_switch_stmt();
+    } else if (cur_tok.type == TK_DO) {
+        return parse_do_stmt();
     } else if (cur_tok.type == TK_WHILE) {
         return parse_while_stmt();
     } else if (cur_tok.type == TK_FOR) {
