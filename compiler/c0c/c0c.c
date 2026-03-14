@@ -10,8 +10,9 @@ typedef enum {
     TK_EOF, TK_INT, TK_RETURN, TK_IF, TK_ELSE, TK_WHILE, TK_FOR, TK_BREAK, TK_CONTINUE,
     TK_IDENT, TK_NUM, TK_STR,
     TK_ASSIGN = '=', TK_PLUS = '+', TK_MINUS = '-', TK_MUL = '*', TK_DIV = '/',
-    TK_LT = '<', TK_GT = '>', TK_NOT = '!', TK_LPAREN = '(', TK_RPAREN = ')',
-    TK_LBRACE = '{', TK_RBRACE = '}', TK_SEMI = ';', TK_COMMA = ','
+    TK_MOD = '%', TK_LT = '<', TK_GT = '>', TK_NOT = '!', TK_LPAREN = '(', TK_RPAREN = ')',
+    TK_LBRACE = '{', TK_RBRACE = '}', TK_SEMI = ';', TK_COMMA = ',',
+    TK_EQ = 257, TK_NE, TK_LE, TK_GE, TK_ANDAND, TK_OROR, TK_PLUSPLUS, TK_MINUSMINUS, TK_PLUSEQ
 } TokenType;
 
 typedef struct {
@@ -82,11 +83,16 @@ void next_token() {
         return;
     }
 
-    // 處理雙字元運算子: == != <= >=
-    if (p[0] == '=' && p[1] == '=') { cur_tok.type = (TokenType)257; p += 2; return; }
-    if (p[0] == '!' && p[1] == '=') { cur_tok.type = (TokenType)258; p += 2; return; }
-    if (p[0] == '<' && p[1] == '=') { cur_tok.type = (TokenType)259; p += 2; return; }
-    if (p[0] == '>' && p[1] == '=') { cur_tok.type = (TokenType)260; p += 2; return; }
+    // 處理雙字元運算子: == != <= >= && || ++ -- +=
+    if (p[0] == '=' && p[1] == '=') { cur_tok.type = TK_EQ; p += 2; return; }
+    if (p[0] == '!' && p[1] == '=') { cur_tok.type = TK_NE; p += 2; return; }
+    if (p[0] == '<' && p[1] == '=') { cur_tok.type = TK_LE; p += 2; return; }
+    if (p[0] == '>' && p[1] == '=') { cur_tok.type = TK_GE; p += 2; return; }
+    if (p[0] == '&' && p[1] == '&') { cur_tok.type = TK_ANDAND; p += 2; return; }
+    if (p[0] == '|' && p[1] == '|') { cur_tok.type = TK_OROR; p += 2; return; }
+    if (p[0] == '+' && p[1] == '+') { cur_tok.type = TK_PLUSPLUS; p += 2; return; }
+    if (p[0] == '-' && p[1] == '-') { cur_tok.type = TK_MINUSMINUS; p += 2; return; }
+    if (p[0] == '+' && p[1] == '=') { cur_tok.type = TK_PLUSEQ; p += 2; return; }
 
     cur_tok.type = (TokenType)(*p++); // 處理 + - * / ( ) { } ; , < > ! =
 }
@@ -100,8 +106,8 @@ void expect(TokenType type, const char *msg) {
 // 2. 抽象語法樹 (AST) 與 語法分析 (Parser) 
 // ============================================================================
 typedef enum {
-    AST_FUNC, AST_DECL, AST_ASSIGN, AST_BINOP, AST_VAR, AST_NUM, AST_RETURN,
-    AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR, AST_BREAK, AST_CONTINUE
+    AST_FUNC, AST_DECL, AST_ASSIGN, AST_BINOP, AST_UNARY, AST_VAR, AST_NUM, AST_RETURN,
+    AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR, AST_BREAK, AST_CONTINUE, AST_INCDEC
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -113,6 +119,7 @@ typedef struct ASTNode {
     struct ASTNode *left, *right;
     struct ASTNode *cond, *then_body, *else_body;
     struct ASTNode *init, *update, *body;
+    int is_prefix;
     struct ASTNode *next; 
 } ASTNode;
 
@@ -130,6 +137,7 @@ ASTNode* parse_while_stmt();
 ASTNode* parse_for_stmt();
 ASTNode* parse_break_stmt();
 ASTNode* parse_continue_stmt();
+ASTNode* parse_unary();
 
 ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
@@ -168,6 +176,14 @@ ASTNode* parse_primary() {
             // 否則只是一般變數
             ASTNode *n = new_node(AST_VAR);
             strcpy(n->name, name);
+            if (cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
+                ASTNode *inc = new_node(AST_INCDEC);
+                inc->op = cur_tok.type;
+                inc->is_prefix = 0;
+                strcpy(inc->name, name);
+                next_token();
+                return inc;
+            }
             return n;
         }
     } else if (cur_tok.type == TK_LPAREN) {
@@ -181,10 +197,10 @@ ASTNode* parse_primary() {
 }
 
 ASTNode* parse_mul() {
-    ASTNode *n = parse_primary();
-    while (cur_tok.type == TK_MUL || cur_tok.type == TK_DIV) {
+    ASTNode *n = parse_unary();
+    while (cur_tok.type == TK_MUL || cur_tok.type == TK_DIV || cur_tok.type == TK_MOD) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
-        next_token(); p->right = parse_primary(); n = p;
+        next_token(); p->right = parse_unary(); n = p;
     }
     return n;
 }
@@ -201,7 +217,7 @@ ASTNode* parse_add() {
 ASTNode* parse_rel() {
     ASTNode *n = parse_add();
     while (cur_tok.type == TK_LT || cur_tok.type == TK_GT ||
-           cur_tok.type == (TokenType)259 || cur_tok.type == (TokenType)260) {
+           cur_tok.type == TK_LE || cur_tok.type == TK_GE) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_add(); n = p;
     }
@@ -210,14 +226,54 @@ ASTNode* parse_rel() {
 
 ASTNode* parse_eq() {
     ASTNode *n = parse_rel();
-    while (cur_tok.type == (TokenType)257 || cur_tok.type == (TokenType)258) {
+    while (cur_tok.type == TK_EQ || cur_tok.type == TK_NE) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_rel(); n = p;
     }
     return n;
 }
 
-ASTNode* parse_expr() { return parse_eq(); }
+ASTNode* parse_and() {
+    ASTNode *n = parse_eq();
+    while (cur_tok.type == TK_ANDAND) {
+        ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
+        next_token(); p->right = parse_eq(); n = p;
+    }
+    return n;
+}
+
+ASTNode* parse_or() {
+    ASTNode *n = parse_and();
+    while (cur_tok.type == TK_OROR) {
+        ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
+        next_token(); p->right = parse_and(); n = p;
+    }
+    return n;
+}
+
+ASTNode* parse_expr() { return parse_or(); }
+
+ASTNode* parse_unary() {
+    if (cur_tok.type == TK_MINUS || cur_tok.type == TK_NOT ||
+        cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
+        TokenType op = cur_tok.type;
+        next_token();
+        ASTNode *operand = parse_unary();
+        if (op == TK_PLUSPLUS || op == TK_MINUSMINUS) {
+            if (!operand || operand->type != AST_VAR) error("++/-- 只能用在變數上");
+            ASTNode *inc = new_node(AST_INCDEC);
+            inc->op = op;
+            inc->is_prefix = 1;
+            strcpy(inc->name, operand->name);
+            return inc;
+        }
+        ASTNode *n = new_node(AST_UNARY);
+        n->op = op;
+        n->left = operand;
+        return n;
+    }
+    return parse_primary();
+}
 
 ASTNode* parse_block() {
     expect(TK_LBRACE, "預期 '{'");
@@ -289,12 +345,18 @@ ASTNode* parse_for_stmt() {
         } else if (cur_tok.type == TK_IDENT) {
             char *saved_p = p; Token saved_tok = cur_tok;
             next_token();
-            int is_assign = (cur_tok.type == TK_ASSIGN);
+            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
             p = saved_p; cur_tok = saved_tok;
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
                 strcpy(assign->name, cur_tok.name);
-                next_token(); expect(TK_ASSIGN, "預期 '='");
+                next_token();
+                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+                    assign->op = cur_tok.type;
+                    next_token();
+                } else {
+                    error("預期 '=' 或 '+='");
+                }
                 assign->right = parse_expr();
                 init = assign;
             } else {
@@ -319,12 +381,18 @@ ASTNode* parse_for_stmt() {
         if (cur_tok.type == TK_IDENT) {
             char *saved_p = p; Token saved_tok = cur_tok;
             next_token();
-            int is_assign = (cur_tok.type == TK_ASSIGN);
+            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
             p = saved_p; cur_tok = saved_tok;
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
                 strcpy(assign->name, cur_tok.name);
-                next_token(); expect(TK_ASSIGN, "預期 '='");
+                next_token();
+                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+                    assign->op = cur_tok.type;
+                    next_token();
+                } else {
+                    error("預期 '=' 或 '+='");
+                }
                 assign->right = parse_expr();
                 update = assign;
             } else {
@@ -394,13 +462,19 @@ ASTNode* parse_stmt() {
         // 利用 Lookahead 偷看下一個字元，區分賦值 (a = 1) 還是函數呼叫 (printf(...))
         char *saved_p = p; Token saved_tok = cur_tok;
         next_token();
-        int is_assign = (cur_tok.type == TK_ASSIGN);
+        int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
         p = saved_p; cur_tok = saved_tok; // 恢復狀態
 
         if (is_assign) {
             ASTNode *n = new_node(AST_ASSIGN);
             strcpy(n->name, cur_tok.name);
-            next_token(); expect(TK_ASSIGN, "預期 '='");
+            next_token();
+            if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+                n->op = cur_tok.type;
+                next_token();
+            } else {
+                error("預期 '=' 或 '+='");
+            }
             n->right = parse_expr();
             expect(TK_SEMI, "預期 ';'");
             return n;
@@ -471,6 +545,20 @@ int stmt_may_fallthrough(ASTNode *node);
 int break_label_stack[128];
 int continue_label_stack[128];
 int loop_depth = 0;
+
+int is_bool_op(int op) {
+    return op == TK_EQ || op == TK_NE || op == TK_LE || op == TK_GE ||
+           op == TK_LT || op == TK_GT || op == TK_ANDAND || op == TK_OROR;
+}
+
+int is_bool_expr(ASTNode *node) {
+    if (!node) return 0;
+    if (node->type == AST_BINOP) return is_bool_op(node->op);
+    if (node->type == AST_UNARY && node->op == TK_NOT) return 1;
+    return 0;
+}
+
+char* gen_cond(ASTNode *node);
 
 int is_param(ASTNode *params, const char *name) {
     ASTNode *pnode = params;
@@ -582,6 +670,37 @@ char* gen_expr(ASTNode *node) {
         sprintf(res, "%%%d", r);
         return res;
     } else if (node->type == AST_BINOP) {
+        if (node->op == TK_ANDAND || node->op == TK_OROR) {
+            int tmp = reg_cnt++;
+            int rhs_label = label_cnt++;
+            int short_label = label_cnt++;
+            int end_label = label_cnt++;
+            fprintf(out, "  %%%d = alloca i1\n", tmp);
+            char *left_cond = gen_cond(node->left);
+            if (node->op == TK_ANDAND) {
+                fprintf(out, "  br i1 %s, label %%L%d, label %%L%d\n", left_cond, rhs_label, short_label);
+            } else {
+                fprintf(out, "  br i1 %s, label %%L%d, label %%L%d\n", left_cond, short_label, rhs_label);
+            }
+            free(left_cond);
+
+            fprintf(out, "L%d:\n", rhs_label);
+            char *right_cond = gen_cond(node->right);
+            fprintf(out, "  store i1 %s, ptr %%%d\n", right_cond, tmp);
+            free(right_cond);
+            fprintf(out, "  br label %%L%d\n", end_label);
+
+            fprintf(out, "L%d:\n", short_label);
+            fprintf(out, "  store i1 %s, ptr %%%d\n", (node->op == TK_ANDAND) ? "0" : "1", tmp);
+            fprintf(out, "  br label %%L%d\n", end_label);
+
+            fprintf(out, "L%d:\n", end_label);
+            int r = reg_cnt++;
+            fprintf(out, "  %%%d = load i1, ptr %%%d\n", r, tmp);
+            sprintf(res, "%%%d", r);
+            return res;
+        }
+
         char *left = gen_expr(node->left);
         char *right = gen_expr(node->right);
         int r = reg_cnt++;
@@ -589,17 +708,63 @@ char* gen_expr(ASTNode *node) {
         if (node->op == '-') fprintf(out, "  %%%d = sub i32 %s, %s\n", r, left, right);
         if (node->op == '*') fprintf(out, "  %%%d = mul i32 %s, %s\n", r, left, right);
         if (node->op == '/') fprintf(out, "  %%%d = sdiv i32 %s, %s\n", r, left, right);
+        if (node->op == TK_MOD) fprintf(out, "  %%%d = srem i32 %s, %s\n", r, left, right);
         if (node->op == TK_LT) fprintf(out, "  %%%d = icmp slt i32 %s, %s\n", r, left, right);
         if (node->op == TK_GT) fprintf(out, "  %%%d = icmp sgt i32 %s, %s\n", r, left, right);
-        if (node->op == (TokenType)259) fprintf(out, "  %%%d = icmp sle i32 %s, %s\n", r, left, right);
-        if (node->op == (TokenType)260) fprintf(out, "  %%%d = icmp sge i32 %s, %s\n", r, left, right);
-        if (node->op == (TokenType)257) fprintf(out, "  %%%d = icmp eq i32 %s, %s\n", r, left, right);
-        if (node->op == (TokenType)258) fprintf(out, "  %%%d = icmp ne i32 %s, %s\n", r, left, right);
+        if (node->op == TK_LE) fprintf(out, "  %%%d = icmp sle i32 %s, %s\n", r, left, right);
+        if (node->op == TK_GE) fprintf(out, "  %%%d = icmp sge i32 %s, %s\n", r, left, right);
+        if (node->op == TK_EQ) fprintf(out, "  %%%d = icmp eq i32 %s, %s\n", r, left, right);
+        if (node->op == TK_NE) fprintf(out, "  %%%d = icmp ne i32 %s, %s\n", r, left, right);
         free(left); free(right);
         sprintf(res, "%%%d", r);
         return res;
+    } else if (node->type == AST_UNARY) {
+        if (node->op == TK_NOT) {
+            char *val = gen_cond(node->left);
+            int r = reg_cnt++;
+            fprintf(out, "  %%%d = xor i1 %s, 1\n", r, val);
+            free(val);
+            sprintf(res, "%%%d", r);
+            return res;
+        } else if (node->op == TK_MINUS) {
+            char *val = gen_expr(node->left);
+            int r = reg_cnt++;
+            fprintf(out, "  %%%d = sub i32 0, %s\n", r, val);
+            free(val);
+            sprintf(res, "%%%d", r);
+            return res;
+        }
+    } else if (node->type == AST_INCDEC) {
+        int is_inc = (node->op == TK_PLUSPLUS);
+        int r_old = reg_cnt++;
+        if (is_param(current_params, node->name)) {
+            fprintf(out, "  %%%d = load i32, ptr %%%s.addr\n", r_old, node->name);
+        } else {
+            fprintf(out, "  %%%d = load i32, ptr %%%s\n", r_old, node->name);
+        }
+        int r_new = reg_cnt++;
+        if (is_inc) fprintf(out, "  %%%d = add i32 %%%d, 1\n", r_new, r_old);
+        else fprintf(out, "  %%%d = sub i32 %%%d, 1\n", r_new, r_old);
+        if (is_param(current_params, node->name)) {
+            fprintf(out, "  store i32 %%%d, ptr %%%s.addr\n", r_new, node->name);
+        } else {
+            fprintf(out, "  store i32 %%%d, ptr %%%s\n", r_new, node->name);
+        }
+        sprintf(res, "%%%d", node->is_prefix ? r_new : r_old);
+        return res;
     }
     return NULL;
+}
+
+char* gen_cond(ASTNode *node) {
+    char *val = gen_expr(node);
+    if (is_bool_expr(node)) return val;
+    int r = reg_cnt++;
+    fprintf(out, "  %%%d = icmp ne i32 %s, 0\n", r, val);
+    free(val);
+    char *res = malloc(64);
+    sprintf(res, "%%%d", r);
+    return res;
 }
 
 void gen_stmt(ASTNode *node) {
@@ -617,18 +782,36 @@ void gen_stmt(ASTNode *node) {
                 }
             }
         } else if (node->type == AST_ASSIGN) {
-            char *val = gen_expr(node->right);
-            if (is_param(current_params, node->name)) {
-                fprintf(out, "  store i32 %s, ptr %%%s.addr\n", val, node->name);
+            if (node->op == TK_PLUSEQ) {
+                char *rhs = gen_expr(node->right);
+                int r_old = reg_cnt++;
+                if (is_param(current_params, node->name)) {
+                    fprintf(out, "  %%%d = load i32, ptr %%%s.addr\n", r_old, node->name);
+                } else {
+                    fprintf(out, "  %%%d = load i32, ptr %%%s\n", r_old, node->name);
+                }
+                int r_new = reg_cnt++;
+                fprintf(out, "  %%%d = add i32 %%%d, %s\n", r_new, r_old, rhs);
+                if (is_param(current_params, node->name)) {
+                    fprintf(out, "  store i32 %%%d, ptr %%%s.addr\n", r_new, node->name);
+                } else {
+                    fprintf(out, "  store i32 %%%d, ptr %%%s\n", r_new, node->name);
+                }
+                free(rhs);
             } else {
-                fprintf(out, "  store i32 %s, ptr %%%s\n", val, node->name);
+                char *val = gen_expr(node->right);
+                if (is_param(current_params, node->name)) {
+                    fprintf(out, "  store i32 %s, ptr %%%s.addr\n", val, node->name);
+                } else {
+                    fprintf(out, "  store i32 %s, ptr %%%s\n", val, node->name);
+                }
+                free(val);
             }
-            free(val);
         } else if (node->type == AST_EXPR_STMT) {
             char *val = gen_expr(node->left); // 執行 printf 呼叫
             if (val) free(val);
         } else if (node->type == AST_IF) {
-            char *cond_val = gen_expr(node->cond);
+            char *cond_val = gen_cond(node->cond);
             int then_fall = stmt_list_may_fallthrough(node->then_body);
             int else_fall = node->else_body ? stmt_list_may_fallthrough(node->else_body) : 1;
             int need_end = then_fall || else_fall;
@@ -664,7 +847,7 @@ void gen_stmt(ASTNode *node) {
             fprintf(out, "  br label %%L%d\n", cond_label);
 
             fprintf(out, "L%d:\n", cond_label);
-            char *cond_val = gen_expr(node->cond);
+            char *cond_val = gen_cond(node->cond);
             fprintf(out, "  br i1 %s, label %%L%d, label %%L%d\n", cond_val, body_label, end_label);
             free(cond_val);
 
@@ -682,15 +865,7 @@ void gen_stmt(ASTNode *node) {
         } else if (node->type == AST_FOR) {
             if (node->init) {
                 if (node->init->type == AST_DECL) gen_stmt(node->init);
-                else if (node->init->type == AST_ASSIGN) {
-                    char *val = gen_expr(node->init->right);
-                    if (is_param(current_params, node->init->name)) {
-                        fprintf(out, "  store i32 %s, ptr %%%s.addr\n", val, node->init->name);
-                    } else {
-                        fprintf(out, "  store i32 %s, ptr %%%s\n", val, node->init->name);
-                    }
-                    free(val);
-                }
+                else if (node->init->type == AST_ASSIGN) gen_stmt(node->init);
                 else if (node->init->type == AST_EXPR_STMT) {
                     char *val = gen_expr(node->init->left);
                     if (val) free(val);
@@ -706,7 +881,7 @@ void gen_stmt(ASTNode *node) {
 
             fprintf(out, "L%d:\n", cond_label);
             if (node->cond) {
-                char *cond_val = gen_expr(node->cond);
+                char *cond_val = gen_cond(node->cond);
                 fprintf(out, "  br i1 %s, label %%L%d, label %%L%d\n", cond_val, body_label, end_label);
                 free(cond_val);
             } else {
@@ -725,15 +900,8 @@ void gen_stmt(ASTNode *node) {
 
             fprintf(out, "L%d:\n", update_label);
             if (node->update) {
-                if (node->update->type == AST_ASSIGN) {
-                    char *val = gen_expr(node->update->right);
-                    if (is_param(current_params, node->update->name)) {
-                        fprintf(out, "  store i32 %s, ptr %%%s.addr\n", val, node->update->name);
-                    } else {
-                        fprintf(out, "  store i32 %s, ptr %%%s\n", val, node->update->name);
-                    }
-                    free(val);
-                } else {
+                if (node->update->type == AST_ASSIGN) gen_stmt(node->update);
+                else {
                     char *val = gen_expr(node->update);
                     if (val) free(val);
                 }
