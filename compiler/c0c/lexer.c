@@ -74,6 +74,12 @@ void next_token(void) {
         if (strcmp(cur_tok.name, "int") == 0) cur_tok.type = TK_INT;
         else if (strcmp(cur_tok.name, "char") == 0) cur_tok.type = TK_CHAR;
         else if (strcmp(cur_tok.name, "void") == 0) cur_tok.type = TK_VOID;
+        else if (strcmp(cur_tok.name, "float") == 0) cur_tok.type = TK_FLOAT;
+        else if (strcmp(cur_tok.name, "double") == 0) cur_tok.type = TK_DOUBLE;
+        else if (strcmp(cur_tok.name, "unsigned") == 0) cur_tok.type = TK_UNSIGNED;
+        else if (strcmp(cur_tok.name, "short") == 0) cur_tok.type = TK_SHORT;
+        else if (strcmp(cur_tok.name, "long") == 0) cur_tok.type = TK_LONG;
+        else if (strcmp(cur_tok.name, "const") == 0) cur_tok.type = TK_CONST;
         else if (strcmp(cur_tok.name, "struct") == 0) cur_tok.type = TK_STRUCT;
         else if (strcmp(cur_tok.name, "typedef") == 0) cur_tok.type = TK_TYPEDEF;
         else if (strcmp(cur_tok.name, "return") == 0) cur_tok.type = TK_RETURN;
@@ -92,11 +98,24 @@ void next_token(void) {
         return;
     }
 
-    if (isdigit((unsigned char)*p)) {
+    if (isdigit((unsigned char)*p) || (*p == '.' && isdigit((unsigned char)p[1]))) {
         char *start = p;
-        cur_tok.val = strtol(p, &p, 10);
+        char *end = NULL;
+        double f = strtod(p, &end);
+        int is_float = 0;
+        for (char *q = start; q < end; q++) {
+            if (*q == '.' || *q == 'e' || *q == 'E') { is_float = 1; break; }
+        }
+        p = end;
         cur_col += (int)(p - start);
-        cur_tok.type = TK_NUM;
+        if (*p == 'f' || *p == 'F') { advance_char(); is_float = 1; cur_tok.val = 1; }
+        if (is_float) {
+            cur_tok.fval = f;
+            cur_tok.type = TK_FLOAT_LIT;
+        } else {
+            cur_tok.val = (int)f;
+            cur_tok.type = TK_NUM;
+        }
         return;
     }
 

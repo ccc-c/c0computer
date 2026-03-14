@@ -2,16 +2,32 @@
 #define C0C_AST_H
 
 typedef enum {
-    AST_FUNC, AST_DECL, AST_ASSIGN, AST_BINOP, AST_UNARY, AST_VAR, AST_NUM, AST_RETURN,
+    AST_FUNC, AST_DECL, AST_ASSIGN, AST_BINOP, AST_UNARY, AST_CAST, AST_VAR, AST_NUM, AST_FLOAT, AST_RETURN,
     AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR, AST_BREAK, AST_CONTINUE, AST_INCDEC,
     AST_ADDR, AST_DEREF, AST_INDEX, AST_SIZEOF, AST_BLOCK, AST_SWITCH, AST_CASE, AST_DO, AST_MEMBER
 } ASTNodeType;
 
 typedef enum {
     TY_INT,
+    TY_UINT,
+    TY_SHORT,
+    TY_USHORT,
+    TY_LONG,
+    TY_ULONG,
     TY_CHAR,
+    TY_UCHAR,
+    TY_FLOAT,
+    TY_DOUBLE,
     TY_INT_PTR,
+    TY_UINT_PTR,
+    TY_SHORT_PTR,
+    TY_USHORT_PTR,
+    TY_LONG_PTR,
+    TY_ULONG_PTR,
     TY_CHAR_PTR,
+    TY_UCHAR_PTR,
+    TY_FLOAT_PTR,
+    TY_DOUBLE_PTR,
     TY_VOID,
     TY_STRUCT,
     TY_STRUCT_PTR
@@ -21,6 +37,7 @@ typedef struct ASTNode {
     ASTNodeType type;
     CType ty;
     int val;
+    double fval;
     char name[64];
     char str_val[256];
     int op;

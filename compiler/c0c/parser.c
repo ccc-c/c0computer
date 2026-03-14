@@ -114,9 +114,15 @@ static StructDef* get_struct_def(int id) {
 }
 
 static int type_size(CType ty, int struct_id) {
-    if (ty == TY_CHAR) return 1;
-    if (ty == TY_INT) return 4;
-    if (ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR) return 8;
+    if (ty == TY_CHAR || ty == TY_UCHAR) return 1;
+    if (ty == TY_SHORT || ty == TY_USHORT) return 2;
+    if (ty == TY_INT || ty == TY_UINT) return 4;
+    if (ty == TY_LONG || ty == TY_ULONG) return 8;
+    if (ty == TY_FLOAT) return 4;
+    if (ty == TY_DOUBLE) return 8;
+    if (ty == TY_INT_PTR || ty == TY_UINT_PTR || ty == TY_SHORT_PTR || ty == TY_USHORT_PTR ||
+        ty == TY_LONG_PTR || ty == TY_ULONG_PTR || ty == TY_CHAR_PTR || ty == TY_UCHAR_PTR ||
+        ty == TY_FLOAT_PTR || ty == TY_DOUBLE_PTR || ty == TY_STRUCT_PTR) return 8;
     if (ty == TY_STRUCT) {
         StructDef *d = get_struct_def(struct_id);
         return d->size;
@@ -132,16 +138,90 @@ static Sym* sym_find(const char *name) {
     return NULL;
 }
 
-static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR; }
+static int is_ptr(CType ty) {
+    return ty == TY_INT_PTR || ty == TY_UINT_PTR || ty == TY_SHORT_PTR || ty == TY_USHORT_PTR ||
+           ty == TY_LONG_PTR || ty == TY_ULONG_PTR || ty == TY_CHAR_PTR || ty == TY_UCHAR_PTR ||
+           ty == TY_FLOAT_PTR || ty == TY_DOUBLE_PTR || ty == TY_STRUCT_PTR;
+}
+static int is_float(CType ty) { return ty == TY_FLOAT || ty == TY_DOUBLE; }
+static int is_int(CType ty) {
+    return ty == TY_CHAR || ty == TY_UCHAR || ty == TY_SHORT || ty == TY_USHORT ||
+           ty == TY_INT || ty == TY_UINT || ty == TY_LONG || ty == TY_ULONG;
+}
+static int is_unsigned(CType ty) {
+    return ty == TY_UCHAR || ty == TY_USHORT || ty == TY_UINT || ty == TY_ULONG;
+}
+static int int_rank(CType ty) {
+    if (ty == TY_CHAR || ty == TY_UCHAR) return 1;
+    if (ty == TY_SHORT || ty == TY_USHORT) return 2;
+    if (ty == TY_INT || ty == TY_UINT) return 3;
+    if (ty == TY_LONG || ty == TY_ULONG) return 4;
+    return 0;
+}
+static CType int_promote(CType ty) {
+    if (ty == TY_CHAR || ty == TY_UCHAR || ty == TY_SHORT || ty == TY_USHORT) return TY_INT;
+    return ty;
+}
+static CType int_type_from_rank(int rank, int is_uns) {
+    if (rank == 1) return is_uns ? TY_UCHAR : TY_CHAR;
+    if (rank == 2) return is_uns ? TY_USHORT : TY_SHORT;
+    if (rank == 3) return is_uns ? TY_UINT : TY_INT;
+    if (rank == 4) return is_uns ? TY_ULONG : TY_LONG;
+    return TY_INT;
+}
+static CType common_arith_type(CType a, CType b) {
+    if (is_float(a) || is_float(b)) {
+        if (a == TY_DOUBLE || b == TY_DOUBLE) return TY_DOUBLE;
+        return TY_FLOAT;
+    }
+    a = int_promote(a);
+    b = int_promote(b);
+    int ra = int_rank(a);
+    int rb = int_rank(b);
+    int ua = is_unsigned(a);
+    int ub = is_unsigned(b);
+    if (ra == rb) {
+        return int_type_from_rank(ra, ua || ub);
+    }
+    if (ra > rb) {
+        if (ua) return int_type_from_rank(ra, 1);
+        if (ub) {
+            return int_type_from_rank(ra, 0);
+        }
+        return int_type_from_rank(ra, 0);
+    } else {
+        if (ub) return int_type_from_rank(rb, 1);
+        if (ua) {
+            return int_type_from_rank(rb, 0);
+        }
+        return int_type_from_rank(rb, 0);
+    }
+}
 static CType ptr_of(CType ty) {
     if (ty == TY_CHAR) return TY_CHAR_PTR;
+    if (ty == TY_UCHAR) return TY_UCHAR_PTR;
+    if (ty == TY_SHORT) return TY_SHORT_PTR;
+    if (ty == TY_USHORT) return TY_USHORT_PTR;
     if (ty == TY_INT) return TY_INT_PTR;
+    if (ty == TY_UINT) return TY_UINT_PTR;
+    if (ty == TY_LONG) return TY_LONG_PTR;
+    if (ty == TY_ULONG) return TY_ULONG_PTR;
+    if (ty == TY_FLOAT) return TY_FLOAT_PTR;
+    if (ty == TY_DOUBLE) return TY_DOUBLE_PTR;
     if (ty == TY_STRUCT) return TY_STRUCT_PTR;
     return ty;
 }
 static CType base_of(CType ty) {
     if (ty == TY_CHAR_PTR) return TY_CHAR;
+    if (ty == TY_UCHAR_PTR) return TY_UCHAR;
+    if (ty == TY_SHORT_PTR) return TY_SHORT;
+    if (ty == TY_USHORT_PTR) return TY_USHORT;
     if (ty == TY_INT_PTR) return TY_INT;
+    if (ty == TY_UINT_PTR) return TY_UINT;
+    if (ty == TY_LONG_PTR) return TY_LONG;
+    if (ty == TY_ULONG_PTR) return TY_ULONG;
+    if (ty == TY_FLOAT_PTR) return TY_FLOAT;
+    if (ty == TY_DOUBLE_PTR) return TY_DOUBLE;
     if (ty == TY_STRUCT_PTR) return TY_STRUCT;
     return TY_INT;
 }
@@ -149,10 +229,9 @@ static CType base_of(CType ty) {
 static CType parse_type_allow_void(int allow_void) {
     CType base;
     last_struct_id = -1;
-    if (cur_tok.type == TK_INT) { next_token(); base = TY_INT; }
-    else if (cur_tok.type == TK_CHAR) { next_token(); base = TY_CHAR; }
-    else if (allow_void && cur_tok.type == TK_VOID) { next_token(); base = TY_VOID; }
-    else if (cur_tok.type == TK_STRUCT) {
+    while (cur_tok.type == TK_CONST) next_token();
+    if (allow_void && cur_tok.type == TK_VOID) { next_token(); base = TY_VOID; goto ptr_check; }
+    if (cur_tok.type == TK_STRUCT) {
         next_token();
         if (cur_tok.type != TK_IDENT) error("預期 struct 名稱");
         int sid = struct_find(cur_tok.name);
@@ -160,27 +239,57 @@ static CType parse_type_allow_void(int allow_void) {
         next_token();
         base = TY_STRUCT;
         last_struct_id = sid;
-        if (cur_tok.type == TK_MUL) {
-            next_token();
-            return TY_STRUCT_PTR;
-        }
-        return base;
-    } else {
+        goto ptr_check;
+    }
+    if (cur_tok.type == TK_IDENT) {
         CType t;
         int sid = -1;
-        if (cur_tok.type == TK_IDENT && typedef_find(cur_tok.name, &t, &sid)) {
+        if (typedef_find(cur_tok.name, &t, &sid)) {
             next_token();
-            if (cur_tok.type == TK_MUL) {
-                next_token();
-                if (t == TY_STRUCT) { last_struct_id = sid; return TY_STRUCT_PTR; }
-                return ptr_of(t);
-            }
             last_struct_id = sid;
-            return t;
+            base = t;
+            goto ptr_check;
         }
-        error("預期型別 int、char 或 void");
+    }
+
+    int is_uns = 0;
+    int is_short = 0;
+    int is_long = 0;
+    int has_type = 0;
+    CType builtin = TY_INT;
+    while (1) {
+        if (cur_tok.type == TK_CONST) { next_token(); continue; }
+        if (cur_tok.type == TK_UNSIGNED) { is_uns = 1; next_token(); continue; }
+        if (cur_tok.type == TK_SHORT) { is_short = 1; next_token(); continue; }
+        if (cur_tok.type == TK_LONG) { is_long = 1; next_token(); continue; }
+        if (cur_tok.type == TK_INT) { has_type = 1; builtin = TY_INT; next_token(); continue; }
+        if (cur_tok.type == TK_CHAR) { has_type = 1; builtin = TY_CHAR; next_token(); continue; }
+        if (cur_tok.type == TK_FLOAT) { has_type = 1; builtin = TY_FLOAT; next_token(); continue; }
+        if (cur_tok.type == TK_DOUBLE) { has_type = 1; builtin = TY_DOUBLE; next_token(); continue; }
+        break;
+    }
+    if (!has_type && (is_uns || is_short || is_long)) {
+        builtin = TY_INT;
+        has_type = 1;
+    }
+    if (!has_type) {
+        error("預期型別 int、char、float、double 或 void");
         return TY_INT;
     }
+    if (builtin == TY_FLOAT || builtin == TY_DOUBLE) {
+        if (is_uns || is_short || is_long) error("float/double 不可搭配 unsigned/short/long");
+        base = builtin;
+    } else if (builtin == TY_CHAR) {
+        if (is_short || is_long) error("char 不可搭配 short/long");
+        base = is_uns ? TY_UCHAR : TY_CHAR;
+    } else {
+        if (is_short && is_long) error("short/long 不可同時使用");
+        if (is_short) base = is_uns ? TY_USHORT : TY_SHORT;
+        else if (is_long) base = is_uns ? TY_ULONG : TY_LONG;
+        else base = is_uns ? TY_UINT : TY_INT;
+    }
+
+ptr_check:
     if (cur_tok.type == TK_MUL) {
         if (base == TY_VOID) error("不支援 void*");
         next_token();
@@ -244,11 +353,24 @@ static int is_typedef_name(void) {
     return typedef_find(cur_tok.name, &t, &sid);
 }
 
+static int is_type_start(void) {
+    if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR || cur_tok.type == TK_FLOAT ||
+        cur_tok.type == TK_DOUBLE || cur_tok.type == TK_UNSIGNED || cur_tok.type == TK_SHORT ||
+        cur_tok.type == TK_LONG || cur_tok.type == TK_CONST || cur_tok.type == TK_STRUCT) return 1;
+    return is_typedef_name();
+}
+
 static ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
         ASTNode *n = new_node(AST_NUM);
         n->val = cur_tok.val;
         n->ty = TY_INT;
+        next_token();
+        return n;
+    } else if (cur_tok.type == TK_FLOAT_LIT) {
+        ASTNode *n = new_node(AST_FLOAT);
+        n->fval = cur_tok.fval;
+        n->ty = (cur_tok.val == 1) ? TY_FLOAT : TY_DOUBLE;
         next_token();
         return n;
     } else if (cur_tok.type == TK_CHAR_LIT) {
@@ -347,7 +469,7 @@ static ASTNode* parse_postfix() {
         }
         if (cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
             if (n->type != AST_VAR) error("++/-- 只能用在變數上");
-            if (is_ptr(n->ty)) error("++/-- 不支援指標");
+            if (is_ptr(n->ty) || n->ty == TY_STRUCT) error("++/-- 不支援指標或 struct");
             ASTNode *inc = new_node(AST_INCDEC);
             inc->op = cur_tok.type;
             inc->is_prefix = 0;
@@ -367,7 +489,16 @@ static ASTNode* parse_mul() {
     while (cur_tok.type == TK_MUL || cur_tok.type == TK_DIV || cur_tok.type == TK_MOD) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_unary(); n = p;
-        p->ty = TY_INT;
+        if (p->op == TK_MOD) {
+            if (!is_int(p->left->ty) || !is_int(p->right->ty)) error("% 只能用在整數");
+            p->ty = common_arith_type(p->left->ty, p->right->ty);
+        } else {
+            if ((is_ptr(p->left->ty) || is_ptr(p->right->ty)) ||
+                (p->left->ty == TY_STRUCT || p->right->ty == TY_STRUCT)) {
+                error("不支援的乘除型別");
+            }
+            p->ty = common_arith_type(p->left->ty, p->right->ty);
+        }
     }
     return n;
 }
@@ -386,6 +517,8 @@ static ASTNode* parse_add() {
             }
         } else if ((is_ptr(p->left->ty) && (p->op == TK_PLUS || p->op == TK_MINUS)) ||
                    (is_ptr(p->right->ty) && p->op == TK_PLUS)) {
+            if (is_ptr(p->left->ty) && !is_int(p->right->ty)) error("指標只能加減整數");
+            if (is_ptr(p->right->ty) && !is_int(p->left->ty)) error("指標只能加整數");
             if (is_ptr(p->left->ty)) {
                 p->ty = p->left->ty;
                 p->struct_id = p->left->struct_id;
@@ -396,7 +529,11 @@ static ASTNode* parse_add() {
         } else if (!is_ptr(p->left->ty) && is_ptr(p->right->ty) && p->op == TK_MINUS) {
             error("不支援 int - 指標");
         } else {
-            p->ty = TY_INT;
+            if ((p->left->ty == TY_STRUCT || p->right->ty == TY_STRUCT) ||
+                is_ptr(p->left->ty) || is_ptr(p->right->ty)) {
+                error("不支援的加減型別");
+            }
+            p->ty = common_arith_type(p->left->ty, p->right->ty);
         }
     }
     return n;
@@ -408,6 +545,11 @@ static ASTNode* parse_rel() {
            cur_tok.type == TK_LE || cur_tok.type == TK_GE) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_add(); n = p;
+        if (is_ptr(p->left->ty) || is_ptr(p->right->ty)) {
+            if (!is_ptr(p->left->ty) || !is_ptr(p->right->ty)) error("指標只能與指標比較");
+        } else if (!is_int(p->left->ty) && !is_float(p->left->ty)) {
+            error("不支援的比較型別");
+        }
         p->ty = TY_INT;
     }
     return n;
@@ -418,6 +560,13 @@ static ASTNode* parse_eq() {
     while (cur_tok.type == TK_EQ || cur_tok.type == TK_NE) {
         ASTNode *p = new_node(AST_BINOP); p->op = cur_tok.type; p->left = n;
         next_token(); p->right = parse_rel(); n = p;
+        if (is_ptr(p->left->ty) || is_ptr(p->right->ty)) {
+            if (!is_ptr(p->left->ty) && !(p->left->type == AST_NUM && p->left->val == 0)) {
+                if (!is_ptr(p->right->ty) && !(p->right->type == AST_NUM && p->right->val == 0)) {
+                    error("指標只能與 0 或指標比較");
+                }
+            }
+        }
         p->ty = TY_INT;
     }
     return n;
@@ -478,6 +627,23 @@ static ASTNode* parse_unary() {
         n->val = type_size(n->left->ty, n->left->struct_id);
         return n;
     }
+    if (cur_tok.type == TK_LPAREN) {
+        char *saved_p = p; Token saved_tok = cur_tok; int saved_line = cur_line; int saved_col = cur_col;
+        next_token();
+        if (is_type_start()) {
+            p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
+            expect(TK_LPAREN, "預期 '('");
+            CType ty = parse_type_allow_void(0);
+            if (ty == TY_STRUCT) error("不支援 struct 轉型");
+            expect(TK_RPAREN, "預期 ')'");
+            ASTNode *n = new_node(AST_CAST);
+            n->ty = ty;
+            n->struct_id = last_struct_id;
+            n->left = parse_unary();
+            return n;
+        }
+        p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
+    }
     if (cur_tok.type == TK_MINUS || cur_tok.type == TK_NOT ||
         cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS ||
         cur_tok.type == TK_MUL || cur_tok.type == '&') {
@@ -501,7 +667,7 @@ static ASTNode* parse_unary() {
         }
         if (op == TK_PLUSPLUS || op == TK_MINUSMINUS) {
             if (!operand || operand->type != AST_VAR) error("++/-- 只能用在變數上");
-            if (is_ptr(operand->ty)) error("++/-- 不支援指標");
+            if (is_ptr(operand->ty) || operand->ty == TY_STRUCT) error("++/-- 不支援指標或 struct");
             ASTNode *inc = new_node(AST_INCDEC);
             inc->op = op;
             inc->is_prefix = 1;
@@ -512,7 +678,12 @@ static ASTNode* parse_unary() {
         ASTNode *n = new_node(AST_UNARY);
         n->op = op;
         n->left = operand;
-        n->ty = TY_INT;
+        if (op == TK_MINUS) {
+            if (!is_int(operand->ty) && !is_float(operand->ty)) error("不支援的一元 -");
+            n->ty = operand->ty;
+        } else {
+            n->ty = TY_INT;
+        }
         return n;
     }
     return parse_postfix();
@@ -714,7 +885,7 @@ static ASTNode* parse_decl_stmt(int expect_semi) {
     if (cur_tok.type == TK_ASSIGN) {
         next_token();
         if (n->array_len != 0) {
-            if (cur_tok.type == TK_STR && base_of(n->ty) == TY_CHAR) {
+            if (cur_tok.type == TK_STR && (base_of(n->ty) == TY_CHAR || base_of(n->ty) == TY_UCHAR)) {
                 n->init_kind = 3;
                 strcpy(n->str_val, cur_tok.str_val);
                 next_token();
@@ -813,7 +984,7 @@ static ASTNode* parse_for_stmt() {
     ASTNode *update = NULL;
 
     if (cur_tok.type != TK_SEMI) {
-        if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR || cur_tok.type == TK_STRUCT) {
+        if (is_type_start()) {
             if (cur_tok.type == TK_STRUCT && is_struct_def_ahead()) {
                 error("for 內不支援 struct 定義");
             }
@@ -821,34 +992,27 @@ static ASTNode* parse_for_stmt() {
             sym_add(decl->name, decl->ty, decl->array_len, decl->struct_id);
             init = decl;
         } else if (cur_tok.type == TK_IDENT) {
-            CType t; int sid;
-            if (typedef_find(cur_tok.name, &t, &sid)) {
-                ASTNode *decl = parse_decl_stmt(0);
-                sym_add(decl->name, decl->ty, decl->array_len, decl->struct_id);
-                init = decl;
-            } else {
-                char *saved_p = p; Token saved_tok = cur_tok;
+            char *saved_p = p; Token saved_tok = cur_tok;
+            next_token();
+            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
+            p = saved_p; cur_tok = saved_tok;
+            if (is_assign) {
+                ASTNode *assign = new_node(AST_ASSIGN);
+                assign->left = make_var_node(cur_tok.name);
+                assign->ty = assign->left->ty;
                 next_token();
-                int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
-                p = saved_p; cur_tok = saved_tok;
-                if (is_assign) {
-                    ASTNode *assign = new_node(AST_ASSIGN);
-                    assign->left = make_var_node(cur_tok.name);
-                    assign->ty = assign->left->ty;
+                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+                    assign->op = cur_tok.type;
                     next_token();
-                    if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
-                        assign->op = cur_tok.type;
-                        next_token();
-                    } else {
-                        error("預期 '=' 或 '+='");
-                    }
-                    assign->right = parse_expr();
-                    init = assign;
                 } else {
-                    ASTNode *expr = parse_expr();
-                    init = new_node(AST_EXPR_STMT);
-                    init->left = expr;
+                    error("預期 '=' 或 '+='");
                 }
+                assign->right = parse_expr();
+                init = assign;
+            } else {
+                ASTNode *expr = parse_expr();
+                init = new_node(AST_EXPR_STMT);
+                init->left = expr;
             }
         } else {
             ASTNode *expr = parse_expr();
@@ -930,7 +1094,7 @@ static ASTNode* parse_stmt() {
         ASTNode *empty = new_node(AST_EXPR_STMT);
         empty->left = NULL;
         return empty;
-    } else if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR || cur_tok.type == TK_STRUCT || is_typedef_name()) {
+    } else if (is_type_start()) {
         ASTNode *n = parse_decl_stmt(1);
         sym_add(n->name, n->ty, n->array_len, n->struct_id);
         return n;

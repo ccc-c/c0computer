@@ -7,13 +7,18 @@
 typedef enum {
     VT_I1,
     VT_I8,
+    VT_I16,
     VT_I32,
+    VT_I64,
+    VT_F32,
+    VT_F64,
     VT_PTR
 } ValueType;
 
 typedef struct {
     char *reg;
     ValueType vt;
+    CType cty;
 } Value;
 
 typedef struct {
@@ -52,23 +57,91 @@ static int var_cnt = 0;
 static int scope_marks[128];
 static int scope_depth = 0;
 
-static int is_ptr(CType ty) { return ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR; }
+static int is_ptr(CType ty) {
+    return ty == TY_INT_PTR || ty == TY_UINT_PTR || ty == TY_SHORT_PTR || ty == TY_USHORT_PTR ||
+           ty == TY_LONG_PTR || ty == TY_ULONG_PTR || ty == TY_CHAR_PTR || ty == TY_UCHAR_PTR ||
+           ty == TY_FLOAT_PTR || ty == TY_DOUBLE_PTR || ty == TY_STRUCT_PTR;
+}
+static int is_float(CType ty) { return ty == TY_FLOAT || ty == TY_DOUBLE; }
+static int is_int(CType ty) {
+    return ty == TY_CHAR || ty == TY_UCHAR || ty == TY_SHORT || ty == TY_USHORT ||
+           ty == TY_INT || ty == TY_UINT || ty == TY_LONG || ty == TY_ULONG;
+}
+static int is_unsigned(CType ty) {
+    return ty == TY_UCHAR || ty == TY_USHORT || ty == TY_UINT || ty == TY_ULONG;
+}
+static int int_rank(CType ty) {
+    if (ty == TY_CHAR || ty == TY_UCHAR) return 1;
+    if (ty == TY_SHORT || ty == TY_USHORT) return 2;
+    if (ty == TY_INT || ty == TY_UINT) return 3;
+    if (ty == TY_LONG || ty == TY_ULONG) return 4;
+    return 0;
+}
+static CType int_promote(CType ty) {
+    if (ty == TY_CHAR || ty == TY_UCHAR || ty == TY_SHORT || ty == TY_USHORT) return TY_INT;
+    return ty;
+}
+static CType int_type_from_rank(int rank, int is_uns) {
+    if (rank == 1) return is_uns ? TY_UCHAR : TY_CHAR;
+    if (rank == 2) return is_uns ? TY_USHORT : TY_SHORT;
+    if (rank == 3) return is_uns ? TY_UINT : TY_INT;
+    if (rank == 4) return is_uns ? TY_ULONG : TY_LONG;
+    return TY_INT;
+}
+static CType common_arith_type(CType a, CType b) {
+    if (is_float(a) || is_float(b)) {
+        if (a == TY_DOUBLE || b == TY_DOUBLE) return TY_DOUBLE;
+        return TY_FLOAT;
+    }
+    a = int_promote(a);
+    b = int_promote(b);
+    int ra = int_rank(a);
+    int rb = int_rank(b);
+    int ua = is_unsigned(a);
+    int ub = is_unsigned(b);
+    if (ra == rb) return int_type_from_rank(ra, ua || ub);
+    if (ra > rb) {
+        if (ua) return int_type_from_rank(ra, 1);
+        if (ub) return int_type_from_rank(ra, 0);
+        return int_type_from_rank(ra, 0);
+    } else {
+        if (ub) return int_type_from_rank(rb, 1);
+        if (ua) return int_type_from_rank(rb, 0);
+        return int_type_from_rank(rb, 0);
+    }
+}
 static CType base_of(CType ty) {
     if (ty == TY_CHAR_PTR) return TY_CHAR;
+    if (ty == TY_UCHAR_PTR) return TY_UCHAR;
+    if (ty == TY_SHORT_PTR) return TY_SHORT;
+    if (ty == TY_USHORT_PTR) return TY_USHORT;
     if (ty == TY_INT_PTR) return TY_INT;
+    if (ty == TY_UINT_PTR) return TY_UINT;
+    if (ty == TY_LONG_PTR) return TY_LONG;
+    if (ty == TY_ULONG_PTR) return TY_ULONG;
+    if (ty == TY_FLOAT_PTR) return TY_FLOAT;
+    if (ty == TY_DOUBLE_PTR) return TY_DOUBLE;
     if (ty == TY_STRUCT_PTR) return TY_STRUCT;
     return TY_INT;
 }
 static const char* llvm_type(CType ty) {
-    if (ty == TY_CHAR) return "i8";
-    if (ty == TY_INT) return "i32";
+    if (ty == TY_CHAR || ty == TY_UCHAR) return "i8";
+    if (ty == TY_SHORT || ty == TY_USHORT) return "i16";
+    if (ty == TY_INT || ty == TY_UINT) return "i32";
+    if (ty == TY_LONG || ty == TY_ULONG) return "i64";
+    if (ty == TY_FLOAT) return "float";
+    if (ty == TY_DOUBLE) return "double";
     if (ty == TY_VOID) return "void";
     return "ptr";
 }
 static const char* llvm_elem_type(CType ty) {
     CType base = is_ptr(ty) ? base_of(ty) : ty;
-    if (base == TY_CHAR) return "i8";
-    if (base == TY_INT) return "i32";
+    if (base == TY_CHAR || base == TY_UCHAR) return "i8";
+    if (base == TY_SHORT || base == TY_USHORT) return "i16";
+    if (base == TY_INT || base == TY_UINT) return "i32";
+    if (base == TY_LONG || base == TY_ULONG) return "i64";
+    if (base == TY_FLOAT) return "float";
+    if (base == TY_DOUBLE) return "double";
     return "i8";
 }
 
@@ -129,9 +202,15 @@ static int struct_size(int struct_id) {
 }
 
 static int type_size(CType ty, int struct_id) {
-    if (ty == TY_CHAR) return 1;
-    if (ty == TY_INT) return 4;
-    if (ty == TY_INT_PTR || ty == TY_CHAR_PTR || ty == TY_STRUCT_PTR) return 8;
+    if (ty == TY_CHAR || ty == TY_UCHAR) return 1;
+    if (ty == TY_SHORT || ty == TY_USHORT) return 2;
+    if (ty == TY_INT || ty == TY_UINT) return 4;
+    if (ty == TY_LONG || ty == TY_ULONG) return 8;
+    if (ty == TY_FLOAT) return 4;
+    if (ty == TY_DOUBLE) return 8;
+    if (ty == TY_INT_PTR || ty == TY_UINT_PTR || ty == TY_SHORT_PTR || ty == TY_USHORT_PTR ||
+        ty == TY_LONG_PTR || ty == TY_ULONG_PTR || ty == TY_CHAR_PTR || ty == TY_UCHAR_PTR ||
+        ty == TY_FLOAT_PTR || ty == TY_DOUBLE_PTR || ty == TY_STRUCT_PTR) return 8;
     if (ty == TY_STRUCT) return struct_size(struct_id);
     return 0;
 }
@@ -207,60 +286,113 @@ static int stmt_list_may_fallthrough(ASTNode *node) {
     return stmt_may_fallthrough(cur);
 }
 
-static Value value_from_reg(char *reg, ValueType vt) {
-    Value v = {reg, vt};
+static ValueType vt_from_ctype(CType ty) {
+    if (ty == TY_CHAR || ty == TY_UCHAR) return VT_I8;
+    if (ty == TY_SHORT || ty == TY_USHORT) return VT_I16;
+    if (ty == TY_INT || ty == TY_UINT) return VT_I32;
+    if (ty == TY_LONG || ty == TY_ULONG) return VT_I64;
+    if (ty == TY_FLOAT) return VT_F32;
+    if (ty == TY_DOUBLE) return VT_F64;
+    if (is_ptr(ty)) return VT_PTR;
+    return VT_I32;
+}
+
+static const char* llvm_type_from_vt(ValueType vt) {
+    if (vt == VT_I1) return "i1";
+    if (vt == VT_I8) return "i8";
+    if (vt == VT_I16) return "i16";
+    if (vt == VT_I32) return "i32";
+    if (vt == VT_I64) return "i64";
+    if (vt == VT_F32) return "float";
+    if (vt == VT_F64) return "double";
+    return "ptr";
+}
+
+static Value value_from_raw(char *reg, ValueType vt, CType cty) {
+    Value v = {reg, vt, cty};
     return v;
+}
+
+static Value value_from_ctype(char *reg, CType ty) {
+    return value_from_raw(reg, vt_from_ctype(ty), ty);
+}
+
+static Value cast_value(Value v, CType to) {
+    if (v.reg == NULL) error("使用了 void 表達式");
+    if (v.cty == to && v.vt != VT_I1) return v;
+    if (is_ptr(to)) {
+        if (v.vt == VT_PTR) {
+            v.cty = to;
+            return v;
+        }
+        error("不支援轉換為指標");
+    }
+    ValueType from_vt = v.vt;
+    ValueType to_vt = vt_from_ctype(to);
+    int r = reg_cnt++;
+    if (to_vt == VT_F32 || to_vt == VT_F64) {
+        const char *to_ty = (to_vt == VT_F64) ? "double" : "float";
+        if (from_vt == VT_F32 || from_vt == VT_F64) {
+            const char *op = (to_vt == VT_F64 && from_vt == VT_F32) ? "fpext" : "fptrunc";
+            fprintf(out_fp, "  %%%d = %s %s %s to %s\n", r, op,
+                    (from_vt == VT_F64) ? "double" : "float", v.reg, to_ty);
+        } else {
+            const char *op = is_unsigned(v.cty) ? "uitofp" : "sitofp";
+            fprintf(out_fp, "  %%%d = %s %s %s to %s\n", r, op, llvm_type_from_vt(from_vt), v.reg, to_ty);
+        }
+    } else {
+        const char *to_ty = llvm_type(to);
+        if (from_vt == VT_F32 || from_vt == VT_F64) {
+            const char *op = is_unsigned(to) ? "fptoui" : "fptosi";
+            fprintf(out_fp, "  %%%d = %s %s %s to %s\n", r, op,
+                    (from_vt == VT_F64) ? "double" : "float", v.reg, to_ty);
+        } else {
+            int from_bits = (from_vt == VT_I1) ? 1 :
+                            (from_vt == VT_I8) ? 8 :
+                            (from_vt == VT_I16) ? 16 :
+                            (from_vt == VT_I64) ? 64 : 32;
+            int to_bits = (to_vt == VT_I8) ? 8 : (to_vt == VT_I16) ? 16 : (to_vt == VT_I64) ? 64 : 32;
+            if (from_bits == to_bits) {
+                v.cty = to;
+                return v;
+            } else if (from_bits < to_bits) {
+                const char *op = (from_vt == VT_I1) ? "zext" : (is_unsigned(v.cty) ? "zext" : "sext");
+                fprintf(out_fp, "  %%%d = %s %s %s to %s\n", r, op, llvm_type_from_vt(from_vt), v.reg, to_ty);
+            } else {
+                fprintf(out_fp, "  %%%d = trunc %s %s to %s\n", r, llvm_type_from_vt(from_vt), v.reg, to_ty);
+            }
+        }
+    }
+    free(v.reg);
+    char *res = malloc(64);
+    sprintf(res, "%%%d", r);
+    return value_from_ctype(res, to);
 }
 
 static Value to_i1(Value v) {
     if (v.vt == VT_I1) return v;
     if (v.reg == NULL) error("使用了 void 表達式");
     int r = reg_cnt++;
-    if (v.vt == VT_I8) {
-        fprintf(out_fp, "  %%%d = icmp ne i8 %s, 0\n", r, v.reg);
-    } else if (v.vt == VT_PTR) {
+    if (v.vt == VT_PTR) {
         fprintf(out_fp, "  %%%d = icmp ne ptr %s, null\n", r, v.reg);
+    } else if (v.vt == VT_F32 || v.vt == VT_F64) {
+        const char *fty = (v.vt == VT_F64) ? "double" : "float";
+        fprintf(out_fp, "  %%%d = fcmp one %s %s, 0.0\n", r, fty, v.reg);
     } else {
-        fprintf(out_fp, "  %%%d = icmp ne i32 %s, 0\n", r, v.reg);
+        fprintf(out_fp, "  %%%d = icmp ne %s %s, 0\n", r, llvm_type(v.cty), v.reg);
     }
     free(v.reg);
     char *res = malloc(64);
     sprintf(res, "%%%d", r);
-    return value_from_reg(res, VT_I1);
+    return value_from_raw(res, VT_I1, TY_INT);
 }
 
 static Value to_i32(Value v) {
-    if (v.vt == VT_I32) return v;
-    if (v.reg == NULL) error("使用了 void 表達式");
-    int r = reg_cnt++;
-    if (v.vt == VT_I8) {
-        fprintf(out_fp, "  %%%d = sext i8 %s to i32\n", r, v.reg);
-    } else if (v.vt == VT_I1) {
-        fprintf(out_fp, "  %%%d = zext i1 %s to i32\n", r, v.reg);
-    } else {
-        error("不支援的型別轉換");
-    }
-    free(v.reg);
-    char *res = malloc(64);
-    sprintf(res, "%%%d", r);
-    return value_from_reg(res, VT_I32);
+    return cast_value(v, TY_INT);
 }
 
 static Value to_i8(Value v) {
-    if (v.vt == VT_I8) return v;
-    if (v.reg == NULL) error("使用了 void 表達式");
-    int r = reg_cnt++;
-    if (v.vt == VT_I32) {
-        fprintf(out_fp, "  %%%d = trunc i32 %s to i8\n", r, v.reg);
-    } else if (v.vt == VT_I1) {
-        fprintf(out_fp, "  %%%d = zext i1 %s to i8\n", r, v.reg);
-    } else {
-        error("不支援的型別轉換");
-    }
-    free(v.reg);
-    char *res = malloc(64);
-    sprintf(res, "%%%d", r);
-    return value_from_reg(res, VT_I8);
+    return cast_value(v, TY_CHAR);
 }
 
 static Value gen_lvalue_addr(ASTNode *node) {
@@ -278,11 +410,11 @@ static Value gen_lvalue_addr(ASTNode *node) {
             }
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
-            return value_from_reg(res, VT_PTR);
+            return value_from_raw(res, VT_PTR, slot->ty);
         }
         char *res = malloc(64);
         sprintf(res, "%%%s", slot->ir);
-        return value_from_reg(res, VT_PTR);
+        return value_from_raw(res, VT_PTR, slot->ty);
     }
     if (node->type == AST_DEREF) {
         return gen_expr(node->left);
@@ -304,7 +436,7 @@ static Value gen_lvalue_addr(ASTNode *node) {
                 }
                 char *res = malloc(64);
                 sprintf(res, "%%%d", r);
-                base_ptr = value_from_reg(res, VT_PTR);
+                base_ptr = value_from_ctype(res, slot->ty);
             } else {
                 base_ptr = gen_expr(base);
             }
@@ -320,7 +452,7 @@ static Value gen_lvalue_addr(ASTNode *node) {
             free(idx.reg);
             char *mul_reg = malloc(64);
             sprintf(mul_reg, "%%%d", r_mul);
-            idx = value_from_reg(mul_reg, VT_I32);
+            idx = value_from_raw(mul_reg, VT_I32, TY_INT);
         }
         int r = reg_cnt++;
         fprintf(out_fp, "  %%%d = getelementptr i8, ptr %s, i32 %s\n", r, base_ptr.reg, idx.reg);
@@ -328,7 +460,7 @@ static Value gen_lvalue_addr(ASTNode *node) {
         free(idx.reg);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        return value_from_reg(res, VT_PTR);
+        return value_from_raw(res, VT_PTR, TY_INT_PTR);
     }
     if (node->type == AST_MEMBER) {
         Value base_ptr;
@@ -342,17 +474,22 @@ static Value gen_lvalue_addr(ASTNode *node) {
         free(base_ptr.reg);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        return value_from_reg(res, VT_PTR);
+        return value_from_raw(res, VT_PTR, TY_INT_PTR);
     }
     error("不支援的取址");
-    return value_from_reg(NULL, VT_PTR);
+    return value_from_raw(NULL, VT_PTR, TY_INT_PTR);
 }
 
 static Value gen_expr(ASTNode *node) {
     if (node->type == AST_NUM) {
         char *res = malloc(64);
         sprintf(res, "%d", node->val);
-        return value_from_reg(res, VT_I32);
+        return value_from_ctype(res, node->ty);
+    } else if (node->type == AST_FLOAT) {
+        char *res = malloc(64);
+        if (node->ty == TY_FLOAT) snprintf(res, 64, "%.9f", node->fval);
+        else snprintf(res, 64, "%.17f", node->fval);
+        return value_from_ctype(res, node->ty);
     } else if (node->type == AST_STR) {
         int id = string_cnt++;
         strcpy(string_table[id], node->str_val);
@@ -362,7 +499,7 @@ static Value gen_expr(ASTNode *node) {
                 r, len, id);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        return value_from_reg(res, VT_PTR);
+        return value_from_raw(res, VT_PTR, TY_CHAR_PTR);
     } else if (node->type == AST_VAR) {
         VarSlot *slot = var_find(node->name);
         if (slot->array_len > 0) {
@@ -377,47 +514,54 @@ static Value gen_expr(ASTNode *node) {
             }
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
-            return value_from_reg(res, VT_PTR);
+            return value_from_ctype(res, slot->ty);
         }
         if (slot->ty == TY_STRUCT) {
             char *res = malloc(64);
             sprintf(res, "%%%s", slot->ir);
-            return value_from_reg(res, VT_PTR);
+            return value_from_raw(res, VT_PTR, TY_STRUCT_PTR);
         }
         int r = reg_cnt++;
         const char *ty = llvm_type(slot->ty);
         fprintf(out_fp, "  %%%d = load %s, ptr %%%s\n", r, ty, slot->ir);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        if (is_ptr(slot->ty)) return value_from_reg(res, VT_PTR);
-        return value_from_reg(res, (slot->ty == TY_CHAR) ? VT_I8 : VT_I32);
+        if (is_ptr(slot->ty)) return value_from_raw(res, VT_PTR, slot->ty);
+        return value_from_ctype(res, slot->ty);
     } else if (node->type == AST_CALL) {
         Value raw_vals[10];
         Value final_vals[10];
-        ValueType arg_types[10];
+        CType call_types[10];
         int arg_count = 0;
         ASTNode *arg = node->left;
         while (arg) {
             raw_vals[arg_count] = gen_expr(arg);
-            if (arg->type == AST_STR || is_ptr(arg->ty)) arg_types[arg_count] = VT_PTR;
-            else arg_types[arg_count] = VT_I32;
+            call_types[arg_count] = arg->ty;
             arg = arg->next;
             arg_count++;
         }
         int is_printf = (strcmp(node->name, "printf") == 0);
         FuncSig *sig = find_func_sig(node->name);
-        const char *ret_ty = (sig && sig->ret == TY_VOID) ? "void" :
-                             (sig && is_ptr(sig->ret)) ? "ptr" :
-                             (sig && sig->ret == TY_CHAR) ? "i8" : "i32";
+        const char *ret_ty = (sig && sig->ret == TY_VOID) ? "void" : llvm_type(sig ? sig->ret : TY_INT);
         for (int i = 0; i < arg_count; i++) {
-            if (arg_types[i] == VT_PTR) {
-                final_vals[i] = raw_vals[i];
-            } else if (sig && i < sig->param_cnt && is_ptr(sig->params[i])) {
-                error("指標參數需要 ptr");
-            } else if (sig && i < sig->param_cnt && sig->params[i] == TY_CHAR) {
-                final_vals[i] = to_i8(raw_vals[i]);
+            if (is_printf) {
+                CType ct = call_types[i];
+                if (ct == TY_FLOAT) ct = TY_DOUBLE;
+                if (ct == TY_CHAR || ct == TY_UCHAR || ct == TY_SHORT || ct == TY_USHORT) ct = TY_INT;
+                call_types[i] = ct;
+                if (is_ptr(ct)) final_vals[i] = raw_vals[i];
+                else final_vals[i] = cast_value(raw_vals[i], ct);
+            } else if (sig && i < sig->param_cnt) {
+                CType pt = sig->params[i];
+                if (is_ptr(pt)) {
+                    if (!is_ptr(call_types[i])) error("指標參數需要 ptr");
+                    final_vals[i] = raw_vals[i];
+                } else {
+                    final_vals[i] = cast_value(raw_vals[i], pt);
+                }
+                call_types[i] = pt;
             } else {
-                final_vals[i] = to_i32(raw_vals[i]);
+                final_vals[i] = raw_vals[i];
             }
         }
 
@@ -433,28 +577,22 @@ static Value gen_expr(ASTNode *node) {
         }
         for (int i = 0; i < arg_count; i++) {
             if (i > 0) fprintf(out_fp, ", ");
-            if (arg_types[i] == VT_PTR) {
+            if (is_ptr(call_types[i])) {
                 fprintf(out_fp, "ptr %s", final_vals[i].reg);
                 free(final_vals[i].reg);
             } else {
-                if (sig && i < sig->param_cnt && sig->params[i] == TY_CHAR) {
-                    fprintf(out_fp, "i8 %s", final_vals[i].reg);
-                    free(final_vals[i].reg);
-                } else {
-                    fprintf(out_fp, "i32 %s", final_vals[i].reg);
-                    free(final_vals[i].reg);
-                }
+                fprintf(out_fp, "%s %s", llvm_type(call_types[i]), final_vals[i].reg);
+                free(final_vals[i].reg);
             }
         }
         fprintf(out_fp, ")\n");
         if (!is_printf && sig && sig->ret == TY_VOID) {
-            return value_from_reg(NULL, VT_I32);
+            return value_from_raw(NULL, VT_I32, TY_INT);
         }
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        if (!is_printf && sig && is_ptr(sig->ret)) return value_from_reg(res, VT_PTR);
-        if (!is_printf && sig && sig->ret == TY_CHAR) return value_from_reg(res, VT_I8);
-        return value_from_reg(res, VT_I32);
+        if (!is_printf && sig) return value_from_ctype(res, sig->ret);
+        return value_from_ctype(res, TY_INT);
     } else if (node->type == AST_ADDR) {
         return gen_lvalue_addr(node->left);
     } else if (node->type == AST_DEREF) {
@@ -467,7 +605,7 @@ static Value gen_expr(ASTNode *node) {
         free(ptr.reg);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
+        return value_from_ctype(res, node->ty);
     } else if (node->type == AST_INDEX) {
         Value addr = gen_lvalue_addr(node);
         if (node->ty == TY_STRUCT) {
@@ -478,7 +616,7 @@ static Value gen_expr(ASTNode *node) {
         free(addr.reg);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
+        return value_from_ctype(res, node->ty);
     } else if (node->type == AST_MEMBER) {
         Value addr = gen_lvalue_addr(node);
         if (node->ty == TY_STRUCT) {
@@ -489,7 +627,7 @@ static Value gen_expr(ASTNode *node) {
         free(addr.reg);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
-        return value_from_reg(res, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
+        return value_from_ctype(res, node->ty);
     } else if (node->type == AST_BINOP) {
         if (node->op == TK_ANDAND || node->op == TK_OROR) {
             int tmp = reg_cnt++;
@@ -520,7 +658,7 @@ static Value gen_expr(ASTNode *node) {
             fprintf(out_fp, "  %%%d = load i1, ptr %%%d\n", r, tmp);
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
-            return value_from_reg(res, VT_I1);
+            return value_from_raw(res, VT_I1, TY_INT);
         }
 
         if ((node->op == TK_EQ || node->op == TK_NE) &&
@@ -538,7 +676,7 @@ static Value gen_expr(ASTNode *node) {
                 if (other->type == AST_NUM && other->val == 0) {
                     char *res = malloc(16);
                     strcpy(res, "null");
-                    r = value_from_reg(res, VT_PTR);
+                    r = value_from_raw(res, VT_PTR, TY_INT_PTR);
                 } else {
                     error("指標只能與 0 或指標比較");
                 }
@@ -550,7 +688,7 @@ static Value gen_expr(ASTNode *node) {
             free(r.reg);
             char *res = malloc(64);
             sprintf(res, "%%%d", rcmp);
-            return value_from_reg(res, VT_I1);
+            return value_from_raw(res, VT_I1, TY_INT);
         }
 
         if ((node->op == TK_LT || node->op == TK_GT || node->op == TK_LE || node->op == TK_GE) &&
@@ -577,7 +715,7 @@ static Value gen_expr(ASTNode *node) {
             free(r.reg);
             char *res = malloc(64);
             sprintf(res, "%%%d", rcmp);
-            return value_from_reg(res, VT_I1);
+            return value_from_raw(res, VT_I1, TY_INT);
         }
 
         if ((node->op == TK_PLUS || node->op == TK_MINUS) &&
@@ -608,7 +746,7 @@ static Value gen_expr(ASTNode *node) {
                 free(r.reg);
                 char *res = malloc(64);
                 sprintf(res, "%%%d", rtr);
-                return value_from_reg(res, VT_I32);
+                return value_from_ctype(res, TY_INT);
             } else {
                 ASTNode *ptr_node = is_ptr(node->left->ty) ? node->left : node->right;
                 ASTNode *int_node = is_ptr(node->left->ty) ? node->right : node->left;
@@ -620,7 +758,7 @@ static Value gen_expr(ASTNode *node) {
                     free(idx.reg);
                     char *neg = malloc(64);
                     sprintf(neg, "%%%d", rneg);
-                    idx = value_from_reg(neg, VT_I32);
+                    idx = value_from_raw(neg, VT_I32, TY_INT);
                 }
                 int esz = elem_size(ptr_node->ty, ptr_node->struct_id);
                 if (esz > 1) {
@@ -629,7 +767,7 @@ static Value gen_expr(ASTNode *node) {
                     free(idx.reg);
                     char *mul = malloc(64);
                     sprintf(mul, "%%%d", r_mul);
-                    idx = value_from_reg(mul, VT_I32);
+                    idx = value_from_raw(mul, VT_I32, TY_INT);
                 }
                 int r = reg_cnt++;
                 fprintf(out_fp, "  %%%d = getelementptr i8, ptr %s, i32 %s\n",
@@ -638,33 +776,53 @@ static Value gen_expr(ASTNode *node) {
                 free(idx.reg);
                 char *res = malloc(64);
                 sprintf(res, "%%%d", r);
-                return value_from_reg(res, VT_PTR);
+                return value_from_raw(res, VT_PTR, TY_INT_PTR);
             }
         }
 
-        Value left = to_i32(gen_expr(node->left));
-        Value right = to_i32(gen_expr(node->right));
+        CType ct = common_arith_type(node->left->ty, node->right->ty);
+        Value left = cast_value(gen_expr(node->left), ct);
+        Value right = cast_value(gen_expr(node->right), ct);
         int r = reg_cnt++;
-        if (node->op == '+') fprintf(out_fp, "  %%%d = add i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == '-') fprintf(out_fp, "  %%%d = sub i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == '*') fprintf(out_fp, "  %%%d = mul i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == '/') fprintf(out_fp, "  %%%d = sdiv i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == TK_MOD) fprintf(out_fp, "  %%%d = srem i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == TK_LT) fprintf(out_fp, "  %%%d = icmp slt i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == TK_GT) fprintf(out_fp, "  %%%d = icmp sgt i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == TK_LE) fprintf(out_fp, "  %%%d = icmp sle i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == TK_GE) fprintf(out_fp, "  %%%d = icmp sge i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == TK_EQ) fprintf(out_fp, "  %%%d = icmp eq i32 %s, %s\n", r, left.reg, right.reg);
-        if (node->op == TK_NE) fprintf(out_fp, "  %%%d = icmp ne i32 %s, %s\n", r, left.reg, right.reg);
+        if (is_float(ct)) {
+            const char *fty = (ct == TY_DOUBLE) ? "double" : "float";
+            if (node->op == '+') fprintf(out_fp, "  %%%d = fadd %s %s, %s\n", r, fty, left.reg, right.reg);
+            if (node->op == '-') fprintf(out_fp, "  %%%d = fsub %s %s, %s\n", r, fty, left.reg, right.reg);
+            if (node->op == '*') fprintf(out_fp, "  %%%d = fmul %s %s, %s\n", r, fty, left.reg, right.reg);
+            if (node->op == '/') fprintf(out_fp, "  %%%d = fdiv %s %s, %s\n", r, fty, left.reg, right.reg);
+            if (node->op == TK_LT || node->op == TK_GT || node->op == TK_LE || node->op == TK_GE ||
+                node->op == TK_EQ || node->op == TK_NE) {
+                const char *op = (node->op == TK_LT) ? "olt" :
+                                 (node->op == TK_LE) ? "ole" :
+                                 (node->op == TK_GT) ? "ogt" :
+                                 (node->op == TK_GE) ? "oge" :
+                                 (node->op == TK_EQ) ? "oeq" : "one";
+                fprintf(out_fp, "  %%%d = fcmp %s %s %s, %s\n", r, op, fty, left.reg, right.reg);
+            }
+        } else {
+            const char *ity = llvm_type(ct);
+            int uns = is_unsigned(ct);
+            if (node->op == '+') fprintf(out_fp, "  %%%d = add %s %s, %s\n", r, ity, left.reg, right.reg);
+            if (node->op == '-') fprintf(out_fp, "  %%%d = sub %s %s, %s\n", r, ity, left.reg, right.reg);
+            if (node->op == '*') fprintf(out_fp, "  %%%d = mul %s %s, %s\n", r, ity, left.reg, right.reg);
+            if (node->op == '/') fprintf(out_fp, "  %%%d = %s %s %s, %s\n", r, uns ? "udiv" : "sdiv", ity, left.reg, right.reg);
+            if (node->op == TK_MOD) fprintf(out_fp, "  %%%d = %s %s %s, %s\n", r, uns ? "urem" : "srem", ity, left.reg, right.reg);
+            if (node->op == TK_LT) fprintf(out_fp, "  %%%d = icmp %s %s %s, %s\n", r, uns ? "ult" : "slt", ity, left.reg, right.reg);
+            if (node->op == TK_GT) fprintf(out_fp, "  %%%d = icmp %s %s %s, %s\n", r, uns ? "ugt" : "sgt", ity, left.reg, right.reg);
+            if (node->op == TK_LE) fprintf(out_fp, "  %%%d = icmp %s %s %s, %s\n", r, uns ? "ule" : "sle", ity, left.reg, right.reg);
+            if (node->op == TK_GE) fprintf(out_fp, "  %%%d = icmp %s %s %s, %s\n", r, uns ? "uge" : "sge", ity, left.reg, right.reg);
+            if (node->op == TK_EQ) fprintf(out_fp, "  %%%d = icmp eq %s %s, %s\n", r, ity, left.reg, right.reg);
+            if (node->op == TK_NE) fprintf(out_fp, "  %%%d = icmp ne %s %s, %s\n", r, ity, left.reg, right.reg);
+        }
         free(left.reg);
         free(right.reg);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
         if (node->op == TK_LT || node->op == TK_GT || node->op == TK_LE || node->op == TK_GE ||
             node->op == TK_EQ || node->op == TK_NE) {
-            return value_from_reg(res, VT_I1);
+            return value_from_raw(res, VT_I1, TY_INT);
         }
-        return value_from_reg(res, VT_I32);
+        return value_from_ctype(res, ct);
     } else if (node->type == AST_UNARY) {
         if (node->op == TK_NOT) {
             Value val = gen_cond(node->left);
@@ -673,20 +831,33 @@ static Value gen_expr(ASTNode *node) {
             free(val.reg);
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
-            return value_from_reg(res, VT_I1);
+            return value_from_raw(res, VT_I1, TY_INT);
         } else if (node->op == TK_MINUS) {
-            Value val = to_i32(gen_expr(node->left));
+            Value val = cast_value(gen_expr(node->left), node->ty);
             int r = reg_cnt++;
-            fprintf(out_fp, "  %%%d = sub i32 0, %s\n", r, val.reg);
+            if (is_float(node->ty)) {
+                const char *fty = (node->ty == TY_DOUBLE) ? "double" : "float";
+                fprintf(out_fp, "  %%%d = fsub %s 0.0, %s\n", r, fty, val.reg);
+            } else {
+                const char *ity = llvm_type(node->ty);
+                fprintf(out_fp, "  %%%d = sub %s 0, %s\n", r, ity, val.reg);
+            }
             free(val.reg);
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
-            return value_from_reg(res, VT_I32);
+            return value_from_ctype(res, node->ty);
         }
+    } else if (node->type == AST_CAST) {
+        Value val = gen_expr(node->left);
+        if (is_ptr(node->ty)) {
+            if (!is_ptr(val.cty)) error("不支援指標轉型");
+            return value_from_raw(val.reg, VT_PTR, node->ty);
+        }
+        return cast_value(val, node->ty);
     } else if (node->type == AST_SIZEOF) {
         char *res = malloc(64);
         sprintf(res, "%d", node->val);
-        return value_from_reg(res, VT_I32);
+        return value_from_ctype(res, TY_INT);
     } else if (node->type == AST_INCDEC) {
         int is_inc = (node->op == TK_PLUSPLUS);
         VarSlot *slot = var_find(node->name);
@@ -695,25 +866,26 @@ static Value gen_expr(ASTNode *node) {
         fprintf(out_fp, "  %%%d = load %s, ptr %%%s\n", r_old, ty, slot->ir);
         char *old_reg = malloc(64);
         sprintf(old_reg, "%%%d", r_old);
-        Value old_val = value_from_reg(old_reg, (slot->ty == TY_CHAR) ? VT_I8 : VT_I32);
-        Value old_i32 = to_i32(value_from_reg(strdup(old_reg), old_val.vt));
+        Value old_val = value_from_ctype(old_reg, slot->ty);
         int r_new = reg_cnt++;
-        if (is_inc) fprintf(out_fp, "  %%%d = add i32 %s, 1\n", r_new, old_i32.reg);
-        else fprintf(out_fp, "  %%%d = sub i32 %s, 1\n", r_new, old_i32.reg);
-        free(old_i32.reg);
+        if (is_float(slot->ty)) {
+            const char *fty = (slot->ty == TY_DOUBLE) ? "double" : "float";
+            fprintf(out_fp, "  %%%d = %s %s %s, 1.0\n", r_new, is_inc ? "fadd" : "fsub", fty, old_val.reg);
+        } else {
+            fprintf(out_fp, "  %%%d = %s %s %s, 1\n", r_new, is_inc ? "add" : "sub", llvm_type(slot->ty), old_val.reg);
+        }
         char *new_reg = malloc(64);
         sprintf(new_reg, "%%%d", r_new);
-        Value new_val = value_from_reg(new_reg, VT_I32);
-        Value store_val = (slot->ty == TY_CHAR) ? to_i8(new_val) : new_val;
-        fprintf(out_fp, "  store %s %s, ptr %%%s\n", llvm_type(slot->ty), store_val.reg, slot->ir);
+        Value new_val = value_from_ctype(new_reg, slot->ty);
+        fprintf(out_fp, "  store %s %s, ptr %%%s\n", llvm_type(slot->ty), new_val.reg, slot->ir);
         if (node->is_prefix) {
-            return value_from_reg(store_val.reg, (slot->ty == TY_CHAR) ? VT_I8 : VT_I32);
+            return value_from_ctype(new_val.reg, slot->ty);
         }
-        free(store_val.reg);
-        return value_from_reg(old_val.reg, old_val.vt);
+        free(new_val.reg);
+        return value_from_ctype(old_val.reg, slot->ty);
     }
     error("未知的表達式");
-    return value_from_reg(NULL, VT_I32);
+    return value_from_raw(NULL, VT_I32, TY_INT);
 }
 
 static Value gen_cond(ASTNode *node) {
@@ -740,13 +912,13 @@ static void gen_stmt(ASTNode *node) {
                         int idx = 0;
                         ASTNode *cur = node->left;
                         while (cur && idx < node->array_len) {
-                            Value val = gen_expr(cur);
-                            Value store_val = (base_of(node->ty) == TY_CHAR) ? to_i8(val) : to_i32(val);
+                        Value val = gen_expr(cur);
+                        Value store_val = cast_value(val, base_of(node->ty));
                             int r = reg_cnt++;
                             fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 %d\n",
                                     r, node->array_len, llvm_elem_type(node->ty), ir_name, idx);
                             fprintf(out_fp, "  store %s %s, ptr %%%d\n",
-                                    (base_of(node->ty) == TY_CHAR) ? "i8" : "i32", store_val.reg, r);
+                                    llvm_elem_type(node->ty), store_val.reg, r);
                             free(store_val.reg);
                             cur = cur->next;
                             idx++;
@@ -755,8 +927,7 @@ static void gen_stmt(ASTNode *node) {
                             int r = reg_cnt++;
                             fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 %d\n",
                                     r, node->array_len, llvm_elem_type(node->ty), ir_name, i);
-                            fprintf(out_fp, "  store %s 0, ptr %%%d\n",
-                                    (base_of(node->ty) == TY_CHAR) ? "i8" : "i32", r);
+                            fprintf(out_fp, "  store %s 0, ptr %%%d\n", llvm_elem_type(node->ty), r);
                         }
                     } else if (node->init_kind == 3) {
                         int len = (int)strlen(node->str_val);
@@ -784,8 +955,7 @@ static void gen_stmt(ASTNode *node) {
                     Value val = gen_expr(node->left);
                     Value store_val;
                     if (is_ptr(node->ty)) store_val = val;
-                    else if (node->ty == TY_CHAR) store_val = to_i8(val);
-                    else store_val = to_i32(val);
+                    else store_val = cast_value(val, node->ty);
                     fprintf(out_fp, "  store %s %s, ptr %%%s\n", llvm_ty, store_val.reg, ir_name);
                     free(store_val.reg);
                 }
@@ -800,26 +970,27 @@ static void gen_stmt(ASTNode *node) {
                 fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r_old, llvm_ty, addr.reg);
                 char *old_reg = malloc(64);
                 sprintf(old_reg, "%%%d", r_old);
-                Value old_val = value_from_reg(old_reg, (node->ty == TY_CHAR) ? VT_I8 : VT_I32);
-                Value rhs = gen_expr(node->right);
-                Value old_i32 = to_i32(old_val);
-                Value rhs_i32 = to_i32(rhs);
+                Value old_val = value_from_ctype(old_reg, node->ty);
+                Value rhs = cast_value(gen_expr(node->right), node->ty);
                 int r_new = reg_cnt++;
-                fprintf(out_fp, "  %%%d = add i32 %s, %s\n", r_new, old_i32.reg, rhs_i32.reg);
-                free(old_i32.reg);
-                free(rhs_i32.reg);
+                if (is_float(node->ty)) {
+                    const char *fty = (node->ty == TY_DOUBLE) ? "double" : "float";
+                    fprintf(out_fp, "  %%%d = fadd %s %s, %s\n", r_new, fty, old_val.reg, rhs.reg);
+                } else {
+                    fprintf(out_fp, "  %%%d = add %s %s, %s\n", r_new, llvm_ty, old_val.reg, rhs.reg);
+                }
+                free(old_val.reg);
+                free(rhs.reg);
                 char *new_reg = malloc(64);
                 sprintf(new_reg, "%%%d", r_new);
-                Value new_val = value_from_reg(new_reg, VT_I32);
-                Value store_val = (node->ty == TY_CHAR) ? to_i8(new_val) : new_val;
-                fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, store_val.reg, addr.reg);
-                free(store_val.reg);
+                Value new_val = value_from_ctype(new_reg, node->ty);
+                fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, new_val.reg, addr.reg);
+                free(new_val.reg);
             } else {
                 Value val = gen_expr(node->right);
                 Value store_val;
                 if (is_ptr(node->ty)) store_val = val;
-                else if (node->ty == TY_CHAR) store_val = to_i8(val);
-                else store_val = to_i32(val);
+                else store_val = cast_value(val, node->ty);
                 fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, store_val.reg, addr.reg);
                 free(store_val.reg);
             }
@@ -954,7 +1125,7 @@ static void gen_stmt(ASTNode *node) {
             free(cond_val.reg);
             fprintf(out_fp, "L%d:\n", end_label);
         } else if (node->type == AST_SWITCH) {
-            Value cond_val = to_i32(gen_expr(node->cond));
+            Value cond_val = cast_value(gen_expr(node->cond), TY_INT);
             int end_label = label_cnt++;
             int case_count = 0;
             for (ASTNode *c = node->left; c; c = c->next) case_count++;
@@ -1022,10 +1193,8 @@ static void gen_stmt(ASTNode *node) {
                 Value ret_val;
                 if (is_ptr(current_ret_ty)) {
                     ret_val = val;
-                } else if (current_ret_ty == TY_CHAR) {
-                    ret_val = to_i8(val);
                 } else {
-                    ret_val = to_i32(val);
+                    ret_val = cast_value(val, current_ret_ty);
                 }
                 fprintf(out_fp, "  ret %s %s\n", llvm_type(current_ret_ty), ret_val.reg);
                 free(ret_val.reg);
