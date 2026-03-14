@@ -7,7 +7,7 @@
 // 1. 詞法分析 (Lexer)
 // ============================================================================
 typedef enum {
-    TK_EOF, TK_INT, TK_RETURN, TK_IF, TK_ELSE, TK_IDENT, TK_NUM, TK_STR,
+    TK_EOF, TK_INT, TK_RETURN, TK_IF, TK_ELSE, TK_WHILE, TK_FOR, TK_IDENT, TK_NUM, TK_STR,
     TK_ASSIGN = '=', TK_PLUS = '+', TK_MINUS = '-', TK_MUL = '*', TK_DIV = '/',
     TK_LT = '<', TK_GT = '>', TK_NOT = '!', TK_LPAREN = '(', TK_RPAREN = ')',
     TK_LBRACE = '{', TK_RBRACE = '}', TK_SEMI = ';', TK_COMMA = ','
@@ -67,6 +67,8 @@ void next_token() {
         else if (strcmp(cur_tok.name, "return") == 0) cur_tok.type = TK_RETURN;
         else if (strcmp(cur_tok.name, "if") == 0) cur_tok.type = TK_IF;
         else if (strcmp(cur_tok.name, "else") == 0) cur_tok.type = TK_ELSE;
+        else if (strcmp(cur_tok.name, "while") == 0) cur_tok.type = TK_WHILE;
+        else if (strcmp(cur_tok.name, "for") == 0) cur_tok.type = TK_FOR;
         else cur_tok.type = TK_IDENT;
         return;
     }
@@ -96,7 +98,7 @@ void expect(TokenType type, const char *msg) {
 // ============================================================================
 typedef enum {
     AST_FUNC, AST_DECL, AST_ASSIGN, AST_BINOP, AST_VAR, AST_NUM, AST_RETURN,
-    AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF
+    AST_STR, AST_CALL, AST_EXPR_STMT, AST_IF, AST_WHILE, AST_FOR
 } ASTNodeType;
 
 typedef struct ASTNode {
@@ -107,6 +109,7 @@ typedef struct ASTNode {
     int op;
     struct ASTNode *left, *right;
     struct ASTNode *cond, *then_body, *else_body;
+    struct ASTNode *init, *update, *body;
     struct ASTNode *next; 
 } ASTNode;
 
@@ -120,6 +123,8 @@ ASTNode* parse_expr();
 ASTNode* parse_stmt();
 ASTNode* parse_block();
 ASTNode* parse_if_stmt();
+ASTNode* parse_while_stmt();
+ASTNode* parse_for_stmt();
 
 ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
@@ -244,6 +249,100 @@ ASTNode* parse_if_stmt() {
     return n;
 }
 
+ASTNode* parse_while_stmt() {
+    expect(TK_WHILE, "預期 'while'");
+    expect(TK_LPAREN, "預期 '('");
+    ASTNode *cond = parse_expr();
+    expect(TK_RPAREN, "預期 ')'");
+    ASTNode *body = NULL;
+    if (cur_tok.type == TK_LBRACE) body = parse_block();
+    else body = parse_stmt();
+    ASTNode *n = new_node(AST_WHILE);
+    n->cond = cond;
+    n->body = body;
+    return n;
+}
+
+ASTNode* parse_for_stmt() {
+    expect(TK_FOR, "預期 'for'");
+    expect(TK_LPAREN, "預期 '('");
+    ASTNode *init = NULL;
+    ASTNode *cond = NULL;
+    ASTNode *update = NULL;
+
+    if (cur_tok.type != TK_SEMI) {
+        if (cur_tok.type == TK_INT) {
+            next_token();
+            ASTNode *decl = new_node(AST_DECL);
+            strcpy(decl->name, cur_tok.name);
+            expect(TK_IDENT, "預期變數名稱");
+            if (cur_tok.type == TK_ASSIGN) {
+                next_token();
+                decl->left = parse_expr();
+            }
+            init = decl;
+        } else if (cur_tok.type == TK_IDENT) {
+            char *saved_p = p; Token saved_tok = cur_tok;
+            next_token();
+            int is_assign = (cur_tok.type == TK_ASSIGN);
+            p = saved_p; cur_tok = saved_tok;
+            if (is_assign) {
+                ASTNode *assign = new_node(AST_ASSIGN);
+                strcpy(assign->name, cur_tok.name);
+                next_token(); expect(TK_ASSIGN, "預期 '='");
+                assign->right = parse_expr();
+                init = assign;
+            } else {
+                ASTNode *expr = parse_expr();
+                init = new_node(AST_EXPR_STMT);
+                init->left = expr;
+            }
+        } else {
+            ASTNode *expr = parse_expr();
+            init = new_node(AST_EXPR_STMT);
+            init->left = expr;
+        }
+    }
+    expect(TK_SEMI, "預期 ';'");
+
+    if (cur_tok.type != TK_SEMI) {
+        cond = parse_expr();
+    }
+    expect(TK_SEMI, "預期 ';'");
+
+    if (cur_tok.type != TK_RPAREN) {
+        if (cur_tok.type == TK_IDENT) {
+            char *saved_p = p; Token saved_tok = cur_tok;
+            next_token();
+            int is_assign = (cur_tok.type == TK_ASSIGN);
+            p = saved_p; cur_tok = saved_tok;
+            if (is_assign) {
+                ASTNode *assign = new_node(AST_ASSIGN);
+                strcpy(assign->name, cur_tok.name);
+                next_token(); expect(TK_ASSIGN, "預期 '='");
+                assign->right = parse_expr();
+                update = assign;
+            } else {
+                update = parse_expr();
+            }
+        } else {
+            update = parse_expr();
+        }
+    }
+    expect(TK_RPAREN, "預期 ')'");
+
+    ASTNode *body = NULL;
+    if (cur_tok.type == TK_LBRACE) body = parse_block();
+    else body = parse_stmt();
+
+    ASTNode *n = new_node(AST_FOR);
+    n->init = init;
+    n->cond = cond;
+    n->update = update;
+    n->body = body;
+    return n;
+}
+
 ASTNode* parse_stmt() {
     if (cur_tok.type == TK_INT) {
         next_token();
@@ -258,6 +357,10 @@ ASTNode* parse_stmt() {
         return n;
     } else if (cur_tok.type == TK_IF) {
         return parse_if_stmt();
+    } else if (cur_tok.type == TK_WHILE) {
+        return parse_while_stmt();
+    } else if (cur_tok.type == TK_FOR) {
+        return parse_for_stmt();
     } else if (cur_tok.type == TK_RETURN) {
         next_token();
         ASTNode *n = new_node(AST_RETURN);
@@ -338,6 +441,10 @@ int string_cnt = 0;
 ASTNode *current_params = NULL;
 int stmt_list_ends_with_return(ASTNode *node);
 int stmt_ends_with_return(ASTNode *node);
+int stmt_list_ends_with_break(ASTNode *node);
+int stmt_ends_with_break(ASTNode *node);
+int stmt_list_may_fallthrough(ASTNode *node);
+int stmt_may_fallthrough(ASTNode *node);
 
 int is_param(ASTNode *params, const char *name) {
     ASTNode *pnode = params;
@@ -364,6 +471,42 @@ int stmt_list_ends_with_return(ASTNode *node) {
     ASTNode *cur = node;
     while (cur->next) cur = cur->next;
     return stmt_ends_with_return(cur);
+}
+
+int stmt_ends_with_break(ASTNode *node) {
+    if (!node) return 0;
+    if (node->type == AST_WHILE || node->type == AST_FOR) return 0;
+    if (node->type == AST_IF) {
+        int then_br = stmt_list_ends_with_break(node->then_body);
+        int else_br = stmt_list_ends_with_break(node->else_body);
+        return then_br && else_br;
+    }
+    return 0;
+}
+
+int stmt_list_ends_with_break(ASTNode *node) {
+    if (!node) return 0;
+    ASTNode *cur = node;
+    while (cur->next) cur = cur->next;
+    return stmt_ends_with_break(cur);
+}
+
+int stmt_may_fallthrough(ASTNode *node) {
+    if (!node) return 1;
+    if (node->type == AST_RETURN) return 0;
+    if (node->type == AST_IF) {
+        int then_ft = stmt_list_may_fallthrough(node->then_body);
+        int else_ft = node->else_body ? stmt_list_may_fallthrough(node->else_body) : 1;
+        return then_ft || else_ft;
+    }
+    return 1;
+}
+
+int stmt_list_may_fallthrough(ASTNode *node) {
+    if (!node) return 1;
+    ASTNode *cur = node;
+    while (cur->next) cur = cur->next;
+    return stmt_may_fallthrough(cur);
 }
 
 char* gen_expr(ASTNode *node) {
@@ -459,8 +602,8 @@ void gen_stmt(ASTNode *node) {
             if (val) free(val);
         } else if (node->type == AST_IF) {
             char *cond_val = gen_expr(node->cond);
-            int then_fall = !stmt_list_ends_with_return(node->then_body);
-            int else_fall = node->else_body ? !stmt_list_ends_with_return(node->else_body) : 1;
+            int then_fall = stmt_list_may_fallthrough(node->then_body);
+            int else_fall = node->else_body ? stmt_list_may_fallthrough(node->else_body) : 1;
             int need_end = then_fall || else_fall;
             int then_label = label_cnt++;
             int else_label = node->else_body ? label_cnt++ : (need_end ? label_cnt++ : label_cnt++);
@@ -487,6 +630,82 @@ void gen_stmt(ASTNode *node) {
             if (need_end) {
                 fprintf(out, "L%d:\n", end_label);
             }
+        } else if (node->type == AST_WHILE) {
+            int cond_label = label_cnt++;
+            int body_label = label_cnt++;
+            int end_label = label_cnt++;
+            fprintf(out, "  br label %%L%d\n", cond_label);
+
+            fprintf(out, "L%d:\n", cond_label);
+            char *cond_val = gen_expr(node->cond);
+            fprintf(out, "  br i1 %s, label %%L%d, label %%L%d\n", cond_val, body_label, end_label);
+            free(cond_val);
+
+            fprintf(out, "L%d:\n", body_label);
+            gen_stmt(node->body);
+            if (stmt_list_may_fallthrough(node->body)) {
+                fprintf(out, "  br label %%L%d\n", cond_label);
+            }
+
+            fprintf(out, "L%d:\n", end_label);
+        } else if (node->type == AST_FOR) {
+            if (node->init) {
+                if (node->init->type == AST_DECL) gen_stmt(node->init);
+                else if (node->init->type == AST_ASSIGN) {
+                    char *val = gen_expr(node->init->right);
+                    if (is_param(current_params, node->init->name)) {
+                        fprintf(out, "  store i32 %s, ptr %%%s.addr\n", val, node->init->name);
+                    } else {
+                        fprintf(out, "  store i32 %s, ptr %%%s\n", val, node->init->name);
+                    }
+                    free(val);
+                }
+                else if (node->init->type == AST_EXPR_STMT) {
+                    char *val = gen_expr(node->init->left);
+                    if (val) free(val);
+                }
+            }
+
+            int cond_label = label_cnt++;
+            int body_label = label_cnt++;
+            int update_label = label_cnt++;
+            int end_label = label_cnt++;
+
+            fprintf(out, "  br label %%L%d\n", cond_label);
+
+            fprintf(out, "L%d:\n", cond_label);
+            if (node->cond) {
+                char *cond_val = gen_expr(node->cond);
+                fprintf(out, "  br i1 %s, label %%L%d, label %%L%d\n", cond_val, body_label, end_label);
+                free(cond_val);
+            } else {
+                fprintf(out, "  br label %%L%d\n", body_label);
+            }
+
+            fprintf(out, "L%d:\n", body_label);
+            gen_stmt(node->body);
+            if (stmt_list_may_fallthrough(node->body)) {
+                fprintf(out, "  br label %%L%d\n", update_label);
+            }
+
+            fprintf(out, "L%d:\n", update_label);
+            if (node->update) {
+                if (node->update->type == AST_ASSIGN) {
+                    char *val = gen_expr(node->update->right);
+                    if (is_param(current_params, node->update->name)) {
+                        fprintf(out, "  store i32 %s, ptr %%%s.addr\n", val, node->update->name);
+                    } else {
+                        fprintf(out, "  store i32 %s, ptr %%%s\n", val, node->update->name);
+                    }
+                    free(val);
+                } else {
+                    char *val = gen_expr(node->update);
+                    if (val) free(val);
+                }
+            }
+            fprintf(out, "  br label %%L%d\n", cond_label);
+
+            fprintf(out, "L%d:\n", end_label);
         } else if (node->type == AST_RETURN) {
             char *val = gen_expr(node->left);
             fprintf(out, "  ret i32 %s\n", val);
