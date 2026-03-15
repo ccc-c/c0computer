@@ -10,9 +10,10 @@
 ## 實作工具
 
 * compiler -- 編譯器
+    * [x] pcmake -- 專案建置工具，採用 python 語法寫 Pcmakefile 建置檔
     * [x] c0c -- c0 之編譯器，類似 gcc
     * [x] py0c -- py0 之編譯器，輸出 qd 檔案
-    * [x] qd0c -- qd0 轉為 ll 的編譯器
+    * [x] qd0c -- qd0 轉為 ll0 的編譯器
     * [x] qd0lib -- qd0 的指令呼叫與函式庫
     * [ ] qd0vm -- qd0 的虛擬機
     * [ ] ll0c -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc
