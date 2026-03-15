@@ -24,7 +24,9 @@ typedef struct {
 typedef struct {
     char name[64];
     CType ret;
+    int ret_struct_id;
     CType params[16];
+    int param_struct_id[16];
     int param_cnt;
 } FuncSig;
 
@@ -50,12 +52,50 @@ typedef struct {
     CType ty;
     int array_len;
     int struct_id;
+    int is_global;
 } VarSlot;
 
 static VarSlot var_slots[512];
 static int var_cnt = 0;
+static VarSlot global_slots[256];
+static int global_cnt = 0;
 static int scope_marks[128];
 static int scope_depth = 0;
+
+static int add_string_literal(const char *s) {
+    if (string_cnt >= 100) error("字串常數過多");
+    strcpy(string_table[string_cnt], s);
+    return string_cnt++;
+}
+
+static void build_llvm_string(const char *src, char *dst, int *out_len) {
+    int out = 0;
+    int len = 0;
+    const unsigned char *p = (const unsigned char*)src;
+    while (*p) {
+        unsigned char c = *p++;
+        if (c == '\n') {
+            out += sprintf(dst + out, "\\0A");
+        } else if (c == '\t') {
+            out += sprintf(dst + out, "\\09");
+        } else if (c == '\r') {
+            out += sprintf(dst + out, "\\0D");
+        } else if (c == '\\') {
+            out += sprintf(dst + out, "\\5C");
+        } else if (c == '\"') {
+            out += sprintf(dst + out, "\\22");
+        } else if (c < 32 || c >= 127) {
+            out += sprintf(dst + out, "\\%02X", c);
+        } else {
+            dst[out++] = (char)c;
+            dst[out] = '\0';
+        }
+        len++;
+    }
+    strcat(dst, "\\00");
+    len++;
+    if (out_len) *out_len = len;
+}
 
 static int is_ptr(CType ty) {
     return ty == TY_INT_PTR || ty == TY_UINT_PTR || ty == TY_SHORT_PTR || ty == TY_USHORT_PTR ||
@@ -152,6 +192,119 @@ static int stmt_list_may_fallthrough(ASTNode *node);
 static Value gen_cond(ASTNode *node);
 static Value gen_expr(ASTNode *node);
 static Value gen_lvalue_addr(ASTNode *node);
+static int struct_size(int struct_id);
+static void global_add(const char *name, CType ty, int array_len, int struct_id);
+
+static int is_zero_literal(ASTNode *n) {
+    return n && n->type == AST_NUM && n->val == 0;
+}
+
+static void emit_int_const(CType ty, long long v) {
+    fprintf(out_fp, "%s %lld", llvm_type(ty), v);
+}
+
+static void emit_float_const(CType ty, double v) {
+    const char *fty = (ty == TY_DOUBLE) ? "double" : "float";
+    fprintf(out_fp, "%s %.17g", fty, v);
+}
+
+static void emit_global_scalar(ASTNode *g) {
+    const char *name = g->name;
+    if (g->ty == TY_STRUCT) {
+        int sz = struct_size(g->struct_id);
+        if (g->init_kind != 0) error("全域 struct 不支援初始化");
+        fprintf(out_fp, "@%s = global [%d x i8] zeroinitializer\n", name, sz);
+        return;
+    }
+    fprintf(out_fp, "@%s = global %s ", name, llvm_type(g->ty));
+    if (g->init_kind == 0) {
+        if (is_ptr(g->ty)) fprintf(out_fp, "null\n");
+        else if (is_float(g->ty)) fprintf(out_fp, "0.0\n");
+        else fprintf(out_fp, "0\n");
+        return;
+    }
+    if (g->init_kind != 1) error("全域變數初始化需為常數");
+    ASTNode *v = g->left;
+    if (is_ptr(g->ty)) {
+        if (is_zero_literal(v)) {
+            fprintf(out_fp, "null\n");
+            return;
+        }
+        if ((g->ty == TY_CHAR_PTR || g->ty == TY_UCHAR_PTR) && v->type == AST_STR) {
+            int id = add_string_literal(v->str_val);
+            int len = (int)strlen(v->str_val) + 1;
+            fprintf(out_fp, "getelementptr ([%d x i8], ptr @.str.%d, i32 0, i32 0)\n", len, id);
+            return;
+        }
+        error("全域指標初始化只支援 0 或字串");
+    }
+    if (is_float(g->ty)) {
+        double fv = (v->type == AST_FLOAT) ? v->fval : (double)v->val;
+        emit_float_const(g->ty, fv);
+        fprintf(out_fp, "\n");
+        return;
+    }
+    if (v->type != AST_NUM && v->type != AST_FLOAT) error("全域變數初始化需為常數");
+    emit_int_const(g->ty, (long long)(v->type == AST_FLOAT ? (long long)v->fval : v->val));
+    fprintf(out_fp, "\n");
+}
+
+static void emit_global_array(ASTNode *g) {
+    const char *name = g->name;
+    CType elem = base_of(g->ty);
+    if (elem == TY_STRUCT) {
+        int total = g->array_len * struct_size(g->struct_id);
+        if (g->init_kind != 0) error("全域 struct 陣列不支援初始化");
+        fprintf(out_fp, "@%s = global [%d x i8] zeroinitializer\n", name, total);
+        return;
+    }
+    if (g->init_kind == 3 && (elem == TY_CHAR || elem == TY_UCHAR)) {
+        char llvm_str[1024] = {0};
+        int len = 0;
+        build_llvm_string(g->str_val, llvm_str, &len);
+        while (len < g->array_len) {
+            strcat(llvm_str, "\\00");
+            len++;
+        }
+        fprintf(out_fp, "@%s = global [%d x i8] c\"%s\"\n", name, g->array_len, llvm_str);
+        return;
+    }
+    if (is_ptr(elem)) error("全域指標陣列不支援初始化");
+    fprintf(out_fp, "@%s = global [%d x %s] ", name, g->array_len, llvm_elem_type(g->ty));
+    if (g->init_kind == 0) {
+        fprintf(out_fp, "zeroinitializer\n");
+        return;
+    }
+    if (g->init_kind != 2) error("全域陣列初始化需為常數列表");
+    fprintf(out_fp, "[");
+    ASTNode *cur = g->left;
+    for (int i = 0; i < g->array_len; i++) {
+        if (i > 0) fprintf(out_fp, ", ");
+        if (cur) {
+            if (is_float(elem)) {
+                double fv = (cur->type == AST_FLOAT) ? cur->fval : (double)cur->val;
+                emit_float_const(elem, fv);
+            } else {
+                if (cur->type != AST_NUM && cur->type != AST_FLOAT) error("全域陣列初始化需為常數");
+                emit_int_const(elem, (long long)(cur->type == AST_FLOAT ? (long long)cur->fval : cur->val));
+            }
+            cur = cur->next;
+        } else {
+            if (is_float(elem)) emit_float_const(elem, 0.0);
+            else emit_int_const(elem, 0);
+        }
+    }
+    fprintf(out_fp, "]\n");
+}
+
+static void emit_globals(ASTNode *nodes) {
+    for (ASTNode *n = nodes; n; n = n->next) {
+        if (n->type != AST_GLOBAL) continue;
+        global_add(n->name, n->ty, n->array_len, n->struct_id);
+        if (n->array_len > 0) emit_global_array(n);
+        else emit_global_scalar(n);
+    }
+}
 
 static int is_param(ASTNode *params, const char *name) {
     ASTNode *pnode = params;
@@ -178,13 +331,14 @@ static void var_pop_scope(void) {
     var_cnt = scope_marks[--scope_depth];
 }
 
-static void var_add(const char *name, const char *ir, CType ty, int array_len, int struct_id) {
+static void var_add(const char *name, const char *ir, CType ty, int array_len, int struct_id, int is_global) {
     if (var_cnt >= 512) error("變數表已滿");
     strcpy(var_slots[var_cnt].name, name);
     strcpy(var_slots[var_cnt].ir, ir);
     var_slots[var_cnt].ty = ty;
     var_slots[var_cnt].array_len = array_len;
     var_slots[var_cnt].struct_id = struct_id;
+    var_slots[var_cnt].is_global = is_global;
     var_cnt++;
 }
 
@@ -192,8 +346,32 @@ static VarSlot* var_find(const char *name) {
     for (int i = var_cnt - 1; i >= 0; i--) {
         if (strcmp(var_slots[i].name, name) == 0) return &var_slots[i];
     }
+    for (int i = global_cnt - 1; i >= 0; i--) {
+        if (strcmp(global_slots[i].name, name) == 0) return &global_slots[i];
+    }
     error("找不到變數宣告");
     return NULL;
+}
+
+static void global_add(const char *name, CType ty, int array_len, int struct_id) {
+    if (global_cnt >= 256) error("全域變數表已滿");
+    strcpy(global_slots[global_cnt].name, name);
+    strcpy(global_slots[global_cnt].ir, name);
+    global_slots[global_cnt].ty = ty;
+    global_slots[global_cnt].array_len = array_len;
+    global_slots[global_cnt].struct_id = struct_id;
+    global_slots[global_cnt].is_global = 1;
+    global_cnt++;
+}
+
+static const char* slot_prefix(VarSlot *slot) {
+    return slot->is_global ? "@" : "%";
+}
+
+static char* slot_ref(VarSlot *slot) {
+    char *res = malloc(64);
+    sprintf(res, "%s%s", slot_prefix(slot), slot->ir);
+    return res;
 }
 
 static int struct_size(int struct_id) {
@@ -224,14 +402,17 @@ static void build_func_sigs(ASTNode *funcs) {
     func_sig_cnt = 0;
     ASTNode *f = funcs;
     while (f) {
+        if (f->type != AST_FUNC) { f = f->next; continue; }
         if (func_sig_cnt >= 128) error("函式表已滿");
         FuncSig *sig = &func_sigs[func_sig_cnt++];
         strcpy(sig->name, f->name);
         sig->ret = f->ty;
+        sig->ret_struct_id = f->struct_id;
         sig->param_cnt = 0;
         ASTNode *p = f->left;
         while (p && sig->param_cnt < 16) {
             sig->params[sig->param_cnt++] = p->ty;
+            sig->param_struct_id[sig->param_cnt - 1] = p->struct_id;
             p = p->next;
         }
         f = f->next;
@@ -241,6 +422,7 @@ static void build_func_sigs(ASTNode *funcs) {
 static int func_has_def(ASTNode *funcs, const char *name) {
     ASTNode *f = funcs;
     while (f) {
+        if (f->type != AST_FUNC) { f = f->next; continue; }
         if (!f->is_decl && strcmp(f->name, name) == 0) return 1;
         f = f->next;
     }
@@ -398,22 +580,22 @@ static Value to_i8(Value v) {
 static Value gen_lvalue_addr(ASTNode *node) {
     if (node->type == AST_VAR) {
         VarSlot *slot = var_find(node->name);
+        const char *pref = slot_prefix(slot);
         if (slot->array_len > 0) {
             int r = reg_cnt++;
             if (base_of(slot->ty) == TY_STRUCT) {
                 int total = slot->array_len * struct_size(slot->struct_id);
-                fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 0\n",
-                        r, total, slot->ir);
+                fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %s%s, i32 0, i32 0\n",
+                        r, total, pref, slot->ir);
             } else {
-                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
-                        r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
+                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %s%s, i32 0, i32 0\n",
+                        r, slot->array_len, llvm_elem_type(slot->ty), pref, slot->ir);
             }
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
             return value_from_raw(res, VT_PTR, slot->ty);
         }
-        char *res = malloc(64);
-        sprintf(res, "%%%s", slot->ir);
+        char *res = slot_ref(slot);
         return value_from_raw(res, VT_PTR, slot->ty);
     }
     if (node->type == AST_DEREF) {
@@ -424,15 +606,16 @@ static Value gen_lvalue_addr(ASTNode *node) {
         Value base_ptr;
         if (base->type == AST_VAR) {
             VarSlot *slot = var_find(base->name);
+            const char *pref = slot_prefix(slot);
             if (slot->array_len > 0) {
                 int r = reg_cnt++;
                 if (base_of(slot->ty) == TY_STRUCT) {
                     int total = slot->array_len * struct_size(slot->struct_id);
-                    fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 0\n",
-                            r, total, slot->ir);
+                    fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %s%s, i32 0, i32 0\n",
+                            r, total, pref, slot->ir);
                 } else {
-                    fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
-                            r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
+                    fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %s%s, i32 0, i32 0\n",
+                            r, slot->array_len, llvm_elem_type(slot->ty), pref, slot->ir);
                 }
                 char *res = malloc(64);
                 sprintf(res, "%%%d", r);
@@ -491,8 +674,7 @@ static Value gen_expr(ASTNode *node) {
         else snprintf(res, 64, "%.17f", node->fval);
         return value_from_ctype(res, node->ty);
     } else if (node->type == AST_STR) {
-        int id = string_cnt++;
-        strcpy(string_table[id], node->str_val);
+        int id = add_string_literal(node->str_val);
         int len = (int)strlen(node->str_val) + 1;
         int r = reg_cnt++;
         fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr @.str.%d, i32 0, i32 0\n",
@@ -502,28 +684,28 @@ static Value gen_expr(ASTNode *node) {
         return value_from_raw(res, VT_PTR, TY_CHAR_PTR);
     } else if (node->type == AST_VAR) {
         VarSlot *slot = var_find(node->name);
+        const char *pref = slot_prefix(slot);
         if (slot->array_len > 0) {
             int r = reg_cnt++;
             if (base_of(slot->ty) == TY_STRUCT) {
                 int total = slot->array_len * struct_size(slot->struct_id);
-                fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %%%s, i32 0, i32 0\n",
-                        r, total, slot->ir);
+                fprintf(out_fp, "  %%%d = getelementptr [%d x i8], ptr %s%s, i32 0, i32 0\n",
+                        r, total, pref, slot->ir);
             } else {
-                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %%%s, i32 0, i32 0\n",
-                        r, slot->array_len, llvm_elem_type(slot->ty), slot->ir);
+                fprintf(out_fp, "  %%%d = getelementptr [%d x %s], ptr %s%s, i32 0, i32 0\n",
+                        r, slot->array_len, llvm_elem_type(slot->ty), pref, slot->ir);
             }
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
             return value_from_ctype(res, slot->ty);
         }
         if (slot->ty == TY_STRUCT) {
-            char *res = malloc(64);
-            sprintf(res, "%%%s", slot->ir);
+            char *res = slot_ref(slot);
             return value_from_raw(res, VT_PTR, TY_STRUCT_PTR);
         }
         int r = reg_cnt++;
         const char *ty = llvm_type(slot->ty);
-        fprintf(out_fp, "  %%%d = load %s, ptr %%%s\n", r, ty, slot->ir);
+        fprintf(out_fp, "  %%%d = load %s, ptr %s%s\n", r, ty, pref, slot->ir);
         char *res = malloc(64);
         sprintf(res, "%%%d", r);
         if (is_ptr(slot->ty)) return value_from_raw(res, VT_PTR, slot->ty);
@@ -532,11 +714,14 @@ static Value gen_expr(ASTNode *node) {
         Value raw_vals[10];
         Value final_vals[10];
         CType call_types[10];
+        int call_struct_ids[10];
         int arg_count = 0;
         ASTNode *arg = node->left;
         while (arg) {
+            if (arg_count >= 10) error("參數過多");
             raw_vals[arg_count] = gen_expr(arg);
             call_types[arg_count] = arg->ty;
+            call_struct_ids[arg_count] = arg->struct_id;
             arg = arg->next;
             arg_count++;
         }
@@ -555,6 +740,13 @@ static Value gen_expr(ASTNode *node) {
                 CType pt = sig->params[i];
                 if (is_ptr(pt)) {
                     if (!is_ptr(call_types[i])) error("指標參數需要 ptr");
+                    if (pt == TY_STRUCT_PTR) {
+                        if (call_types[i] != TY_STRUCT_PTR || sig->param_struct_id[i] != call_struct_ids[i]) {
+                            error("struct 指標參數型別不相容");
+                        }
+                    } else if (call_types[i] != pt) {
+                        error("指標參數型別不相容");
+                    }
                     final_vals[i] = raw_vals[i];
                 } else {
                     final_vals[i] = cast_value(raw_vals[i], pt);
@@ -904,7 +1096,7 @@ static void gen_stmt(ASTNode *node) {
             const char *llvm_ty = llvm_type(node->ty);
             char ir_name[64];
             snprintf(ir_name, sizeof(ir_name), "v%d", var_id++);
-            var_add(node->name, ir_name, node->ty, node->array_len, node->struct_id);
+            var_add(node->name, ir_name, node->ty, node->array_len, node->struct_id, 0);
             if (node->array_len > 0) {
                 if (base_of(node->ty) == TY_STRUCT) {
                     int total = node->array_len * struct_size(node->struct_id);
@@ -1224,9 +1416,13 @@ static void gen_stmt(ASTNode *node) {
 void gen_llvm_ir(ASTNode *funcs, FILE *out) {
     out_fp = out;
     fprintf(out_fp, "; ModuleID = 'c0c'\n");
+    string_cnt = 0;
+    global_cnt = 0;
     build_func_sigs(funcs);
+    emit_globals(funcs);
     ASTNode *func = funcs;
     while (func) {
+        if (func->type != AST_FUNC) { func = func->next; continue; }
         const char *ret_ty = llvm_type(func->ty);
         if (func->is_decl) {
             if (func_has_def(funcs, func->name)) {
@@ -1274,29 +1470,7 @@ void gen_llvm_ir(ASTNode *funcs, FILE *out) {
     for (int i = 0; i < string_cnt; i++) {
         char llvm_str[512] = {0};
         int len = 0;
-        int out = 0;
-        unsigned char *p = (unsigned char*)string_table[i];
-        while (*p) {
-            unsigned char c = *p++;
-            if (c == '\n') {
-                out += sprintf(llvm_str + out, "\\0A");
-            } else if (c == '\t') {
-                out += sprintf(llvm_str + out, "\\09");
-            } else if (c == '\r') {
-                out += sprintf(llvm_str + out, "\\0D");
-            } else if (c == '\\') {
-                out += sprintf(llvm_str + out, "\\5C");
-            } else if (c == '\"') {
-                out += sprintf(llvm_str + out, "\\22");
-            } else if (c < 32 || c >= 127) {
-                out += sprintf(llvm_str + out, "\\%02X", c);
-            } else {
-                llvm_str[out++] = (char)c;
-                llvm_str[out] = '\0';
-            }
-            len++;
-        }
-        strcat(llvm_str, "\\00"); len++;
+        build_llvm_string(string_table[i], llvm_str, &len);
         fprintf(out_fp, "@.str.%d = private unnamed_addr constant [%d x i8] c\"%s\", align 1\n", i, len, llvm_str);
     }
 

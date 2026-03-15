@@ -16,12 +16,18 @@ static int sym_cnt = 0;
 typedef struct {
     char name[64];
     CType ret;
+    int ret_struct_id;
+    CType params[16];
+    int param_struct_id[16];
+    int param_cnt;
 } FuncSym;
 
 static FuncSym func_tab[128];
 static int func_cnt = 0;
 static CType current_func_ret = TY_INT;
 static int last_struct_id = -1;
+
+static FuncSym* func_find(const char *name);
 
 typedef struct {
     char name[64];
@@ -40,6 +46,16 @@ typedef struct {
 static StructSym struct_tab[64];
 static int struct_sym_cnt = 0;
 
+typedef struct {
+    char name[64];
+    CType ty;
+    int array_len;
+    int struct_id;
+} GlobalSym;
+
+static GlobalSym gsymtab[256];
+static int gsym_cnt = 0;
+
 static void sym_reset(void) { sym_cnt = 0; }
 
 static void sym_add(const char *name, CType ty, int array_len, int struct_id) {
@@ -51,21 +67,57 @@ static void sym_add(const char *name, CType ty, int array_len, int struct_id) {
     sym_cnt++;
 }
 
-static void func_add(const char *name, CType ret) {
-    for (int i = 0; i < func_cnt; i++) {
-        if (strcmp(func_tab[i].name, name) == 0) return;
+static int global_find_index(const char *name) {
+    for (int i = gsym_cnt - 1; i >= 0; i--) {
+        if (strcmp(gsymtab[i].name, name) == 0) return i;
     }
+    return -1;
+}
+
+static void global_add(const char *name, CType ty, int array_len, int struct_id) {
+    if (gsym_cnt >= 256) error("全域符號表已滿");
+    if (global_find_index(name) >= 0) error("全域變數重複定義");
+    if (func_find(name)) error("全域變數名稱與函式衝突");
+    strcpy(gsymtab[gsym_cnt].name, name);
+    gsymtab[gsym_cnt].ty = ty;
+    gsymtab[gsym_cnt].array_len = array_len;
+    gsymtab[gsym_cnt].struct_id = struct_id;
+    gsym_cnt++;
+}
+
+static void func_add(const char *name, CType ret, int ret_struct_id,
+                     CType *params, int *param_struct_id, int param_cnt) {
     if (func_cnt >= 128) error("函式表已滿");
+    for (int i = 0; i < func_cnt; i++) {
+        if (strcmp(func_tab[i].name, name) == 0) {
+            if (func_tab[i].ret != ret || func_tab[i].param_cnt != param_cnt) {
+                error("函式宣告不一致");
+            }
+            if (func_tab[i].ret_struct_id != ret_struct_id) error("函式回傳型別不一致");
+            for (int j = 0; j < param_cnt; j++) {
+                if (func_tab[i].params[j] != params[j]) error("函式參數型別不一致");
+                if (func_tab[i].param_struct_id[j] != param_struct_id[j]) error("函式參數型別不一致");
+            }
+            return;
+        }
+    }
+    if (global_find_index(name) >= 0) error("函式名稱與全域變數衝突");
     strcpy(func_tab[func_cnt].name, name);
     func_tab[func_cnt].ret = ret;
+    func_tab[func_cnt].ret_struct_id = ret_struct_id;
+    func_tab[func_cnt].param_cnt = param_cnt;
+    for (int i = 0; i < param_cnt; i++) {
+        func_tab[func_cnt].params[i] = params[i];
+        func_tab[func_cnt].param_struct_id[i] = param_struct_id[i];
+    }
     func_cnt++;
 }
 
-static CType func_find(const char *name) {
+static FuncSym* func_find(const char *name) {
     for (int i = 0; i < func_cnt; i++) {
-        if (strcmp(func_tab[i].name, name) == 0) return func_tab[i].ret;
+        if (strcmp(func_tab[i].name, name) == 0) return &func_tab[i];
     }
-    return TY_INT;
+    return NULL;
 }
 
 static void typedef_add(const char *name, CType ty, int struct_id) {
@@ -133,6 +185,15 @@ static int type_size(CType ty, int struct_id) {
 static Sym* sym_find(const char *name) {
     for (int i = sym_cnt - 1; i >= 0; i--) {
         if (strcmp(symtab[i].name, name) == 0) return &symtab[i];
+    }
+    int gi = global_find_index(name);
+    if (gi >= 0) {
+        static Sym gsym;
+        strcpy(gsym.name, gsymtab[gi].name);
+        gsym.ty = gsymtab[gi].ty;
+        gsym.array_len = gsymtab[gi].array_len;
+        gsym.struct_id = gsymtab[gi].struct_id;
+        return &gsym;
     }
     error("找不到變數宣告");
     return NULL;
@@ -347,6 +408,28 @@ static int is_struct_def_ahead(void) {
     return is_def;
 }
 
+static int is_type_start(void);
+
+static int is_func_def_ahead(void) {
+    char *saved_p = p;
+    Token saved_tok = cur_tok;
+    int saved_line = cur_line;
+    int saved_col = cur_col;
+    int saved_struct = last_struct_id;
+
+    if (!is_type_start()) return 0;
+    parse_type_allow_void(1);
+    if (cur_tok.type != TK_IDENT) {
+        p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col; last_struct_id = saved_struct;
+        return 0;
+    }
+    next_token();
+    int is_func = (cur_tok.type == TK_LPAREN);
+
+    p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col; last_struct_id = saved_struct;
+    return is_func;
+}
+
 static int is_typedef_name(void) {
     if (cur_tok.type != TK_IDENT) return 0;
     CType t; int sid;
@@ -399,18 +482,45 @@ static ASTNode* parse_primary() {
             next_token();
             ASTNode *n = new_node(AST_CALL);
             strcpy(n->name, name);
-            n->ty = func_find(name);
+            FuncSym *fs = func_find(name);
+            n->ty = fs ? fs->ret : TY_INT;
+            n->struct_id = fs ? fs->ret_struct_id : -1;
             ASTNode *head = NULL, *tail = NULL;
+            int arg_count = 0;
             if (cur_tok.type != TK_RPAREN) {
                 head = tail = parse_expr();
+                arg_count++;
                 while (cur_tok.type == TK_COMMA) {
                     next_token();
                     tail->next = parse_expr();
                     tail = tail->next;
+                    arg_count++;
                 }
             }
             expect(TK_RPAREN, "預期 ')'");
             n->left = head;
+            if (fs && strcmp(name, "printf") != 0) {
+                if (arg_count != fs->param_cnt) error("函式參數數量不符");
+                ASTNode *a = head;
+                for (int i = 0; i < fs->param_cnt; i++) {
+                    CType pt = fs->params[i];
+                    int psid = fs->param_struct_id[i];
+                    if (is_ptr(pt)) {
+                        int ok = 0;
+                        if (a && a->type == AST_NUM && a->val == 0) ok = 1;
+                        if (a && is_ptr(a->ty)) ok = 1;
+                        if (!ok) error("指標參數需要指標或 0");
+                        if (pt == TY_STRUCT_PTR && a && is_ptr(a->ty) && a->ty == TY_STRUCT_PTR) {
+                            if (a->struct_id != psid) error("struct 指標參數型別不相容");
+                        } else if (a && is_ptr(a->ty) && pt != a->ty) {
+                            error("指標參數型別不相容");
+                        }
+                    } else {
+                        if (a && is_ptr(a->ty)) error("非指標參數不可傳入指標");
+                    }
+                    if (a) a = a->next;
+                }
+            }
             return n;
         } else {
             ASTNode *n = make_var_node(name);
@@ -629,7 +739,12 @@ static ASTNode* parse_unary() {
             p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
         }
         n->left = parse_unary();
-        n->val = type_size(n->left->ty, n->left->struct_id);
+        if (n->left && n->left->type == AST_VAR && n->left->array_len > 0) {
+            int esz = type_size(base_of(n->left->ty), n->left->struct_id);
+            n->val = n->left->array_len * esz;
+        } else {
+            n->val = type_size(n->left->ty, n->left->struct_id);
+        }
         return n;
     }
     if (cur_tok.type == TK_LPAREN) {
@@ -1193,15 +1308,18 @@ static ASTNode* parse_stmt() {
 
 static ASTNode* parse_func() {
     CType ret_ty = parse_type_allow_void(1);
+    int ret_struct_id = last_struct_id;
     ASTNode *func = new_node(AST_FUNC);
     func->ty = ret_ty;
     strcpy(func->name, cur_tok.name);
     expect(TK_IDENT, "預期函數名稱");
-    func_add(func->name, ret_ty);
     expect(TK_LPAREN, "預期 '('");
 
     sym_reset();
     ASTNode *param_head = NULL, *param_tail = NULL;
+    CType param_types[16];
+    int param_struct_ids[16];
+    int param_cnt = 0;
     if (cur_tok.type != TK_RPAREN) {
         if (cur_tok.type == TK_VOID) {
             next_token();
@@ -1216,6 +1334,10 @@ static ASTNode* parse_func() {
             param->array_len = 0;
             param->init_kind = 0;
             param->struct_id = last_struct_id;
+            if (param_cnt >= 16) error("參數過多");
+            param_types[param_cnt] = pty;
+            param_struct_ids[param_cnt] = last_struct_id;
+            param_cnt++;
             sym_add(param->name, pty, 0, param->struct_id);
             if (!param_head) param_head = param_tail = param;
             else { param_tail->next = param; param_tail = param; }
@@ -1225,6 +1347,7 @@ static ASTNode* parse_func() {
         }
     }
     expect(TK_RPAREN, "預期 ')'");
+    func_add(func->name, ret_ty, ret_struct_id, param_types, param_struct_ids, param_cnt);
     if (cur_tok.type == TK_SEMI) {
         next_token();
         func->left = param_head;
@@ -1250,6 +1373,13 @@ ASTNode* parse_program(void) {
         }
         if (cur_tok.type == TK_TYPEDEF) {
             parse_typedef_stmt();
+            continue;
+        }
+        if (is_type_start() && !is_func_def_ahead()) {
+            ASTNode *g = parse_decl_stmt(1);
+            g->type = AST_GLOBAL;
+            global_add(g->name, g->ty, g->array_len, g->struct_id);
+            if (!head) head = tail = g; else { tail->next = g; tail = g; }
             continue;
         }
         ASTNode *func = parse_func();

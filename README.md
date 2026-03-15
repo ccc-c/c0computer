@@ -3,7 +3,7 @@
 ## 語言與格式
 
 * c0 -- 簡化後的 C 語言，副檔名為 .c
-* lua0 -- 簡化後的 Lua 語言，副檔名為 .lua
+* py0 -- 簡化後的 Python 語言，副檔名為 .py
 * ll0 -- 簡化後的 LLVM IR 文字格式，副檔名為 .ll
 * qd0 -- 動態語言虛擬機，採用 quadruple 四元組格式，副檔名為 .qd
 
@@ -12,7 +12,7 @@
 * compiler -- 編譯器
     * [x] c0c -- rust0 之編譯器，類似 rustc
     * [ ] ll0vm -- ll0 中間碼虛擬機
-    * [ ] lua0c -- lua0 之編譯器
+    * [ ] py0c -- py0 之編譯器
     * [ ] qd0c -- qd0 轉為 ll 的編譯器
     * [ ] qd0vm -- qd0 的虛擬機
     * [ ] qd0lib -- qd0 的指令呼叫與函式庫
