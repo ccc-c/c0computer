@@ -19,9 +19,9 @@
     * [ ] ll0c -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc
     * [ ] ll0vm -- ll0 中間碼虛擬機
 * ai -- 人工智慧
-    * [ ] nn -- 神經網路套件，類似 pytorch.
-    * [ ] llm -- 語言模型，類似 GPT
-    * [ ] agent -- 代理人，類似 OpenClaw
+    * [x] nn -- 神經網路套件，類似 pytorch. (kaparthy micrograd)
+    * [x] llm -- 語言模型，類似 GPT (kaparthy microgpt)
+    * [x] agent -- 代理人，類似 OpenClaw (dabit3 mini-openclaw)
 * os -- 作業系統
     * [ ] kernel -- 用 c 寫的 RISCV 處理器上之作業系統，類似 xv6
 * cpu -- 處理器
