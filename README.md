@@ -12,7 +12,7 @@
 * compiler -- 編譯器
     * [x] c0c -- rust0 之編譯器，類似 rustc
     * [ ] ll0vm -- ll0 中間碼虛擬機
-    * [ ] py0c -- py0 之編譯器
+    * [ ] py0c -- py0 之編譯器，輸出 qd 檔案
     * [ ] qd0c -- qd0 轉為 ll 的編譯器
     * [ ] qd0vm -- qd0 的虛擬機
     * [ ] qd0lib -- qd0 的指令呼叫與函式庫
