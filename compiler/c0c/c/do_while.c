@@ -1,3 +1,4 @@
+// expected: sum=3
 int main() {
     int i = 0;
     int sum = 0;

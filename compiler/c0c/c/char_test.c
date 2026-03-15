@@ -1,3 +1,4 @@
+// expected: c=65 d=66 x=131
 char inc(char c) {
     return c + 1;
 }

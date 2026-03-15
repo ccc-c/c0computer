@@ -1,3 +1,4 @@
+// expected: hi\nv=7
 void hello();
 
 void hello() {

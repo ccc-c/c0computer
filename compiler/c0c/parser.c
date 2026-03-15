@@ -360,6 +360,11 @@ static int is_type_start(void) {
     return is_typedef_name();
 }
 
+static int is_lvalue_node(ASTNode *n) {
+    if (!n) return 0;
+    return n->type == AST_VAR || n->type == AST_INDEX || n->type == AST_DEREF || n->type == AST_MEMBER;
+}
+
 static ASTNode* parse_primary() {
     if (cur_tok.type == TK_NUM) {
         ASTNode *n = new_node(AST_NUM);
@@ -468,16 +473,16 @@ static ASTNode* parse_postfix() {
             continue;
         }
         if (cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS) {
-            if (n->type != AST_VAR) error("++/-- 只能用在變數上");
+            if (!is_lvalue_node(n)) error("++/-- 只能用在左值上");
             if (is_ptr(n->ty) || n->ty == TY_STRUCT) error("++/-- 不支援指標或 struct");
             ASTNode *inc = new_node(AST_INCDEC);
             inc->op = cur_tok.type;
             inc->is_prefix = 0;
-            strcpy(inc->name, n->name);
+            inc->left = n;
             inc->ty = n->ty;
             next_token();
             n = inc;
-            continue;
+            break;
         }
         break;
     }
@@ -646,6 +651,7 @@ static ASTNode* parse_unary() {
     }
     if (cur_tok.type == TK_MINUS || cur_tok.type == TK_NOT ||
         cur_tok.type == TK_PLUSPLUS || cur_tok.type == TK_MINUSMINUS ||
+        cur_tok.type == TK_PLUS ||
         cur_tok.type == TK_MUL || cur_tok.type == '&') {
         TokenType op = cur_tok.type;
         next_token();
@@ -666,19 +672,19 @@ static ASTNode* parse_unary() {
             return n;
         }
         if (op == TK_PLUSPLUS || op == TK_MINUSMINUS) {
-            if (!operand || operand->type != AST_VAR) error("++/-- 只能用在變數上");
+            if (!is_lvalue_node(operand)) error("++/-- 只能用在左值上");
             if (is_ptr(operand->ty) || operand->ty == TY_STRUCT) error("++/-- 不支援指標或 struct");
             ASTNode *inc = new_node(AST_INCDEC);
             inc->op = op;
             inc->is_prefix = 1;
-            strcpy(inc->name, operand->name);
+            inc->left = operand;
             inc->ty = operand->ty;
             return inc;
         }
         ASTNode *n = new_node(AST_UNARY);
         n->op = op;
         n->left = operand;
-        if (op == TK_MINUS) {
+        if (op == TK_MINUS || op == TK_PLUS) {
             if (!is_int(operand->ty) && !is_float(operand->ty)) error("不支援的一元 -");
             n->ty = operand->ty;
         } else {
@@ -994,18 +1000,22 @@ static ASTNode* parse_for_stmt() {
         } else if (cur_tok.type == TK_IDENT) {
             char *saved_p = p; Token saved_tok = cur_tok;
             next_token();
-            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
+            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ ||
+                             cur_tok.type == TK_MINUSEQ || cur_tok.type == TK_MULEQ ||
+                             cur_tok.type == TK_DIVEQ || cur_tok.type == TK_MODEQ);
             p = saved_p; cur_tok = saved_tok;
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
                 assign->left = make_var_node(cur_tok.name);
                 assign->ty = assign->left->ty;
                 next_token();
-                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ ||
+                    cur_tok.type == TK_MINUSEQ || cur_tok.type == TK_MULEQ ||
+                    cur_tok.type == TK_DIVEQ || cur_tok.type == TK_MODEQ) {
                     assign->op = cur_tok.type;
                     next_token();
                 } else {
-                    error("預期 '=' 或 '+='");
+                    error("預期 assignment 運算子");
                 }
                 assign->right = parse_expr();
                 init = assign;
@@ -1031,18 +1041,22 @@ static ASTNode* parse_for_stmt() {
         if (cur_tok.type == TK_IDENT) {
             char *saved_p = p; Token saved_tok = cur_tok;
             next_token();
-            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
+            int is_assign = (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ ||
+                             cur_tok.type == TK_MINUSEQ || cur_tok.type == TK_MULEQ ||
+                             cur_tok.type == TK_DIVEQ || cur_tok.type == TK_MODEQ);
             p = saved_p; cur_tok = saved_tok;
             if (is_assign) {
                 ASTNode *assign = new_node(AST_ASSIGN);
                 assign->left = make_var_node(cur_tok.name);
                 assign->ty = assign->left->ty;
                 next_token();
-                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+                if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ ||
+                    cur_tok.type == TK_MINUSEQ || cur_tok.type == TK_MULEQ ||
+                    cur_tok.type == TK_DIVEQ || cur_tok.type == TK_MODEQ) {
                     assign->op = cur_tok.type;
                     next_token();
                 } else {
-                    error("預期 '=' 或 '+='");
+                    error("預期 assignment 運算子");
                 }
                 assign->right = parse_expr();
                 update = assign;
@@ -1147,18 +1161,22 @@ static ASTNode* parse_stmt() {
         char *saved_p = p; Token saved_tok = cur_tok; int saved_line = cur_line; int saved_col = cur_col;
         ASTNode *cand = parse_unary();
         int is_lvalue = (cand->type == AST_VAR || cand->type == AST_INDEX || cand->type == AST_DEREF || cand->type == AST_MEMBER);
-        int is_assign = is_lvalue && (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ);
+        int is_assign = is_lvalue && (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ ||
+                                      cur_tok.type == TK_MINUSEQ || cur_tok.type == TK_MULEQ ||
+                                      cur_tok.type == TK_DIVEQ || cur_tok.type == TK_MODEQ);
         p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
         if (is_assign) {
             ASTNode *lv = parse_lvalue();
             ASTNode *n = new_node(AST_ASSIGN);
             n->left = lv;
             n->ty = lv->ty;
-            if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ) {
+            if (cur_tok.type == TK_ASSIGN || cur_tok.type == TK_PLUSEQ ||
+                cur_tok.type == TK_MINUSEQ || cur_tok.type == TK_MULEQ ||
+                cur_tok.type == TK_DIVEQ || cur_tok.type == TK_MODEQ) {
                 n->op = cur_tok.type;
                 next_token();
             } else {
-                error("預期 '=' 或 '+='");
+                error("預期 assignment 運算子");
             }
             n->right = parse_expr();
             expect(TK_SEMI, "預期 ';'");
@@ -1185,6 +1203,10 @@ static ASTNode* parse_func() {
     sym_reset();
     ASTNode *param_head = NULL, *param_tail = NULL;
     if (cur_tok.type != TK_RPAREN) {
+        if (cur_tok.type == TK_VOID) {
+            next_token();
+            if (cur_tok.type != TK_RPAREN) error("void 參數列表不可有名稱");
+        } else {
         while (1) {
             CType pty = parse_type();
             ASTNode *param = new_node(AST_DECL);
@@ -1199,6 +1221,7 @@ static ASTNode* parse_func() {
             else { param_tail->next = param; param_tail = param; }
             if (cur_tok.type == TK_COMMA) { next_token(); continue; }
             break;
+        }
         }
     }
     expect(TK_RPAREN, "預期 ')'");

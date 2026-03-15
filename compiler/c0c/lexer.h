@@ -11,7 +11,8 @@ typedef enum {
     TK_ASSIGN = '=', TK_PLUS = '+', TK_MINUS = '-', TK_MUL = '*', TK_DIV = '/',
     TK_MOD = '%', TK_LT = '<', TK_GT = '>', TK_NOT = '!', TK_LPAREN = '(', TK_RPAREN = ')',
     TK_LBRACE = '{', TK_RBRACE = '}', TK_SEMI = ';', TK_COMMA = ',',
-    TK_EQ = 257, TK_NE, TK_LE, TK_GE, TK_ANDAND, TK_OROR, TK_PLUSPLUS, TK_MINUSMINUS, TK_PLUSEQ, TK_ARROW
+    TK_EQ = 257, TK_NE, TK_LE, TK_GE, TK_ANDAND, TK_OROR, TK_PLUSPLUS, TK_MINUSMINUS,
+    TK_PLUSEQ, TK_MINUSEQ, TK_MULEQ, TK_DIVEQ, TK_MODEQ, TK_ARROW
 } TokenType;
 
 typedef struct {

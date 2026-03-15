@@ -1,3 +1,4 @@
+// expected: x=20 y=30
 int main() {
     int a[3];
     a[0] = 10;

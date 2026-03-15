@@ -1,3 +1,4 @@
+// expected: sum=10 prod=24
 #include <stdio.h>
 
 int main() {

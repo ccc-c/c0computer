@@ -1,3 +1,4 @@
+// expected: a1=2 s0=97 s2=99
 int main() {
     int a[3] = {1, 2, 3};
     char s[4] = "abc";

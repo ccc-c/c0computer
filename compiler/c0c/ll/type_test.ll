@@ -12,7 +12,7 @@ entry:
   %3 = sext i32 100000 to i64
   store i64 %3, ptr %v2
   %v3 = alloca i64
-  %4 = sext i32 2147483647 to i64
+  %4 = sext i32 -294967296 to i64
   store i64 %4, ptr %v3
   %v4 = alloca i32
   %5 = load i16, ptr %v0

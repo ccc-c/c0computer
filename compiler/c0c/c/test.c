@@ -1,3 +1,4 @@
+// expected: (exit code) 30
 int main() {
     int a;
     int b;

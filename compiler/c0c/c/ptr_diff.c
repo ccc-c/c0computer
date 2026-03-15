@@ -1,3 +1,4 @@
+// expected: d=3 c1=1 c2=1 c3=1
 int main() {
     int a[10];
     int *p = &a[5];

@@ -1,3 +1,4 @@
+// expected: x=64990 y=100005 z=18446744073414584325
 int main() {
     const unsigned short us = 65000;
     short s = -10;

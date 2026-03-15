@@ -1,3 +1,4 @@
+// expected: i=4 c=1 p=8
 int main() {
     int x;
     int *p;

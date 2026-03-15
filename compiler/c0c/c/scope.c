@@ -1,3 +1,4 @@
+// expected: inner=2\nouter=1
 int main() {
     int x = 1;
     {

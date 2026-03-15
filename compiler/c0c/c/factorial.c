@@ -1,3 +1,4 @@
+// expected: fact(5)=120
 #include <stdio.h>
 
 int fact(int n) {

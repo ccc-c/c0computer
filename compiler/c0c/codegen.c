@@ -832,8 +832,11 @@ static Value gen_expr(ASTNode *node) {
             char *res = malloc(64);
             sprintf(res, "%%%d", r);
             return value_from_raw(res, VT_I1, TY_INT);
-        } else if (node->op == TK_MINUS) {
+        } else if (node->op == TK_MINUS || node->op == TK_PLUS) {
             Value val = cast_value(gen_expr(node->left), node->ty);
+            if (node->op == TK_PLUS) {
+                return val;
+            }
             int r = reg_cnt++;
             if (is_float(node->ty)) {
                 const char *fty = (node->ty == TY_DOUBLE) ? "double" : "float";
@@ -860,29 +863,30 @@ static Value gen_expr(ASTNode *node) {
         return value_from_ctype(res, TY_INT);
     } else if (node->type == AST_INCDEC) {
         int is_inc = (node->op == TK_PLUSPLUS);
-        VarSlot *slot = var_find(node->name);
+        Value addr = gen_lvalue_addr(node->left);
+        const char *ty = llvm_type(node->ty);
         int r_old = reg_cnt++;
-        const char *ty = llvm_type(slot->ty);
-        fprintf(out_fp, "  %%%d = load %s, ptr %%%s\n", r_old, ty, slot->ir);
+        fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r_old, ty, addr.reg);
         char *old_reg = malloc(64);
         sprintf(old_reg, "%%%d", r_old);
-        Value old_val = value_from_ctype(old_reg, slot->ty);
+        Value old_val = value_from_ctype(old_reg, node->ty);
         int r_new = reg_cnt++;
-        if (is_float(slot->ty)) {
-            const char *fty = (slot->ty == TY_DOUBLE) ? "double" : "float";
+        if (is_float(node->ty)) {
+            const char *fty = (node->ty == TY_DOUBLE) ? "double" : "float";
             fprintf(out_fp, "  %%%d = %s %s %s, 1.0\n", r_new, is_inc ? "fadd" : "fsub", fty, old_val.reg);
         } else {
-            fprintf(out_fp, "  %%%d = %s %s %s, 1\n", r_new, is_inc ? "add" : "sub", llvm_type(slot->ty), old_val.reg);
+            fprintf(out_fp, "  %%%d = %s %s %s, 1\n", r_new, is_inc ? "add" : "sub", ty, old_val.reg);
         }
         char *new_reg = malloc(64);
         sprintf(new_reg, "%%%d", r_new);
-        Value new_val = value_from_ctype(new_reg, slot->ty);
-        fprintf(out_fp, "  store %s %s, ptr %%%s\n", llvm_type(slot->ty), new_val.reg, slot->ir);
+        Value new_val = value_from_ctype(new_reg, node->ty);
+        fprintf(out_fp, "  store %s %s, ptr %s\n", ty, new_val.reg, addr.reg);
+        free(addr.reg);
         if (node->is_prefix) {
-            return value_from_ctype(new_val.reg, slot->ty);
+            return value_from_ctype(new_val.reg, node->ty);
         }
         free(new_val.reg);
-        return value_from_ctype(old_val.reg, slot->ty);
+        return value_from_ctype(old_val.reg, node->ty);
     }
     error("未知的表達式");
     return value_from_raw(NULL, VT_I32, TY_INT);
@@ -964,8 +968,15 @@ static void gen_stmt(ASTNode *node) {
             const char *llvm_ty = llvm_type(node->ty);
             if (node->ty == TY_STRUCT) error("不支援 struct 賦值");
             Value addr = gen_lvalue_addr(node->left);
-            if (node->op == TK_PLUSEQ) {
-                if (is_ptr(node->ty)) error("指標不支援 +=");
+            if (node->op == TK_ASSIGN) {
+                Value val = gen_expr(node->right);
+                Value store_val;
+                if (is_ptr(node->ty)) store_val = val;
+                else store_val = cast_value(val, node->ty);
+                fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, store_val.reg, addr.reg);
+                free(store_val.reg);
+            } else {
+                if (is_ptr(node->ty)) error("指標不支援複合指定");
                 int r_old = reg_cnt++;
                 fprintf(out_fp, "  %%%d = load %s, ptr %s\n", r_old, llvm_ty, addr.reg);
                 char *old_reg = malloc(64);
@@ -975,9 +986,22 @@ static void gen_stmt(ASTNode *node) {
                 int r_new = reg_cnt++;
                 if (is_float(node->ty)) {
                     const char *fty = (node->ty == TY_DOUBLE) ? "double" : "float";
-                    fprintf(out_fp, "  %%%d = fadd %s %s, %s\n", r_new, fty, old_val.reg, rhs.reg);
+                    if (node->op == TK_PLUSEQ) fprintf(out_fp, "  %%%d = fadd %s %s, %s\n", r_new, fty, old_val.reg, rhs.reg);
+                    else if (node->op == TK_MINUSEQ) fprintf(out_fp, "  %%%d = fsub %s %s, %s\n", r_new, fty, old_val.reg, rhs.reg);
+                    else if (node->op == TK_MULEQ) fprintf(out_fp, "  %%%d = fmul %s %s, %s\n", r_new, fty, old_val.reg, rhs.reg);
+                    else if (node->op == TK_DIVEQ) fprintf(out_fp, "  %%%d = fdiv %s %s, %s\n", r_new, fty, old_val.reg, rhs.reg);
+                    else error("float 不支援此複合指定");
                 } else {
-                    fprintf(out_fp, "  %%%d = add %s %s, %s\n", r_new, llvm_ty, old_val.reg, rhs.reg);
+                    if (node->op == TK_PLUSEQ) fprintf(out_fp, "  %%%d = add %s %s, %s\n", r_new, llvm_ty, old_val.reg, rhs.reg);
+                    else if (node->op == TK_MINUSEQ) fprintf(out_fp, "  %%%d = sub %s %s, %s\n", r_new, llvm_ty, old_val.reg, rhs.reg);
+                    else if (node->op == TK_MULEQ) fprintf(out_fp, "  %%%d = mul %s %s, %s\n", r_new, llvm_ty, old_val.reg, rhs.reg);
+                    else if (node->op == TK_DIVEQ) {
+                        fprintf(out_fp, "  %%%d = %s %s %s, %s\n", r_new, is_unsigned(node->ty) ? "udiv" : "sdiv", llvm_ty, old_val.reg, rhs.reg);
+                    } else if (node->op == TK_MODEQ) {
+                        fprintf(out_fp, "  %%%d = %s %s %s, %s\n", r_new, is_unsigned(node->ty) ? "urem" : "srem", llvm_ty, old_val.reg, rhs.reg);
+                    } else {
+                        error("不支援的複合指定");
+                    }
                 }
                 free(old_val.reg);
                 free(rhs.reg);
@@ -986,13 +1010,6 @@ static void gen_stmt(ASTNode *node) {
                 Value new_val = value_from_ctype(new_reg, node->ty);
                 fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, new_val.reg, addr.reg);
                 free(new_val.reg);
-            } else {
-                Value val = gen_expr(node->right);
-                Value store_val;
-                if (is_ptr(node->ty)) store_val = val;
-                else store_val = cast_value(val, node->ty);
-                fprintf(out_fp, "  store %s %s, ptr %s\n", llvm_ty, store_val.reg, addr.reg);
-                free(store_val.reg);
             }
             free(addr.reg);
         } else if (node->type == AST_EXPR_STMT) {

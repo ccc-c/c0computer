@@ -1,3 +1,4 @@
+// expected: v=3
 typedef struct {
     int v;
 } Box;

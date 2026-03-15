@@ -1,3 +1,4 @@
+// expected: The value of a is: 10\nResult of calculation: 30
 int main() {
     int a;
     int b;

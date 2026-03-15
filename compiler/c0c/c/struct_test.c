@@ -1,3 +1,4 @@
+// expected: x=7 y=9
 struct Point {
     int x;
     char y;

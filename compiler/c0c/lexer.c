@@ -22,6 +22,47 @@ void error(const char *msg) {
     exit(1);
 }
 
+static int hex_val(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static int parse_escape_char(void) {
+    if (*p == 'n') { advance_char(); return '\n'; }
+    if (*p == 't') { advance_char(); return '\t'; }
+    if (*p == 'r') { advance_char(); return '\r'; }
+    if (*p == '\\') { advance_char(); return '\\'; }
+    if (*p == '"') { advance_char(); return '"'; }
+    if (*p == '\'') { advance_char(); return '\''; }
+    if (*p == 'x' || *p == 'X') {
+        advance_char();
+        int val = 0;
+        int cnt = 0;
+        int hv;
+        while ((hv = hex_val(*p)) >= 0 && cnt < 2) {
+            val = (val << 4) | hv;
+            advance_char();
+            cnt++;
+        }
+        return val;
+    }
+    if (*p >= '0' && *p <= '7') {
+        int val = 0;
+        int cnt = 0;
+        while (*p >= '0' && *p <= '7' && cnt < 3) {
+            val = (val << 3) | (*p - '0');
+            advance_char();
+            cnt++;
+        }
+        return val;
+    }
+    int c = (unsigned char)*p;
+    if (*p) advance_char();
+    return c;
+}
+
 void next_token(void) {
     // 忽略 UTF-8 BOM
     if (p == src && strncmp(p, "\xEF\xBB\xBF", 3) == 0) { advance_char(); advance_char(); advance_char(); }
@@ -47,12 +88,7 @@ void next_token(void) {
         while (*p != '\0' && *p != '"') {
             if (*p == '\\') {
                 advance_char();
-                if (*p == 'n') { *s++ = '\n'; advance_char(); }
-                else if (*p == 't') { *s++ = '\t'; advance_char(); }
-                else if (*p == 'r') { *s++ = '\r'; advance_char(); }
-                else if (*p == '\\') { *s++ = '\\'; advance_char(); }
-                else if (*p == '"') { *s++ = '"'; advance_char(); }
-                else { *s++ = *p; advance_char(); }
+                *s++ = (char)parse_escape_char();
             } else {
                 *s++ = *p;
                 advance_char();
@@ -100,20 +136,36 @@ void next_token(void) {
 
     if (isdigit((unsigned char)*p) || (*p == '.' && isdigit((unsigned char)p[1]))) {
         char *start = p;
-        char *end = NULL;
-        double f = strtod(p, &end);
         int is_float = 0;
-        for (char *q = start; q < end; q++) {
-            if (*q == '.' || *q == 'e' || *q == 'E') { is_float = 1; break; }
+        if (*p == '.') {
+            is_float = 1;
+        } else {
+            char *q = p;
+            if (q[0] == '0' && (q[1] == 'x' || q[1] == 'X')) {
+                q += 2;
+                while (isxdigit((unsigned char)*q)) q++;
+            } else {
+                while (isdigit((unsigned char)*q)) q++;
+                if (*q == '.') is_float = 1;
+                if (*q == 'e' || *q == 'E') is_float = 1;
+            }
         }
-        p = end;
-        cur_col += (int)(p - start);
-        if (*p == 'f' || *p == 'F') { advance_char(); is_float = 1; cur_tok.val = 1; }
+
         if (is_float) {
+            char *end = NULL;
+            double f = strtod(p, &end);
+            p = end;
+            cur_col += (int)(p - start);
+            if (*p == 'f' || *p == 'F') { advance_char(); cur_tok.val = 1; }
+            else cur_tok.val = 0;
             cur_tok.fval = f;
             cur_tok.type = TK_FLOAT_LIT;
         } else {
-            cur_tok.val = (int)f;
+            char *end = NULL;
+            long v = strtol(p, &end, 0);
+            p = end;
+            cur_col += (int)(p - start);
+            cur_tok.val = (int)v;
             cur_tok.type = TK_NUM;
         }
         return;
@@ -124,12 +176,7 @@ void next_token(void) {
         int ch = 0;
         if (*p == '\\') {
             advance_char();
-            if (*p == 'n') { ch = '\n'; advance_char(); }
-            else if (*p == 't') { ch = '\t'; advance_char(); }
-            else if (*p == 'r') { ch = '\r'; advance_char(); }
-            else if (*p == '\\') { ch = '\\'; advance_char(); }
-            else if (*p == '\'') { ch = '\''; advance_char(); }
-            else { ch = (unsigned char)*p; advance_char(); }
+            ch = parse_escape_char();
         } else {
             ch = (unsigned char)*p; advance_char();
         }
@@ -149,6 +196,10 @@ void next_token(void) {
     if (p[0] == '-' && p[1] == '-') { cur_tok.type = TK_MINUSMINUS; advance_char(); advance_char(); return; }
     if (p[0] == '-' && p[1] == '>') { cur_tok.type = TK_ARROW; advance_char(); advance_char(); return; }
     if (p[0] == '+' && p[1] == '=') { cur_tok.type = TK_PLUSEQ; advance_char(); advance_char(); return; }
+    if (p[0] == '-' && p[1] == '=') { cur_tok.type = TK_MINUSEQ; advance_char(); advance_char(); return; }
+    if (p[0] == '*' && p[1] == '=') { cur_tok.type = TK_MULEQ; advance_char(); advance_char(); return; }
+    if (p[0] == '/' && p[1] == '=') { cur_tok.type = TK_DIVEQ; advance_char(); advance_char(); return; }
+    if (p[0] == '%' && p[1] == '=') { cur_tok.type = TK_MODEQ; advance_char(); advance_char(); return; }
 
     cur_tok.type = (TokenType)(*p);
     advance_char();

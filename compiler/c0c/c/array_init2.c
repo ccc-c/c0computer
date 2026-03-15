@@ -1,3 +1,4 @@
+// expected: a1=2 b3=0 s2=0
 int main() {
     int a[] = {1, 2};
     int b[4] = {5};
