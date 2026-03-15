@@ -10,19 +10,19 @@
 ## 實作工具
 
 * compiler -- 編譯器
-    * [x] c0c -- rust0 之編譯器，類似 rustc
-    * [ ] ll0vm -- ll0 中間碼虛擬機
-    * [ ] py0c -- py0 之編譯器，輸出 qd 檔案
-    * [ ] qd0c -- qd0 轉為 ll 的編譯器
+    * [x] c0c -- c0 之編譯器，類似 gcc
+    * [x] py0c -- py0 之編譯器，輸出 qd 檔案
+    * [x] qd0c -- qd0 轉為 ll 的編譯器
+    * [x] qd0lib -- qd0 的指令呼叫與函式庫
     * [ ] qd0vm -- qd0 的虛擬機
-    * [ ] qd0lib -- qd0 的指令呼叫與函式庫
     * [ ] ll0c -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc
+    * [ ] ll0vm -- ll0 中間碼虛擬機
 * ai -- 人工智慧
-    * [ ] nn -- 神經網路套件，類似 rust candle.
+    * [ ] nn -- 神經網路套件，類似 pytorch.
     * [ ] llm -- 語言模型，類似 GPT
     * [ ] agent -- 代理人，類似 OpenClaw
 * os -- 作業系統
-    * [ ] kernel -- 用 rust 寫的 RISCV 處理器上之作業系統，類似 xv6
+    * [ ] kernel -- 用 c 寫的 RISCV 處理器上之作業系統，類似 xv6
 * cpu -- 處理器
     * [ ] RISCV 處理器之 Verilog0 原始碼
 * net -- 網路相關
