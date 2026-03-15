@@ -1,0 +1,2 @@
+[console_scripts]
+pcmake = pcmake.main:main
