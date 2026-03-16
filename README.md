@@ -68,8 +68,8 @@
 [agent]:ai/agent/
 
 * ai -- 人工智慧
-    * [x] [nn] -- 神經網路套件，類似 pytorch. (Python:取自 kaparthy microgpt 重新模組化)
-    * [x] [llm] -- 語言模型，類似 GPT (Python:取自 kaparthy microgpt 重新模組化)
+    * [x] [nn] -- 神經網路套件，類似 pytorch. ([nn.py](ai/nn/nn.py) + [nn.c](ai/nn/nn.c) :取自 kaparthy microgpt 重新模組化，然後用 AI 重寫為 C)
+    * [x] [llm] -- 語言模型，類似 GPT ([gpt.py](ai/llm/gpt.py) + [gpt.c](ai/llm/gpt.c) : 取自 kaparthy microgpt 重新模組化)
     * [x] [agent] -- 代理人，類似 OpenClaw (Python:取自 dabit3 mini-openclaw)
 
 [finiteStateMachine]:theory/finiteStateMachine/
