@@ -10,8 +10,10 @@
 
 ## 實作工具
 
+[pcmake]:compiler/pcmake/
+
 * compiler -- 編譯器
-    * [x] pcmake -- 專案建置工具，採用 python 語法寫 Pcmakefile 建置檔 (ccc 用 AI 建構)
+    * [x] [pcmake] -- 專案建置工具，採用 python 語法寫 Pcmakefile 建置檔 (ccc 用 AI 建構)
     * [x] c0c -- c0 之編譯器，類似 gcc (C 語言:ccc 用 AI 建構)
     * [x] py0c -- py0 之編譯器，輸出 qd 檔案 (C 語言:ccc 用 AI 建構)
     * [x] qd0c -- qd0 轉為 ll0 的編譯器 (C 語言:ccc 用 AI 建構)
