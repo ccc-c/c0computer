@@ -41,25 +41,30 @@
     * [x] [prolog] -- prolog 語言解譯器 (Python:ccc 用 AI 建構)
 
 [xv6]:os/xv6
+[xv6-riscv]:https://github.com/mit-pdos/xv6-riscv
 
 * os -- 作業系統
-    * [x] [xv6] -- 用 c 寫的 RISCV 處理器上之作業系統 (C語言：來自 MIT xv6-riscv)
+    * [x] [xv6] -- 用 c 寫的 RISCV 處理器上之作業系統 (C語言：來自 MIT [xv6-riscv] )
 
 [telnet]:net/telnet/
 [webserver]:net/webserver/
+[tcp/ip stack]:net/tcpip_stack/README.md
+[nstack]:https://github.com/jserv/nstack
 
 * net -- 網路相關
     * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
     * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
+    * [ ] [tcp/ip stack] -- 網路 TCP/IP 協定 (C語言:取自 jserv [nstack] 專案) 
 
 [picorv32]:hardware/cpu/picorv32/
 [mcu0]:hardware/cpu/mcu0/
 [cpu0]:hardware/cpu/cpu0/
 [hackcpu]:hardware/cpu/hackcpu/
 [vvp0i]:hardware/eda/vvpi/
+[picorv32]:https://github.com/YosysHQ/picorv32
 
 * hardware -- 硬體相關
-    * [x] [picorv32] -- RISC-V picorv32 處理器 (來自 YosysHQ 的 picorv32 專案)
+    * [x] [picorv32] -- RISC-V picorv32 處理器 (來自 YosysHQ 的 [picorv32] 專案)
     * [x] [mcu0] -- 16位元簡易處理器 (verilog:ccc 自行撰寫)
     * [x] [cpu0] -- 32位元處理器 (verilog:ccc 自行撰寫)
     * [x] [hackcpu] -- 16位元處理器 (verilog: nand2terris 課程，ccc 自行撰寫)
@@ -68,14 +73,16 @@
 [nn]:ai/nn/
 [llm]:ai/llm/
 [agent]:ai/agent/
+[microgpt]:https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95
+[mini-openclaw]:https://gist.github.com/dabit3/86ee04a1c02c839409a02b20fe99a492
 
 * ai -- 人工智慧
     * [x] [nn] -- 神經網路套件，類似 pytorch.
-        * [nn.py](ai/nn/nn.py) + [nn.c](ai/nn/nn.c) :取自 kaparthy microgpt 重新模組化，然後用 AI 重寫為 C
+        * [nn.py](ai/nn/nn.py) + [nn.c](ai/nn/nn.c) :取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C
     * [x] [llm] -- 語言模型，類似 GPT 
-        * [gpt.py](ai/llm/gpt.py) + [gpt.c](ai/llm/gpt.c) : 取自 kaparthy microgpt 重新模組化，然後用 AI 重寫為 C)
+        * [gpt.py](ai/llm/gpt.py) + [gpt.c](ai/llm/gpt.c) : 取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C)
     * [x] [agent] -- 代理人，類似 OpenClaw
-        * [mini-openclaw.c](ai/agent/mini-openclaw.py) :取自 dabit3 mini-openclaw
+        * [mini-openclaw.c](ai/agent/mini-openclaw.py) :取自 dabit3 [mini-openclaw]
 
 [finiteStateMachine]:theory/finiteStateMachine/
 [turingMachine]:theory/turingMachine/
