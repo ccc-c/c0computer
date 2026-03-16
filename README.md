@@ -19,10 +19,10 @@
     * [x] ll0i -- ll0 中間碼虛擬機，類似 lli (C 語言:ccc 用 AI 建構)
     * [ ] ll0c -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc (C 語言:ccc 用 AI 建構)
     * [x] rv0asm -- rv0 的組譯器 (Python:ccc 用 AI 建構)
-* ai -- 人工智慧
-    * [x] nn -- 神經網路套件，類似 pytorch. (Python:取自 kaparthy microgpt 重新模組化)
-    * [x] llm -- 語言模型，類似 GPT (Python:取自 kaparthy microgpt 重新模組化)
-    * [x] agent -- 代理人，類似 OpenClaw (Python:取自 dabit3 mini-openclaw)
+* interpreter -- 解譯器
+    * [x] basic -- basic 語言解譯器 (Python:ccc 用 AI 建構)
+    * [x] lisp -- lisp 語言解譯器 (Python:ccc 用 AI 建構)
+    * [x] prolog -- prolog 語言解譯器 (Python:ccc 用 AI 建構)
 * os -- 作業系統
     * [x] 用 c 寫的 RISCV 處理器上之作業系統 (C語言：來自 MIT xv6-riscv)
 * net -- 網路相關
@@ -34,6 +34,13 @@
     * [x] cpu0 處理器 (verilog:ccc 自行撰寫)
     * [x] HackCPU 處理器 (verilog: nand2terris 課程，ccc 自行撰寫)
     * [x] vvp0i -- verilog 中間碼虛擬機 (C語言:ccc 用 AI 建構)
-
-
-
+* ai -- 人工智慧
+    * [x] nn -- 神經網路套件，類似 pytorch. (Python:取自 kaparthy microgpt 重新模組化)
+    * [x] llm -- 語言模型，類似 GPT (Python:取自 kaparthy microgpt 重新模組化)
+    * [x] agent -- 代理人，類似 OpenClaw (Python:取自 dabit3 mini-openclaw)
+* theory -- 計算理論
+    * [x] finiteStateMachine -- 有限狀態機 (Python:ccc 自行撰寫)
+    * [x] turingMachine -- 圖靈機 (Python:ccc 自行撰寫)
+    * [x] grammar -- 生成語法 (Python:ccc 自行撰寫)
+    * [x] lambdaCalculus -- lambda 函數編程 (Python:ccc 從 JavaScript 專案改過來的)
+    * [x] lambdaInterpreter -- lambda 解譯器 (Python:ccc 用 AI 建構)
