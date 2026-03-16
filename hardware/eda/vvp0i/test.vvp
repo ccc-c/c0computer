@@ -1,0 +1,16 @@
+:vpi_module "system";
+:vpi_module "v2005_math";
+
+# 定義訊號網表 (Netlist)
+L_00x123456 .net "a", 0 0;   # 定義輸入訊號 a 的網路節點
+L_00x123457 .net "b", 0 0;   # 定義輸入訊號 b 的網路節點
+L_00x123458 .net "y", 0 0;   # 定義輸出訊號 y 的網路節點
+
+# 邏輯閘實作 (Gate Implementation)
+g_00x987654 .fun "and", L_00x123458, L_00x123456, L_00x123457;
+
+# 執行緒與排程 (Threads & Event control)
+:thread T_0;
+    %delay 10;
+    %vpi_call "$display", "y=%b", L_00x123458;
+    %end;
