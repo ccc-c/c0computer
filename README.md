@@ -10,24 +10,24 @@
 ## 實作工具
 
 * compiler -- 編譯器
-    * [x] pcmake -- 專案建置工具，採用 python 語法寫 Pcmakefile 建置檔
-    * [x] c0c -- c0 之編譯器，類似 gcc
-    * [x] py0c -- py0 之編譯器，輸出 qd 檔案
-    * [x] qd0c -- qd0 轉為 ll0 的編譯器
-    * [x] qd0lib -- qd0 的指令呼叫與函式庫
-    * [ ] ll0i -- ll0 中間碼虛擬機，類似 lli
-    * [ ] ll0c -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc
+    * [x] pcmake -- 專案建置工具，採用 python 語法寫 Pcmakefile 建置檔 (ccc 用 AI 建構)
+    * [x] c0c -- c0 之編譯器，類似 gcc (ccc 用 AI 建構)
+    * [x] py0c -- py0 之編譯器，輸出 qd 檔案 (ccc 用 AI 建構)
+    * [x] qd0c -- qd0 轉為 ll0 的編譯器 (ccc 用 AI 建構)
+    * [x] qd0lib -- qd0 的指令呼叫與函式庫 (ccc 用 AI 建構)
+    * [ ] ll0i -- ll0 中間碼虛擬機，類似 lli (ccc 用 AI 建構)
+    * [ ] ll0c -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc (ccc 用 AI 建構)
 * ai -- 人工智慧
-    * [x] nn -- 神經網路套件，類似 pytorch. (kaparthy micrograd)
-    * [x] llm -- 語言模型，類似 GPT (kaparthy microgpt)
-    * [x] agent -- 代理人，類似 OpenClaw (dabit3 mini-openclaw)
+    * [x] nn -- 神經網路套件，類似 pytorch. (取自 kaparthy microgpt 重新模組化)
+    * [x] llm -- 語言模型，類似 GPT (取自 kaparthy microgpt 重新模組化)
+    * [x] agent -- 代理人，類似 OpenClaw (取自 dabit3 mini-openclaw)
 * os -- 作業系統
-    * [ ] kernel -- 用 c 寫的 RISCV 處理器上之作業系統，類似 xv6
+    * [x] 用 c 寫的 RISCV 處理器上之作業系統，來自 MIT xv6
 * cpu -- 處理器
     * [ ] RISCV 處理器之 Verilog0 原始碼
 * net -- 網路相關
-    * [ ] telnet -- 重新實作 telnet
-    * [ ] browser -- 簡易瀏覽器
+    * [x] telnet -- 重新實作 telnet (ccc 用 AI 建構)
+    * [x] browser -- 簡易瀏覽器 (ccc 用 AI 建構)
 
 
 
