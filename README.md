@@ -28,6 +28,9 @@
 * net -- 網路相關
     * [x] telnet -- 重新實作 telnet (ccc 用 AI 建構)
     * [x] browser -- 簡易瀏覽器 (ccc 用 AI 建構)
+* hardware -- 硬體相關
+    * [ ] cpu -- RISCV (未來可能會補上)
+    * [ ] eda -- verilog 工具 (未來可能會補上)
 
 
 
