@@ -1,4 +1,4 @@
-# c0computer -- 用 C 重建簡易電腦工業
+# c0computer -- 用 C + Python 重建簡易電腦工業
 
 ## 語言與格式
 
