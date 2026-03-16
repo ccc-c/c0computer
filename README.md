@@ -54,7 +54,7 @@
 [mcu0]:hardware/cpu/mcu0/
 [cpu0]:hardware/cpu/cpu0/
 [hackcpu]:hardware/cpu/hackcpu/
-[vvpi]:hardware/eda/vvpi/
+[vvp0i]:hardware/eda/vvpi/
 
 * hardware -- 硬體相關
     * [x] [picorv32] -- RISC-V picorv32 處理器 (來自 YosysHQ 的 picorv32 專案)
