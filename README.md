@@ -48,7 +48,7 @@
 
 * net -- 網路相關
     * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
-    * [x] [browser] -- 簡易瀏覽器 (C語言:ccc 用 AI 建構)
+    * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
 
 [picorv32]:hardware/cpu/picorv32/
 [mcu0]:hardware/cpu/mcu0/
