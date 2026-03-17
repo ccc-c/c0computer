@@ -122,11 +122,27 @@ void assemble(char lines[][256], int line_count) {
 
         if (strcmp(mnem, "addi") == 0) inst = enc_I(0x13, 0, get_reg(op1), get_reg(op2), atoi(op3));
         else if (strcmp(mnem, "addiw") == 0) inst = enc_I(0x1b, 0, get_reg(op1), get_reg(op2), atoi(op3));
+        else if (strcmp(mnem, "slli") == 0) inst = enc_I(0x13, 1, get_reg(op1), get_reg(op2), atoi(op3));  // slli
+        else if (strcmp(mnem, "srli") == 0) inst = enc_I(0x13, 5, get_reg(op1), get_reg(op2), atoi(op3));  // srli
+        else if (strcmp(mnem, "srai") == 0) inst = enc_I(0x13, 5, get_reg(op1), get_reg(op2), atoi(op3) | 0x1000);  // srai
+        else if (strcmp(mnem, "slliw") == 0) inst = enc_I(0x1b, 1, get_reg(op1), get_reg(op2), atoi(op3));  // slliw
+        else if (strcmp(mnem, "srliw") == 0) inst = enc_I(0x1b, 5, get_reg(op1), get_reg(op2), atoi(op3));  // srliw
+        else if (strcmp(mnem, "sraiw") == 0) inst = enc_I(0x1b, 5, get_reg(op1), get_reg(op2), atoi(op3) | 0x1000);  // sraiw
         else if (strcmp(mnem, "lw") == 0) inst = enc_I(0x03, 2, get_reg(op1), get_reg(op2), mem_imm);
         else if (strcmp(mnem, "ld") == 0) inst = enc_I(0x03, 3, get_reg(op1), get_reg(op2), mem_imm);
         else if (strcmp(mnem, "sw") == 0) inst = enc_S(0x23, 2, get_reg(op2), get_reg(op1), mem_imm);
         else if (strcmp(mnem, "sd") == 0) inst = enc_S(0x23, 3, get_reg(op2), get_reg(op1), mem_imm);
+        else if (strcmp(mnem, "add") == 0) inst = enc_R(0x33, 0, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "sub") == 0) inst = enc_R(0x33, 0, 0x20, get_reg(op1), get_reg(op2), get_reg(op3));
         else if (strcmp(mnem, "mul") == 0) inst = enc_R(0x33, 0, 1, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "sll") == 0) inst = enc_R(0x33, 1, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "srl") == 0) inst = enc_R(0x33, 5, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "sra") == 0) inst = enc_R(0x33, 5, 0x20, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "addw") == 0) inst = enc_R(0x3b, 0, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "subw") == 0) inst = enc_R(0x3b, 0, 0x20, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "sllw") == 0) inst = enc_R(0x3b, 1, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "srlw") == 0) inst = enc_R(0x3b, 5, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "sraw") == 0) inst = enc_R(0x3b, 5, 0x20, get_reg(op1), get_reg(op2), get_reg(op3));
         // ... 前面的 addi, lw, sw, mul 等等保留 ...
         else if (strcmp(mnem, "beq") == 0) inst = enc_B(0x63, 0, get_reg(op1), get_reg(op2), resolve_label(op3) - pc);
         else if (strcmp(mnem, "bne") == 0) inst = enc_B(0x63, 1, get_reg(op1), get_reg(op2), resolve_label(op3) - pc);

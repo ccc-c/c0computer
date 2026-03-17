@@ -48,9 +48,8 @@ void print_registers() {
 }
 
 int main(int argc, char **argv) {
-    // 預設從 offset 108 (0x6C) 啟動，因為在你的 fact.s 中，
-    // factorial 佔了前 108 bytes，接著才是 main 函數。
-    uint64_t entry_point = 108; 
+    // 預設 entry point為 0xFFFFFFFFFFFFFFFF (-1)，表示需要從 ELF 讀取
+    uint64_t entry_point = 0xFFFFFFFFFFFFFFFF; 
 
     int opt;
     while ((opt = getopt(argc, argv, "e:")) != -1) {
@@ -73,6 +72,19 @@ int main(int argc, char **argv) {
     Elf64_Ehdr *ehdr = (Elf64_Ehdr*)map;
     Elf64_Shdr *shdrs = (Elf64_Shdr*)(map + ehdr->e_shoff);
     char *shstrtab = (char*)(map + shdrs[ehdr->e_shstrndx].sh_offset);
+    
+    // 如果沒有指定 entry point，嘗試從 ELF header 取得
+    if (entry_point == 0xFFFFFFFFFFFFFFFF) {
+        uint64_t elf_entry = ehdr->e_entry;
+        // 只有當 ELF entry 不是 0 時才使用
+        if (elf_entry != 0) {
+            entry_point = elf_entry;
+        } else {
+            // 預設設為 0x0 (大多數情況下 main 在 offset 0)
+            // 如果遇到 fact.c 這類前面有其他函數的狀況，使用 -e 0x6c 指定
+            entry_point = 0x0;
+        }
+    }
     
     int rela_text_idx = -1;
     int symtab_idx = -1;
@@ -134,8 +146,14 @@ int main(int argc, char **argv) {
 
     int steps = 0;
     // 執行迴圈：直到跳回我們設定的 MAGIC EXIT ADDRESS (0xFFFFFFFE) 為止
-    while (PC != 0xFFFFFFFE && steps < 100000) {
+    while (steps < 100000) {
         X[0] = 0; // x0 永遠為 0
+
+        // 檢查是否為結束條件（避免嘗試讀取無效記憶體）
+        if (PC == 0xFFFFFFFE) {
+            printf("Program exited successfully! a0 = %lld\n", (long long)X[10]);
+            break;
+        }
 
         if (PC >= RAM_SIZE || PC < 0) {
             printf("Exception: PC out of bounds (0x%llx)\n", (unsigned long long)PC);
@@ -159,12 +177,26 @@ int main(int argc, char **argv) {
             case 0x13: // OP-IMM (addi)
                 if (f3 == 0) X[rd] = X[rs1] + imm_i;
                 break;
-            case 0x1B: // OP-IMM-32 (addiw)
-                if (f3 == 0) X[rd] = (int32_t)(X[rs1] + imm_i);
+            case 0x1B: // OP-IMM-32 (addiw, slli, srli, srai)
+                if (f3 == 0) X[rd] = (int32_t)(X[rs1] + imm_i);       // addiw
+                else if (f3 == 1) X[rd] = (int32_t)(X[rs1] << (imm_i & 0x1F)); // slliW
+                else if (f3 == 5 && (imm_i & 0x1000)) X[rd] = (int32_t)X[rs1] >> (imm_i & 0x1F); // sraiw
+                else if (f3 == 5) X[rd] = (uint32_t)(X[rs1] >> (imm_i & 0x1F)); // srliw
                 break;
-            case 0x33: // OP (add, mul)
-                if (f3 == 0 && f7 == 0) X[rd] = X[rs1] + X[rs2];
+            case 0x33: // OP (add, mul, sub, sll, srl, sra)
+                if (f3 == 0 && f7 == 0) X[rd] = X[rs1] + X[rs2];       // add
                 else if (f3 == 0 && f7 == 1) X[rd] = X[rs1] * X[rs2]; // mul
+                else if (f3 == 0 && f7 == 0x20) X[rd] = X[rs1] - X[rs2]; // sub
+                else if (f3 == 1 && f7 == 0) X[rd] = X[rs1] << (X[rs2] & 0x3F); // sll
+                else if (f3 == 5 && f7 == 0) X[rd] = X[rs1] >> (X[rs2] & 0x3F); // srl
+                else if (f3 == 5 && f7 == 0x20) X[rd] = (int64_t)X[rs1] >> (X[rs2] & 0x3F); // sra
+                break;
+            case 0x3B: // OP-32 (addw, subw, sllw, srlw, sraw)
+                if (f3 == 0 && f7 == 0) X[rd] = (int32_t)(X[rs1] + X[rs2]);       // addw
+                else if (f3 == 0 && f7 == 0x20) X[rd] = (int32_t)(X[rs1] - X[rs2]); // subw
+                else if (f3 == 1 && f7 == 0) X[rd] = (int32_t)(X[rs1] << (X[rs2] & 0x1F)); // sllw
+                else if (f3 == 5 && f7 == 0) X[rd] = (uint32_t)(X[rs1] >> (X[rs2] & 0x1F)); // srlw
+                else if (f3 == 5 && f7 == 0x20) X[rd] = (int32_t)X[rs1] >> (X[rs2] & 0x1F); // sraw
                 break;
             case 0x67: // JALR (ret)
                 PC = (X[rs1] + imm_i) & ~1ULL;
