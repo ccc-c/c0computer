@@ -43,6 +43,7 @@
 [pcmake]:compiler/pcmake/
 [c0c]:compiler/c0/c0c/
 [py0c]:compiler/py0/py0c/
+[py0i]:compiler/py0/py0i/
 [qd0c]:compiler/qd0/qd0c/
 [qd0lib]:compiler/qd0/qd0c/qd0lib.c
 [ll0i]:compiler/ll0/ll0i/
