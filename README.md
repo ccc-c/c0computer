@@ -75,7 +75,7 @@
 
 * os -- 作業系統
     * [x] [xv6] -- 在 RISC-V 上移植自 UNIXv6 的作業系統 (C語言：來自 MIT [xv6-riscv] )
-    * [ ] [os0] -- 擴充 [xv6] 的作業系統，支援 [tcpip0] (C語言:融合 jserv [nstack] 專案) 
+    * [ ] [os0] -- 構想中，擴充自 [xv6]，支援 [tcpip0] (C語言:融合 jserv [nstack] 專案) 
 
 [make0]:tool/make0/
 [git0]:tool/git0/
