@@ -1,5 +1,7 @@
 # 本專案的擴展項目
 
+> 解譯器 + 計算理論 + 硬體 + EDA + 經典工具
+
 [picorv32]:hardware/cpu/picorv32/
 [mcu0]:hardware/cpu/mcu0/
 [cpu0]:hardware/cpu/cpu0/
@@ -41,7 +43,8 @@
 [tcp/ip stack]:net/tcpip_stack/README.md
 [nstack]:https://github.com/jserv/nstack
 
-* net -- 網路相關
+* tool -- 經典工具
+    * [ ] [git0] / [docker0] / ....
     
     * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
     * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)

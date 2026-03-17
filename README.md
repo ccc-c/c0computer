@@ -1,6 +1,6 @@
 # c0computer -- 用 C + Python 打造簡易電腦工業
 
-> 包含：編譯器/解譯器 + 作業系統 + 網路 + 人工智慧 + 計算理論 + 硬體與虛擬機
+> 包含：編譯器 (C) + 解譯器 (Python) + 作業系統 + 網路 Web + 人工智慧
 
 ## 工具流程
 
@@ -83,3 +83,9 @@
         * [gpt.py](ai/llm/gpt.py) + [gpt.c](ai/llm/gpt.c) : 取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C)
     * [x] [agent0] -- 代理人，類似 OpenClaw
         * [mini-openclaw.c](ai/agent/mini-openclaw.py) :取自 dabit3 [mini-openclaw]
+
+* web -- 網路相關
+    * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
+    * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
+    * [x] [fastapi0] -- 簡易版網站框架，類似 fastapi (Python:ccc 用 AI 建構)
+    * [ ] [browser0] -- 簡易版瀏覽器 (有點太難吧！)
