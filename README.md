@@ -53,10 +53,11 @@
 [qd0lib]:compiler/qd0/qd0c/qd0lib.c
 [ll0i]:compiler/ll0/ll0i/
 [ll0c]:compiler/ll0/ll0c/
-[rv0as]:compiler/rv0as/
+[rv0as.c]:compiler/rv0/rv0as.c
+[rv0vm.c]:compiler/rv0/rv0vm.c
+[rv0objdump.c]:compiler/rv0/rv0objdump.c
 
 * compiler -- 編譯器
-    * [x] [pcmake] -- 專案建置工具，採用 python 語法寫 Pcmakefile 建置檔 (ccc 用 AI 建構)
     * [x] [c0c] -- c0 之編譯器，類似 gcc (C 語言:ccc 用 AI 建構)
     * [x] [py0c] -- py0 之編譯器，輸出 qd 檔案 (C 語言:ccc 用 AI 建構)
     * [x] [py0i] -- py0 的解譯器，可以直接執行 .py 的檔案 (Python: ccc 用 AI 建構，但先用 [py0c] 編譯為 py0c.o ，交由 [rv0vm] 執行)
@@ -78,9 +79,10 @@
 
 [make0]:tool/make0/
 [git0]:tool/git0/
+[docker0]:tool/docker0/
 
 * tool -- 專案工具
-    * [x] [make0] --  (Python:類似 c 工具鏈中的 make，但是用 Python 的想法設計) 
+    * [x] [make0] -- 專案建置工具，採用 python 語法寫 make0.py 建置檔 (Python: ccc 用 AI 建構)
     * [ ] [git0] -- (C語言：構想中)
     * [ ] [docker0] -- (C語言：構想中)
 
