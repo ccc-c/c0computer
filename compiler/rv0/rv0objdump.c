@@ -128,24 +128,61 @@ void process_elf##bits(uint8_t *map, size_t size) { \
     } \
     \
     if (opt_d) { \
+        Elf##bits##_Shdr *symtab_shdr = NULL; \
+        char *symstrtab = NULL; \
+        Elf##bits##_Sym *syms = NULL; \
+        int num_syms = 0; \
+        for (int i = 0; i < ehdr->e_shnum; i++) { \
+            if (shdrs[i].sh_type == SHT_SYMTAB) { \
+                symtab_shdr = &shdrs[i]; \
+                symstrtab = (char *)(map + shdrs[symtab_shdr->sh_link].sh_offset); \
+                syms = (Elf##bits##_Sym *)(map + symtab_shdr->sh_offset); \
+                num_syms = symtab_shdr->sh_size / sizeof(Elf##bits##_Sym); \
+                break; \
+            } \
+        } \
         for (int i = 0; i < ehdr->e_shnum; i++) { \
             if (shdrs[i].sh_flags & SHF_EXECINSTR) { \
                 char *name = shstrtab + shdrs[i].sh_name; \
                 printf("\nDisassembly of section %s:\n\n", name); \
-                if (bits == 64) \
-                    printf("%016lx <%s>:\n", (unsigned long)shdrs[i].sh_addr, name); \
-                else \
-                    printf("%08lx <%s>:\n", (unsigned long)shdrs[i].sh_addr, name); \
                 \
                 uint8_t *code = map + shdrs[i].sh_offset; \
+                int printed_section_name = 0; \
                 for (uint64_t offset = 0; offset < shdrs[i].sh_size; offset += 4) { \
+                    uint64_t addr = shdrs[i].sh_addr + offset; \
+                    const char *sym_name = NULL; \
+                    if (syms) { \
+                        for (int s = 0; s < num_syms; s++) { \
+                            if (syms[s].st_shndx == i && syms[s].st_value == addr) { \
+                                int type = ELF##bits##_ST_TYPE(syms[s].st_info); \
+                                if (type == STT_SECTION || type == STT_FILE) continue; \
+                                if (syms[s].st_name != 0) { \
+                                    const char *tname = symstrtab + syms[s].st_name; \
+                                    if (tname[0] == '.' && tname[1] == 'L') continue; \
+                                    sym_name = tname; \
+                                    if (type == STT_FUNC) break; \
+                                } \
+                            } \
+                        } \
+                    } \
+                    if (sym_name) { \
+                        if (offset > 0) printf("\n"); \
+                        if (bits == 64) \
+                            printf("%016lx <%s>:\n", (unsigned long)addr, sym_name); \
+                        else \
+                            printf("%08lx <%s>:\n", (unsigned long)addr, sym_name); \
+                        printed_section_name = 1; \
+                    } else if (offset == 0 && !printed_section_name) { \
+                        if (bits == 64) \
+                            printf("%016lx <%s>:\n", (unsigned long)addr, name); \
+                        else \
+                            printf("%08lx <%s>:\n", (unsigned long)addr, name); \
+                    } \
+                    \
                     if (offset + 4 > shdrs[i].sh_size) break; \
                     uint32_t inst; \
                     memcpy(&inst, code + offset, sizeof(inst)); \
-                    if (bits == 64) \
-                        printf(" %16lx:\t%08x \t", (unsigned long)(shdrs[i].sh_addr + offset), inst); \
-                    else \
-                        printf(" %8lx:\t%08x \t", (unsigned long)(shdrs[i].sh_addr + offset), inst); \
+                    printf("%8lx:\t%08x \t", (unsigned long)offset, inst); \
                     decode_riscv(inst); \
                 } \
             } \

@@ -2,6 +2,33 @@
 
 > 包含：編譯器/解譯器 + 作業系統 + 網路 + 人工智慧 + 計算理論 + 硬體與虛擬機
 
+## 工具流程
+
+自製 C 語言編譯器 c0c 的使用流程
+
+    c0c fact.c -o fact.ll # 編譯 fact.c 為 fact.ll
+    ll0c fact.ll -o fact.o # 將 fact.ll 轉換為 RISC-V 上的目的檔
+    rv0vm fact.o # RISC-V 虛擬機 rv0vm 執行 fact.o 
+
+自製 Python 語言編譯器 py0c 的使用流程
+
+    py0c fact.py -o fact.qd # 編譯 fact.py 為 fact.qd
+    qd0c fact.qd -o fact.ll # 轉換 fact.qd 為 fact.ll
+    ll0c fact.ll qd0lib.o -o fact.o  # 將 fact.ll 轉換為 RISC-V 上的目的檔（連結 qd0lib.o)
+    rv0vm fact.o  # RISC-V 虛擬機 rv0vm 執行 fact.o 
+
+然後我們會將 xv6-riscv 作業系統，修改為 os0
+
+有了上述兩個工具，以及 os0 之後，我們就可以在上面建構出
+
+1. 用 c0 寫的系統程式，包含
+    * tcpip0 堆疊：包含 socket 網路函式庫，接著建構應用 telnet/webserver/...
+    * nn0.c 神經網路後端
+2. 用 py0 寫的應用程式
+    * py0i 解譯器
+    * fastapi0 框架
+    * torch0 神經網路前端
+
 ## 語言與格式
 
 * c0 -- 簡化後的 C 語言，副檔名為 .c
@@ -13,13 +40,13 @@
 ## 實作工具
 
 [pcmake]:compiler/pcmake/
-[c0c]:compiler/c0c/
-[py0c]:compiler/py0c/
-[qd0c]:compiler/qd0c/
-[qd0lib]:compiler/qd0c/qd0lib.c
-[ll0i]:compiler/ll0i/
-[ll0c]:compiler/ll0c/
-[rv0asm]:compiler/rv0asm/
+[c0c]:compiler/c0/c0c/
+[py0c]:compiler/py0/py0c/
+[qd0c]:compiler/qd0/qd0c/
+[qd0lib]:compiler/qd0/qd0c/qd0lib.c
+[ll0i]:compiler/ll0/ll0i/
+[ll0c]:compiler/ll0/ll0c/
+[rv0as]:compiler/rv0as/
 
 * compiler -- 編譯器
     * [x] [pcmake] -- 專案建置工具，採用 python 語法寫 Pcmakefile 建置檔 (ccc 用 AI 建構)
@@ -29,32 +56,14 @@
     * [x] [qd0lib] -- qd0 的指令呼叫與函式庫 (C 語言:ccc 用 AI 建構)
     * [x] [ll0i] -- ll0 中間碼虛擬機，類似 lli (C 語言:ccc 用 AI 建構)
     * [ ] [ll0c] -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc (C 語言:ccc 用 AI 建構)
-    * [x] [rv0asm] -- rv0 的組譯器 (Python:ccc 用 AI 建構)
-
-[basic]:interpreter/basic/
-[lisp]:interpreter/lisp/
-[prolog]:interpreter/prolog
-
-* interpreter -- 解譯器
-    * [x] [basic] -- basic 語言解譯器 (Python:ccc 用 AI 建構)
-    * [x] [lisp] -- lisp 語言解譯器 (Python:ccc 用 AI 建構)
-    * [x] [prolog] -- prolog 語言解譯器 (Python:ccc 用 AI 建構)
+    * [x] [rv0] 工具鏈 -- 包含 [rv0as.c], [rv0vm.c], [rv0objdump.c] (C語言:ccc 用 AI 建構)
 
 [xv6]:os/xv6
 [xv6-riscv]:https://github.com/mit-pdos/xv6-riscv
 
 * os -- 作業系統
     * [x] [xv6] -- 用 c 寫的 RISCV 處理器上之作業系統 (C語言：來自 MIT [xv6-riscv] )
-
-[telnet]:net/telnet/
-[webserver]:net/webserver/
-[tcp/ip stack]:net/tcpip_stack/README.md
-[nstack]:https://github.com/jserv/nstack
-
-* net -- 網路相關
-    * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
-    * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
-    * [ ] [tcp/ip stack] -- 網路 TCP/IP 協定 (C語言:取自 jserv [nstack] 專案) 
+    * [ ] [os0] -- 擴充 [xv6] 的作業系統，支援 [tcpip0] (C語言:融合 jserv [nstack] 專案) 
 
 [picorv32]:hardware/cpu/picorv32/
 [mcu0]:hardware/cpu/mcu0/
@@ -96,3 +105,24 @@
     * [x] [grammar] -- 生成語法 (Python:ccc 自行撰寫)
     * [x] [lambdaCalculus] -- lambda 函數編程 (Python:ccc 從 JavaScript 專案改過來的)
     * [x] [lambdaInterpreter] -- lambda 解譯器 (Python:ccc 用 AI 建構)
+
+
+[basic]:interpreter/basic/
+[lisp]:interpreter/lisp/
+[prolog]:interpreter/prolog
+
+* interpreter -- 解譯器
+    * [x] [basic] -- basic 語言解譯器 (Python:ccc 用 AI 建構)
+    * [x] [lisp] -- lisp 語言解譯器 (Python:ccc 用 AI 建構)
+    * [x] [prolog] -- prolog 語言解譯器 (Python:ccc 用 AI 建構)
+
+[telnet]:net/telnet/
+[webserver]:net/webserver/
+[tcp/ip stack]:net/tcpip_stack/README.md
+[nstack]:https://github.com/jserv/nstack
+
+* net -- 網路相關
+    
+    * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
+    * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
+

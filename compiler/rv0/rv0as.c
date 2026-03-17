@@ -172,6 +172,34 @@ void assemble(char lines[][256], int line_count) {
 void write_elf(const char *filename) {
     FILE *f = fopen(filename, "wb");
     
+    // Construct .strtab (String Table for Symbols)
+    char strtab[4096];
+    memset(strtab, 0, sizeof(strtab));
+    int strtab_size = 1; // index 0 is always null byte
+    
+    // Construct .symtab (Symbol Table)
+    Elf64_Sym syms[MAX_LABELS + 1];
+    memset(syms, 0, sizeof(syms));
+    int sym_count = 1; // index 0 is undefined symbol
+    
+    for (int i = 0; i < label_count; i++) {
+        // Only emit symbols that don't start with '.' (ignore local compiler labels)
+        if (labels[i].name[0] == '.') continue;
+        
+        int name_offset = strtab_size;
+        strcpy(strtab + strtab_size, labels[i].name);
+        strtab_size += strlen(labels[i].name) + 1;
+        
+        syms[sym_count].st_name = name_offset;
+        syms[sym_count].st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC);
+        syms[sym_count].st_shndx = 1; // .text section index
+        syms[sym_count].st_value = labels[i].address;
+        syms[sym_count].st_size = 0; // Don't care for now
+        sym_count++;
+    }
+    
+    int symtab_size = sym_count * sizeof(Elf64_Sym);
+    
     Elf64_Ehdr ehdr;
     memset(&ehdr, 0, sizeof(ehdr));
     ehdr.e_ident[EI_MAG0] = ELFMAG0; ehdr.e_ident[EI_MAG1] = ELFMAG1;
@@ -184,16 +212,16 @@ void write_elf(const char *filename) {
     ehdr.e_version = EV_CURRENT;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);
     ehdr.e_shentsize = sizeof(Elf64_Shdr);
-    ehdr.e_shnum = 3; // Null, .text, .shstrtab
+    ehdr.e_shnum = 5; // Null, .text, .shstrtab, .symtab, .strtab
     ehdr.e_shstrndx = 2;
 
-    const char shstrtab[] = "\0.text\0.shstrtab\0";
+    const char shstrtab[] = "\0.text\0.shstrtab\0.symtab\0.strtab\0";
     
-    Elf64_Shdr shdrs[3];
+    Elf64_Shdr shdrs[5];
     memset(shdrs, 0, sizeof(shdrs));
     
     // .text section
-    shdrs[1].sh_name = 1;
+    shdrs[1].sh_name = 1; // ".text"
     shdrs[1].sh_type = SHT_PROGBITS;
     shdrs[1].sh_flags = SHF_ALLOC | SHF_EXECINSTR;
     shdrs[1].sh_offset = sizeof(Elf64_Ehdr);
@@ -201,17 +229,36 @@ void write_elf(const char *filename) {
     shdrs[1].sh_addralign = 4;
     
     // .shstrtab section
-    shdrs[2].sh_name = 7;
+    shdrs[2].sh_name = 7; // ".shstrtab"
     shdrs[2].sh_type = SHT_STRTAB;
     shdrs[2].sh_offset = sizeof(Elf64_Ehdr) + text_size;
     shdrs[2].sh_size = sizeof(shstrtab);
     shdrs[2].sh_addralign = 1;
 
-    ehdr.e_shoff = shdrs[2].sh_offset + shdrs[2].sh_size;
+    // .symtab section
+    shdrs[3].sh_name = 17; // ".symtab"
+    shdrs[3].sh_type = SHT_SYMTAB;
+    shdrs[3].sh_link = 4; // points to .strtab
+    shdrs[3].sh_info = sym_count; // one greater than the symbol table index of the last local symbol
+    shdrs[3].sh_entsize = sizeof(Elf64_Sym);
+    shdrs[3].sh_offset = shdrs[2].sh_offset + shdrs[2].sh_size;
+    shdrs[3].sh_size = symtab_size;
+    shdrs[3].sh_addralign = 8;
+    
+    // .strtab section
+    shdrs[4].sh_name = 25; // ".strtab"
+    shdrs[4].sh_type = SHT_STRTAB;
+    shdrs[4].sh_offset = shdrs[3].sh_offset + shdrs[3].sh_size;
+    shdrs[4].sh_size = strtab_size;
+    shdrs[4].sh_addralign = 1;
+
+    ehdr.e_shoff = shdrs[4].sh_offset + shdrs[4].sh_size;
 
     fwrite(&ehdr, 1, sizeof(ehdr), f);
     fwrite(text_section, 1, text_size, f);
     fwrite(shstrtab, 1, sizeof(shstrtab), f);
+    fwrite(syms, 1, symtab_size, f);
+    fwrite(strtab, 1, strtab_size, f);
     fwrite(shdrs, 1, sizeof(shdrs), f);
     
     fclose(f);

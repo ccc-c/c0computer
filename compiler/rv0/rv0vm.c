@@ -12,6 +12,19 @@
 #define EM_RISCV 243
 #endif
 
+#ifndef R_RISCV_JAL
+#define R_RISCV_JAL 17
+#endif
+#ifndef R_RISCV_CALL
+#define R_RISCV_CALL 18
+#endif
+#ifndef R_RISCV_CALL_PLT
+#define R_RISCV_CALL_PLT 19
+#endif
+#ifndef R_RISCV_RELAX
+#define R_RISCV_RELAX 51
+#endif
+
 #define RAM_SIZE (1024 * 1024) // 1MB 虛擬記憶體
 
 uint8_t RAM[RAM_SIZE];
@@ -28,7 +41,7 @@ const char* reg_names[32] = {
 void print_registers() {
     printf("\n--- Execution Halted. Register State ---\n");
     for (int i = 0; i < 32; i++) {
-        printf("%-4s: %-10ld ", reg_names[i], X[i]);
+        printf("%-4s: %-10lld ", reg_names[i], (long long)X[i]);
         if ((i + 1) % 4 == 0) printf("\n");
     }
     printf("----------------------------------------\n");
@@ -61,10 +74,52 @@ int main(int argc, char **argv) {
     Elf64_Shdr *shdrs = (Elf64_Shdr*)(map + ehdr->e_shoff);
     char *shstrtab = (char*)(map + shdrs[ehdr->e_shstrndx].sh_offset);
     
+    int rela_text_idx = -1;
+    int symtab_idx = -1;
+
     for (int i = 0; i < ehdr->e_shnum; i++) {
-        if (strcmp(shstrtab + shdrs[i].sh_name, ".text") == 0) {
+        const char *name = shstrtab + shdrs[i].sh_name;
+        if (strcmp(name, ".text") == 0) {
             memcpy(RAM, map + shdrs[i].sh_offset, shdrs[i].sh_size);
-            break;
+        } else if (strcmp(name, ".rela.text") == 0) {
+            rela_text_idx = i;
+        } else if (shdrs[i].sh_type == SHT_SYMTAB) {
+            symtab_idx = i;
+        }
+    }
+
+    // 當有提供 Relocation Table 與 Symbol Table 時，我們把它們套用至記憶體上的 .text
+    if (rela_text_idx != -1 && symtab_idx != -1) {
+        Elf64_Rela *relas = (Elf64_Rela*)(map + shdrs[rela_text_idx].sh_offset);
+        int num_relas = shdrs[rela_text_idx].sh_size / sizeof(Elf64_Rela);
+        Elf64_Sym *syms = (Elf64_Sym*)(map + shdrs[symtab_idx].sh_offset);
+
+        for (int i = 0; i < num_relas; i++) {
+            uint32_t r_type = ELF64_R_TYPE(relas[i].r_info);
+            uint32_t r_sym  = ELF64_R_SYM(relas[i].r_info);
+            uint64_t offset = relas[i].r_offset; // relative to .text
+            int64_t addend  = relas[i].r_addend;
+            
+            // 由於只執行單一 .o 檔案，假定所有目標都相對於 0x0
+            uint64_t sym_val = syms[r_sym].st_value;
+            int64_t diff = (sym_val + addend) - offset;
+            
+            if (r_type == R_RISCV_CALL || r_type == R_RISCV_CALL_PLT) {
+                uint32_t *inst_auipc = (uint32_t*)(RAM + offset);
+                uint32_t *inst_jalr  = (uint32_t*)(RAM + offset + 4);
+                int32_t hi20 = (diff + 0x800) & 0xFFFFF000;
+                int32_t lo12 = diff - hi20;
+                *inst_auipc = (*inst_auipc & 0x00000FFF) | hi20;
+                *inst_jalr  = (*inst_jalr  & 0x000FFFFF) | ((lo12 & 0xFFF) << 20);
+                // printf("Relocating CALL at 0x%lx to 0x%lx (diff=%ld)\n", offset, sym_val + addend, diff);
+            } else if (r_type == R_RISCV_JAL) {
+                uint32_t *inst_jal = (uint32_t*)(RAM + offset);
+                uint32_t imm20 = ((diff >> 20) & 1) << 31;
+                uint32_t imm10_1 = ((diff >> 1) & 0x3FF) << 21;
+                uint32_t imm11 = ((diff >> 11) & 1) << 20;
+                uint32_t imm19_12 = ((diff >> 12) & 0xFF) << 12;
+                *inst_jal = (*inst_jal & 0x00000FFF) | imm20 | imm10_1 | imm11 | imm19_12;
+            }
         }
     }
     munmap(map, st.st_size);
@@ -75,7 +130,7 @@ int main(int argc, char **argv) {
     X[2] = RAM_SIZE;      // sp: 堆疊指標設在記憶體最底部 (1MB 處)
     X[1] = 0xFFFFFFFE;    // ra: 當 main 結束執行 ret (jalr ra) 時跳至此，作為結束標記
 
-    printf("Starting VM at PC = 0x%lx\n", PC);
+    printf("Starting VM at PC = 0x%llx\n", (unsigned long long)PC);
 
     int steps = 0;
     // 執行迴圈：直到跳回我們設定的 MAGIC EXIT ADDRESS (0xFFFFFFFE) 為止
@@ -83,7 +138,7 @@ int main(int argc, char **argv) {
         X[0] = 0; // x0 永遠為 0
 
         if (PC >= RAM_SIZE || PC < 0) {
-            printf("Exception: PC out of bounds (0x%lx)\n", PC);
+            printf("Exception: PC out of bounds (0x%llx)\n", (unsigned long long)PC);
             break;
         }
 
@@ -166,7 +221,7 @@ case 0x63: // BRANCH 完整版
                 }
                 break;
             default:
-                printf("Fault: Unknown Opcode 0x%x at PC=0x%lx\n", opcode, PC);
+                printf("Fault: Unknown Opcode 0x%x at PC=0x%llx\n", opcode, (unsigned long long)PC);
                 goto end;
         }
         PC = next_pc;
