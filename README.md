@@ -40,7 +40,12 @@
 
 ## 實作工具
 
-[pcmake]:compiler/pcmake/
+[c0]:compiler/c0/
+[py0]:compiler/py0/
+[qd0]:compiler/qd0/
+[ll0]:compiler/ll0/
+[rv0]:compiler/rv0/
+
 [c0c]:compiler/c0/c0c/
 [py0c]:compiler/py0/py0c/
 [py0i]:compiler/py0/py0i/
@@ -68,9 +73,15 @@
 [tcpip0]:os/os0/tcpip0/
 
 * os -- 作業系統
-    * [x] [xv6] -- 用 c 寫的 RISCV 處理器上之作業系統 (C語言：來自 MIT [xv6-riscv] )
+    * [x] [xv6] -- 在 RISC-V 上移植自 UNIXv6 的作業系統 (C語言：來自 MIT [xv6-riscv] )
     * [ ] [os0] -- 擴充 [xv6] 的作業系統，支援 [tcpip0] (C語言:融合 jserv [nstack] 專案) 
 
+[pcmake]:compiler/pcmake/
+
+* tool -- 專案工具
+    * [x] [pcmake] --  (Python:類似 c 工具鏈中的 make，但是用 Python 的想法設計) 
+    * [ ] [git0] -- (C語言：構想中)
+    * [ ] [docker0] -- (C語言：構想中)
 
 [nn0]:ai/nn0/
 [gpt0]:ai/gpt0/
@@ -99,6 +110,7 @@
 
 * web -- 網路相關
     * [x] [telnet0] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
-    * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
+    * [x] [webserver0] -- 簡易 web server (C語言:ccc 用 AI 建構)
     * [x] [fastapi0] -- 簡易版網站框架，類似 fastapi (Python:ccc 用 AI 建構)
+    * [ ] [browser0] -- (C 語言：構想中 ...)
 

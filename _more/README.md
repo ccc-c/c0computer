@@ -38,8 +38,3 @@
     * [x] [lisp] -- lisp 語言解譯器 (Python:ccc 用 AI 建構)
     * [x] [prolog] -- prolog 語言解譯器 (Python:ccc 用 AI 建構)
 
-
-
-* tool -- 經典工具
-    * [ ] [git0] / [docker0] / ....
-
