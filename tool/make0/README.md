@@ -42,28 +42,28 @@ make0 [選項] [target ...]
 ## 範例
 
 ```bash
-pip install --upgrade make0
+pip install make0
 
 # 建置預設 target
-make
+make0
 
 # 建置多個 targets
-make all clean
+make0 all clean
 
 # 使用指定 Makefile
-make -f Makefile.demo greet
+make0 -f Makefile.demo greet
 
 # Dry-run
-make -n all
+make0 -n all
 
 # 列出所有 target
-make -l
+make0 -l
 
 # 印出解析的資料庫
-make -p
+make0 -p
 
 # 覆蓋變數
-make --var CC=clang all
+make0 --var CC=clang all
 ```
 
 ## Makefile 語法支援
@@ -79,9 +79,9 @@ make --var CC=clang all
 | `$(shell cmd)` | 執行 shell |
 | `$(wildcard *.c)` | 萬用字元 |
 | `.PHONY: t` | 宣告偽目標 |
-| `$@` | 目標名稱 |
-| `$<` | 第一個 prerequisite |
-| `$^` | 所有 prerequisites（去重） |
-| `$?` | 比目標新的 prerequisites |
+| `$@` | 目標檔案名稱 |
+| `$<` | 第一個 prerequisite 檔案 |
+| `$^` | 所有 prerequisites（自動去重） |
+| `$?` | 所有比目標更新的 prerequisites |
 | `@cmd` | 靜音執行 |
 | `-cmd` | 忽略錯誤 |
