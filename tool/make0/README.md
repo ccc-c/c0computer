@@ -42,26 +42,28 @@ make0 [選項] [target ...]
 ## 範例
 
 ```bash
+pip install --upgrade make0
+
 # 建置預設 target
-python3 make0.py
+make
 
 # 建置多個 targets
-python3 make0.py all clean
+make all clean
 
 # 使用指定 Makefile
-python3 make0.py -f Makefile.demo greet
+make -f Makefile.demo greet
 
 # Dry-run
-python3 make0.py -n all
+make -n all
 
 # 列出所有 target
-python3 make0.py -l
+make -l
 
 # 印出解析的資料庫
-python3 make0.py -p
+make -p
 
 # 覆蓋變數
-python3 make0.py --var CC=clang all
+make --var CC=clang all
 ```
 
 ## Makefile 語法支援
