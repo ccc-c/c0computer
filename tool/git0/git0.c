@@ -1,215 +1,192 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <dirent.h>
 #include <time.h>
-// 新增：包含errno和EEXIST所需的头文件
-#include <errno.h>
+#include <sys/stat.h>
 
-// 定义核心目录路径
 #define GIT0_DIR ".git0"
-#define OBJECTS_DIR ".git0/objects"
-#define INDEX_FILE ".git0/index"
-#define LOG_FILE ".git0/logs"
+#define OBJECTS_DIR GIT0_DIR "/objects"
+#define INDEX_FILE GIT0_DIR "/index"
+#define COMMITS_FILE GIT0_DIR "/commits"
+#define HASH_LEN 8
+#define FNV1A_OFFSET 0x811C9DC5UL
+#define FNV1A_PRIME 0x01000193UL
 
-// 错误处理函数
-void die(const char *msg) {
-    perror(msg);
-    exit(1);
+// --- 修復 1：在這裡先宣告函數原型 ---
+char *strrstr(const char *haystack, const char *needle);
+
+// 輔助函數：檢查文件是否存在
+int file_exists(const char *filename) {
+    struct stat buffer;
+    return (stat(filename, &buffer) == 0);
 }
 
-// 创建目录（支持多级）
-void create_dir(const char *path) {
-    if (mkdir(path, 0755) == -1) {
-        if (errno != EEXIST) die("mkdir failed");
+// 輔助函數：檢查目錄是否存在
+int dir_exists(const char *dirname) {
+    struct stat buffer;
+    if (stat(dirname, &buffer) != 0) return 0;
+    return S_ISDIR(buffer.st_mode);
+}
+
+// 輔助函數：讀取文件全部內容
+char *read_file(const char *filename, size_t *len) {
+    FILE *fp = fopen(filename, "rb");
+    if (!fp) return NULL;
+    fseek(fp, 0, SEEK_END);
+    *len = ftell(fp);
+    rewind(fp);
+    char *data = malloc(*len + 1);
+    if (!data) { fclose(fp); return NULL; }
+    fread(data, 1, *len, fp);
+    data[*len] = '\0';
+    fclose(fp);
+    return data;
+}
+
+// 輔助函數：寫入文件
+int write_file(const char *filename, const char *data, size_t len) {
+    FILE *fp = fopen(filename, "wb");
+    if (!fp) return -1;
+    fwrite(data, 1, len, fp);
+    fclose(fp);
+    return 0;
+}
+
+// FNV-1a 哈希函數
+unsigned int fnv1a_hash(const char *data, size_t len) {
+    unsigned int hash = FNV1A_OFFSET;
+    for (size_t i = 0; i < len; i++) {
+        hash ^= (unsigned char)data[i];
+        hash *= FNV1A_PRIME;
     }
+    return hash;
 }
 
-// 初始化仓库
-void git0_init() {
-    create_dir(GIT0_DIR);
-    create_dir(OBJECTS_DIR);
-    
-    // 创建空的暂存区和日志文件
-    FILE *index = fopen(INDEX_FILE, "w");
-    if (!index) die("fopen index failed");
-    fclose(index);
-
-    FILE *log = fopen(LOG_FILE, "w");
-    if (!log) die("fopen log failed");
-    fclose(log);
-
-    printf("Initialized empty git0 repository\n");
+// 將哈希值轉為 8 位十六進制字符串
+void hash_to_hex(unsigned int hash, char *hex_str) {
+    sprintf(hex_str, "%08x", hash);
 }
 
-// 计算简单的文件内容哈希（简化版 SHA-1）
-void simple_hash(const char *content, char *hash) {
-    unsigned int sum = 0;
-    for (int i = 0; content[i]; i++) {
-        sum = sum * 31 + content[i];
+// 初始化倉庫
+int init_git0() {
+    if (dir_exists(GIT0_DIR)) {
+        printf("git0 repository already exists.\n");
+        return -1;
     }
-    sprintf(hash, "%08x", sum); // 8位十六进制哈希
+    mkdir(GIT0_DIR, 0755);
+    mkdir(OBJECTS_DIR, 0755);
+    fclose(fopen(INDEX_FILE, "w"));
+    fclose(fopen(COMMITS_FILE, "w"));
+    printf("Initialized empty git0 repository in %s/\n", GIT0_DIR);
+    return 0;
 }
 
-// 读取文件内容
-char* read_file(const char *filename, long *size) {
-    FILE *f = fopen(filename, "r");
-    if (!f) die("fopen read failed");
+// 添加文件到暫存區
+int add_file(const char *filename) {
+    if (!file_exists(filename)) { printf("File not found: %s\n", filename); return -1; }
+    if (!dir_exists(GIT0_DIR)) { printf("Not a git0 repo. Run 'init' first.\n"); return -1; }
 
-    fseek(f, 0, SEEK_END);
-    *size = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    size_t len;
+    char *content = read_file(filename, &len);
+    unsigned int hash = fnv1a_hash(content, len);
+    char hash_hex[HASH_LEN + 1];
+    hash_to_hex(hash, hash_hex);
 
-    char *content = malloc(*size + 1);
-    if (!content) die("malloc failed");
-    
-    fread(content, 1, *size, f);
-    content[*size] = '\0'; // 确保字符串结束
-    fclose(f);
-    return content;
-}
-
-// 暂存文件（add）
-void git0_add(const char *filename) {
-    // 检查文件是否存在
-    if (access(filename, F_OK) == -1) {
-        fprintf(stderr, "Error: %s does not exist\n", filename);
-        exit(1);
-    }
-
-    // 读取文件内容
-    long size;
-    char *content = read_file(filename, &size);
-
-    // 计算哈希值
-    char hash[9];
-    simple_hash(content, hash);
-
-    // 将文件内容保存到 objects 目录
     char obj_path[256];
-    snprintf(obj_path, sizeof(obj_path), "%s/%s", OBJECTS_DIR, hash);
-    FILE *obj = fopen(obj_path, "w");
-    if (!obj) die("fopen object failed");
-    fwrite(content, 1, size, obj);
-    fclose(obj);
-
-    // 更新暂存区（index）
-    FILE *index = fopen(INDEX_FILE, "a");
-    if (!index) die("fopen index failed");
-    fprintf(index, "%s %s\n", filename, hash);
-    fclose(index);
-
-    printf("Added %s to staging area (hash: %s)\n", filename, hash);
+    snprintf(obj_path, sizeof(obj_path), "%s/%s", OBJECTS_DIR, hash_hex);
+    if (!file_exists(obj_path)) write_file(obj_path, content, len);
     free(content);
+
+    size_t index_len;
+    char *index_content = read_file(INDEX_FILE, &index_len);
+    char new_index[4096] = {0};
+    int found = 0;
+
+    if (index_content) {
+        char *line = strtok(index_content, "\n");
+        while (line) {
+            char f[256], h[HASH_LEN + 1];
+            sscanf(line, "%255s %8s", f, h);
+            if (strcmp(f, filename) == 0) {
+                sprintf(new_index + strlen(new_index), "%s %s\n", filename, hash_hex);
+                found = 1;
+            } else {
+                sprintf(new_index + strlen(new_index), "%s\n", line);
+            }
+            line = strtok(NULL, "\n");
+        }
+        free(index_content);
+    }
+    if (!found) sprintf(new_index + strlen(new_index), "%s %s\n", filename, hash_hex);
+    write_file(INDEX_FILE, new_index, strlen(new_index));
+
+    printf("Added %s to index.\n", filename);
+    return 0;
 }
 
-// 提交版本（commit）
-void git0_commit(const char *msg) {
-    // 检查暂存区是否为空
-    FILE *index = fopen(INDEX_FILE, "r");
-    if (!index) die("fopen index failed");
-    
-    fseek(index, 0, SEEK_END);
-    if (ftell(index) == 0) {
-        fprintf(stderr, "Error: Staging area is empty, nothing to commit\n");
-        fclose(index);
-        exit(1);
-    }
-    fseek(index, 0, SEEK_SET);
+// 提交變更
+int commit_changes(const char *message) {
+    if (!dir_exists(GIT0_DIR)) { printf("Not a git0 repo. Run 'init' first.\n"); return -1; }
 
-    // 生成提交ID（基于时间戳）
+    size_t index_len;
+    char *index_content = read_file(INDEX_FILE, &index_len);
+    if (!index_content || index_len == 0) {
+        printf("No changes to commit. Use 'add' first.\n");
+        if (index_content) free(index_content);
+        return -1;
+    }
+
+    char parent_id[HASH_LEN + 1] = "none";
+    size_t commits_len;
+    char *commits_content = read_file(COMMITS_FILE, &commits_len);
+    if (commits_content && commits_len > 0) {
+        // --- 修復 2：這裡現在可以正常調用了 ---
+        char *last = strrstr(commits_content, "commit ");
+        if (last) sscanf(last, "commit %8s", parent_id);
+        free(commits_content);
+    }
+
+    srand(time(NULL));
+    unsigned int commit_hash = (unsigned int)time(NULL) ^ (rand() << 16);
+    char commit_id[HASH_LEN + 1];
+    hash_to_hex(commit_hash, commit_id);
+
     time_t now = time(NULL);
-    char commit_id[32];
-    sprintf(commit_id, "%ld", now);
+    char timestamp[64];
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
 
-    // 记录提交信息到日志
-    FILE *log = fopen(LOG_FILE, "a");
-    if (!log) die("fopen log failed");
-    
-    fprintf(log, "Commit: %s\n", commit_id);
-    fprintf(log, "Date: %s", ctime(&now));
-    fprintf(log, "Message: %s\n", msg);
-    
-    // 写入暂存区内容到日志
-    char line[256];
-    fprintf(log, "Files:\n");
-    while (fgets(line, sizeof(line), index)) {
-        fprintf(log, "  %s", line);
-    }
-    fprintf(log, "-------------------------\n");
-    
-    fclose(log);
-    fclose(index);
+    char commit_content[8192];
+    sprintf(commit_content,
+        "commit %s\nparent %s\ndate %s\nmessage %s\nfiles\n%s\n",
+        commit_id, parent_id, timestamp, message, index_content);
+    free(index_content);
 
-    // 清空暂存区
-    FILE *new_index = fopen(INDEX_FILE, "w");
-    if (!new_index) die("fopen index failed");
-    fclose(new_index);
+    FILE *fp = fopen(COMMITS_FILE, "a");
+    fputs(commit_content, fp);
+    fclose(fp);
 
-    printf("Committed successfully (commit ID: %s)\n", commit_id);
+    printf("Committed as %s\n", commit_id);
+    return 0;
 }
 
-// 查看提交日志（log）
-void git0_log() {
-    FILE *log = fopen(LOG_FILE, "r");
-    if (!log) die("fopen log failed");
-
-    char line[256];
-    printf("\n===== Git0 Commit Log =====\n");
-    while (fgets(line, sizeof(line), log)) {
-        printf("%s", line);
-    }
-    printf("===========================\n\n");
-
-    fclose(log);
-}
-
-// 显示帮助信息
-void show_help() {
-    printf("git0 - Simple Git implementation in C\n");
-    printf("Usage: ./git0 <command> [args]\n");
-    printf("Commands:\n");
-    printf("  init        Initialize a new git0 repository\n");
-    printf("  add <file>  Add a file to the staging area\n");
-    printf("  commit <msg> Commit changes with a message\n");
-    printf("  log         Show commit history\n");
-    printf("  help        Show this help message\n");
+// 輔助：查找字符串最後一次出現的位置 (實現部分移到後面不要緊，因為前面已經宣告過了)
+char *strrstr(const char *haystack, const char *needle) {
+    char *last = NULL, *cur = strstr(haystack, needle);
+    while (cur) { last = cur; cur = strstr(cur + 1, needle); }
+    return last;
 }
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        show_help();
-        exit(1);
+        printf("Usage: git0 <command> [args]\n");
+        printf("  init          Initialize repo\n");
+        printf("  add <file>    Add file to index\n");
+        printf("  commit <msg>  Commit changes\n");
+        return 0;
     }
-
-    // 解析命令
-    if (strcmp(argv[1], "init") == 0) {
-        git0_init();
-    } else if (strcmp(argv[1], "add") == 0) {
-        if (argc < 3) {
-            fprintf(stderr, "Error: 'add' requires a filename argument\n");
-            exit(1);
-        }
-        git0_add(argv[2]);
-    } else if (strcmp(argv[1], "commit") == 0) {
-        if (argc < 3) {
-            fprintf(stderr, "Error: 'commit' requires a message argument\n");
-            exit(1);
-        }
-        // 修复：原代码错误使用argv[3]，应该是argv[2]
-        git0_commit(argv[2]);
-    } else if (strcmp(argv[1], "log") == 0) {
-        git0_log();
-    } else if (strcmp(argv[1], "help") == 0) {
-        show_help();
-    } else {
-        fprintf(stderr, "Error: Unknown command '%s'\n", argv[1]);
-        show_help();
-        exit(1);
-    }
-
-    return 0;
+    if (strcmp(argv[1], "init") == 0) return init_git0();
+    if (strcmp(argv[1], "add") == 0) return argc >=3 ? add_file(argv[2]) : (printf("Usage: add <file>\n"), -1);
+    if (strcmp(argv[1], "commit") == 0) return argc >=3 ? commit_changes(argv[2]) : (printf("Usage: commit <msg>\n"), -1);
+    printf("Unknown command: %s\n", argv[1]);
+    return -1;
 }
