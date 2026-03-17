@@ -9,6 +9,10 @@ FILE *in_fp, *out_fp;
 int t_idx = 0;
 int l_idx = 0;
 
+// Track function parameters
+int in_function = 0;
+char param_name[MAX_TOKEN_LEN] = {0};
+
 void next_token();
 void parse_statement();
 void parse_expression(char *res_t);
@@ -74,7 +78,18 @@ void parse_primary(char *res_t) {
         next_token();
     } else if (isalpha(token[0]) || token[0] == '_') {
         char name[MAX_TOKEN_LEN]; strcpy(name, token); next_token();
-        if (accept("(")) { // 函數呼叫： factorial(n - 1)
+        
+        // Debug output
+        // fprintf(stderr, "DEBUG: name='%s', in_function=%d, param_name='%s'\n", 
+        //         name, in_function, param_name);
+        
+        // 如果是函數參數，目前qd0不支持LOAD_FAST參數，故仍使用LOAD_NAME
+        // (這樣會有作用域問題，但是目前qd0的實現就是這樣)
+        if (in_function && strcmp(name, param_name) == 0) {
+            // fprintf(stderr, "DEBUG: Loading param '%s' as LOAD_NAME (qd0 fallback)\n", name);
+            get_t(res_t, 16);
+            emit("LOAD_NAME", name, "_", res_t);
+        } else if (accept("(")) { // 函數呼叫： factorial(n - 1)
             int argc = 0;
             while (strcmp(token, ")") != 0) {
                 char arg_t[16]; parse_expression(arg_t);
@@ -151,17 +166,39 @@ void parse_expression(char *res_t) {
     parse_or(res_t);
 }
 
-// --- 語句解析器 (Statement Parser) ---
+    // --- 語句解析器 (Statement Parser) ---
 void parse_statement() {
+    // Debug at start of each statement
+    // static int depth = 0;
+    // depth++;
+    // static int last_in_function = 0;
+    // if (depth > 1 && last_in_function == 1 && in_function == 0) {
+    //     fprintf(stderr, "DEBUG: in_function changed 1->0 at depth %d, token='%s'\n", depth, token);
+    // }
+    // last_in_function = in_function;
+    // 
+    // fprintf(stderr, "DEBUG parse_statement: depth=%d, in_function=%d, param_name='%s', token='%s'\n", 
+    //         depth, in_function, param_name, token);
+    
     if (accept("def")) {
         char func_name[64]; strcpy(func_name, token); next_token();
         expect("("); 
         char param[64]; strcpy(param, token); next_token(); // 簡化：只讀取一個參數 n
         expect(")"); expect(":");
         
+        // 設置函數參數追蹤
+        in_function = 1;
+        strcpy(param_name, param);
+        
         emit("LABEL", func_name, "_", "_");
-        // 進入函數本體解析 (以 factorial 為例，主體為一個 if 語句)
-        parse_statement(); 
+        // 進入函數本體解析 - 迴圈解析多個語句
+        while (strcmp(token, "EOF") != 0 && strcmp(token, "def") != 0) {
+            parse_statement(); 
+        }
+        
+        // 重置函數參數追蹤
+        in_function = 0;
+        param_name[0] = '\0';
     } 
     else if (accept("if")) {
         char cond_t[16]; parse_expression(cond_t);
@@ -171,21 +208,58 @@ void parse_statement() {
         get_l(l_else, 16); get_l(l_end, 16);
         emit("BRANCH_IF_FALSE", cond_t, "_", l_else);
         
+        // Save param state before recursive call
+        int saved_in_function = in_function;
+        char saved_param_name[MAX_TOKEN_LEN];
+        strcpy(saved_param_name, param_name);
+        
         parse_statement(); // if 的內容 (return 1)
+        
+        // Restore param state
+        in_function = saved_in_function;
+        strcpy(param_name, saved_param_name);
+        // fprintf(stderr, "DEBUG after if-body: in_function=%d, param_name='%s'\n", in_function, param_name);
         
         emit("JUMP", l_end, "_", "_");
         emit("LABEL", l_else, "_", "_");
         
         if (accept("else")) {
             expect(":");
+            // Save param state before else-body too
+            int saved_in_function2 = in_function;
+            char saved_param_name2[MAX_TOKEN_LEN];
+            strcpy(saved_param_name2, param_name);
+            
             parse_statement(); // else 的內容 (return n * factorial(n - 1))
+            
+            // Restore param state after else-body
+            in_function = saved_in_function2;
+            strcpy(param_name, saved_param_name2);
         }
+        
+        // Restore param state after else
+        in_function = saved_in_function;
+        strcpy(param_name, saved_param_name);
+        // fprintf(stderr, "DEBUG after if-else block: in_function=%d, param_name='%s'\n", in_function, param_name);
+        
         emit("LABEL", l_end, "_", "_");
     } 
     else if (accept("return")) {
+        // Save/restore param state for return expression
+        int saved_in_function = in_function;
+        char saved_param_name[MAX_TOKEN_LEN];
+        strcpy(saved_param_name, param_name);
+        
+        // fprintf(stderr, "DEBUG return: saved in_function=%d, param_name='%s'\n", saved_in_function, param_name);
+        
         char res_t[16]; parse_expression(res_t);
         emit("RETURN", res_t, "_", "_");
-    } 
+        
+        in_function = saved_in_function;
+        strcpy(param_name, saved_param_name);
+        
+        // fprintf(stderr, "DEBUG return done: restored in_function=%d, param_name='%s'\n", in_function, param_name);
+    }
     else {
         // 賦值 (result = ...) 或是 獨立函數呼叫 (print(...))
         char id[MAX_TOKEN_LEN]; strcpy(id, token); next_token();
