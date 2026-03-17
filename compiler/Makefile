@@ -26,7 +26,7 @@ RV0VM = ./rv0/rv0vm
 # 預設行為：編譯所有東西
 all: 
 
-fact:
+fact_rv:
 #	$(RV_CC) $(RV_CFLAGS) -S _data/fact.c -o _data/fact.s
 #	$(RV_CC) $(RV_CFLAGS) -c _data/fact.s -o _data/fact.o
 #	$(RV_OBJDUMP) -h -d _data/fact.o
@@ -39,6 +39,19 @@ fact:
 #	$(RV_OBJDUMP) -h -d _data/fact0.o
 	$(RV0VM) _data/fact0.o
 
+fact:
+#	$(RV_CC) $(RV_CFLAGS) -S _data/fact.c -o _data/fact.s
+#	$(RV_CC) $(RV_CFLAGS) -c _data/fact.s -o _data/fact.o
+#	$(RV_OBJDUMP) -h -d _data/fact.o
+	$(C0C) _data/fact.c -o _data/fact.ll # 是 c0c 和 ll0c 的問題
+	$(HOST_CC) _data/fact.ll -o _data/fact.o
+#	$(LL0C) _data/fact0.ll -o _data/fact0.s 
+#	$(RV_CC) $(RV_CFLAGS) -S _data/fact.c -o _data/fact1.s
+#	$(RV0AS) _data/fact1.s -o _data/fact0.o
+#	$(RV0AS) _data/fact.s -o _data/fact0.o
+#	$(RV0OBJDUMP) _data/fact0.o
+#	$(RV_OBJDUMP) -h -d _data/fact0.o
+#	$(RV0VM) _data/fact0.o
 
 # ==========================================
 # 5. 清理檔案 (Clean)
