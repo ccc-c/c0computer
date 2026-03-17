@@ -23,11 +23,12 @@
 
 1. 用 c0 寫的系統程式，包含
     * tcpip0 堆疊：包含 socket 網路函式庫，接著建構應用 telnet/webserver/...
-    * nn0.c 神經網路後端
+    * nn0.c 神經網路後端，gpt0.c 語言模型
 2. 用 py0 寫的應用程式
     * py0i 解譯器
     * fastapi0 框架
-    * torch0 神經網路前端
+    * nn0.py, gpt0.py 神經網路前端 (會呼叫 nn0.c, gpt0.c)
+    * agent0 代理人（類似 openclaw)
 
 ## 語言與格式
 
@@ -56,7 +57,7 @@
     * [x] [qd0c] -- qd0 轉為 ll0 的編譯器 (C 語言:ccc 用 AI 建構)
     * [x] [qd0lib] -- qd0 的指令呼叫與函式庫 (C 語言:ccc 用 AI 建構)
     * [x] [ll0i] -- ll0 中間碼虛擬機，類似 lli (C 語言:ccc 用 AI 建構)
-    * [ ] [ll0c] -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc (C 語言:ccc 用 AI 建構)
+    * [x] [ll0c] -- 簡化後的 LLVM IR 中間碼組譯器，類似 llc (C 語言:ccc 用 AI 建構)
     * [x] [rv0] 工具鏈 -- 包含 [rv0as.c], [rv0vm.c], [rv0objdump.c] (C語言:ccc 用 AI 建構)
 
 [xv6]:os/xv6
@@ -76,9 +77,9 @@
 [mini-openclaw]:https://gist.github.com/dabit3/86ee04a1c02c839409a02b20fe99a492
 
 * ai -- 人工智慧
-    * [x] [nn] -- 神經網路套件，類似 pytorch.
+    * [x] [nn0] -- 神經網路套件，類似 pytorch.
         * [nn.py](ai/nn/nn.py) + [nn.c](ai/nn/nn.c) :取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C
-    * [x] [llm] -- 語言模型，類似 GPT 
+    * [x] [gpt0] -- 語言模型
         * [gpt.py](ai/llm/gpt.py) + [gpt.c](ai/llm/gpt.c) : 取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C)
-    * [x] [agent] -- 代理人，類似 OpenClaw
+    * [x] [agent0] -- 代理人，類似 OpenClaw
         * [mini-openclaw.c](ai/agent/mini-openclaw.py) :取自 dabit3 [mini-openclaw]
