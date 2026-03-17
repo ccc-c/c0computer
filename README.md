@@ -83,7 +83,8 @@
 
 * tool -- 專案工具
     * [x] [make0] -- 專案建置工具，採用 python 語法寫 make0.py 建置檔 (Python: ccc 用 AI 建構)
-    * [ ] [git0] -- (C語言：構想中)
+    * [x] [git0] -- 版本管理，簡化的 git (C語言: ccc 用 AI 建構)
+    * [x] [pip0] -- 套件安裝，類似 pip (Python: ccc 用 AI 建構)
     * [ ] [docker0] -- (C語言：構想中)
 
 [nn0]:ai/nn0/
