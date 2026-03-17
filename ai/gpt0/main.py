@@ -9,10 +9,10 @@ import sys
 import random
 
 # 讓 import 能找到 nn.py（位於 ../nn/）
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'nn'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'nn0'))
 
-from nn import Adam
-from gpt import Gpt, train, inference
+from nn0 import Adam
+from gpt0 import Gpt, train, inference
 
 random.seed(42)
 

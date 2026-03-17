@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "nn.h"
-#include "gpt.h"
+#include "nn0.h"
+#include "gpt0.h"
 
 #define MAX_DOCS 100000
 #define MAX_VOCAB 10000

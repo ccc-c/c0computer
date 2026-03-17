@@ -1,9 +1,0 @@
-README.md
-pyproject.toml
-src/pcmake/__init__.py
-src/pcmake/main.py
-src/pcmake.egg-info/PKG-INFO
-src/pcmake.egg-info/SOURCES.txt
-src/pcmake.egg-info/dependency_links.txt
-src/pcmake.egg-info/entry_points.txt
-src/pcmake.egg-info/top_level.txt

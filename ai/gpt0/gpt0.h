@@ -1,7 +1,7 @@
 #ifndef GPT_H
 #define GPT_H
 
-#include "nn.h"
+#include "nn0.h"
 
 extern int n_layer;
 extern int n_embd;

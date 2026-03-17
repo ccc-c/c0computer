@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "nn.h"
+#include "nn0.h"
 
 #define MAX_NODES 1000000
 

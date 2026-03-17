@@ -65,28 +65,40 @@
 [xv6-riscv]:https://github.com/mit-pdos/xv6-riscv
 [os0]:os/os0
 [nstack]:https://github.com/jserv/nstack
+[tcpip0]:os/os0/tcpip0/
 
 * os -- 作業系統
     * [x] [xv6] -- 用 c 寫的 RISCV 處理器上之作業系統 (C語言：來自 MIT [xv6-riscv] )
     * [ ] [os0] -- 擴充 [xv6] 的作業系統，支援 [tcpip0] (C語言:融合 jserv [nstack] 專案) 
 
 
-[nn]:ai/nn/
-[llm]:ai/llm/
-[agent]:ai/agent/
+[nn0]:ai/nn0/
+[gpt0]:ai/gpt0/
+[agent0]:ai/agent0/
+[nn0.py]:ai/nn0/nn0.py
+[gpt0.py]:ai/gpt0/gpt0.py
+[nn0.c]:ai/nn0/nn0.c
+[gpt0.c]:ai/gpt0/gpt0.c
+[agent0.py]:ai/agent0/agent0.py
+
 [microgpt]:https://gist.github.com/karpathy/8627fe009c40f57531cb18360106ce95
 [mini-openclaw]:https://gist.github.com/dabit3/86ee04a1c02c839409a02b20fe99a492
 
 * ai -- 人工智慧
     * [x] [nn0] -- 神經網路套件，類似 pytorch.
-        * [nn.py](ai/nn/nn.py) + [nn.c](ai/nn/nn.c) :取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C
+        * [nn0.py] + [nn0.c] :取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C
     * [x] [gpt0] -- 語言模型
-        * [gpt.py](ai/llm/gpt.py) + [gpt.c](ai/llm/gpt.c) : 取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C)
+        * [gpt0.py] + [gpt0.c] : 取自 kaparthy [microgpt] 重新模組化，然後用 AI 重寫為 C)
     * [x] [agent0] -- 代理人，類似 OpenClaw
-        * [mini-openclaw.c](ai/agent/mini-openclaw.py) :取自 dabit3 [mini-openclaw]
+        * [agent0.py] :取自 dabit3 [mini-openclaw]
+
+[telnet0]:web/telnet0/
+[webserver0]:web/webserver0/
+[fastapi0]:web/fastapi0/
+[browser0]:web/browser0/
 
 * web -- 網路相關
-    * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
+    * [x] [telnet0] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
     * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
     * [x] [fastapi0] -- 簡易版網站框架，類似 fastapi (Python:ccc 用 AI 建構)
-    * [ ] [browser0] -- 簡易版瀏覽器 (有點太難吧！)
+

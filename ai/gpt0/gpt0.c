@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "gpt.h"
+#include "gpt0.h"
 
 int n_layer = 1;
 int n_embd = 16;

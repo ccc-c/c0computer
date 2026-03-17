@@ -38,14 +38,8 @@
     * [x] [lisp] -- lisp 語言解譯器 (Python:ccc 用 AI 建構)
     * [x] [prolog] -- prolog 語言解譯器 (Python:ccc 用 AI 建構)
 
-[telnet]:net/telnet/
-[webserver]:net/webserver/
-[tcp/ip stack]:net/tcpip_stack/README.md
-[nstack]:https://github.com/jserv/nstack
+
 
 * tool -- 經典工具
     * [ ] [git0] / [docker0] / ....
-    
-    * [x] [telnet] -- 重新實作 telnet (C語言:ccc 用 AI 建構)
-    * [x] [webserver] -- 簡易 web server (C語言:ccc 用 AI 建構)
 
