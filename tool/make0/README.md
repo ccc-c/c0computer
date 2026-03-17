@@ -1,114 +1,85 @@
 # make0
 
-`make0` 是一個輕量級、跨平台的 C/C++ 專案建置工具。
+**make0** 是一個純 Python 實作的 Makefile 建置工具，完全不依賴系統的 `make`，透過直接呼叫 shell 來執行 recipe。
+
+## 特色
+
+- ✅ 解析標準 Makefile 語法
+- ✅ 變數展開（`=`, `:=`, `?=`, `+=`, `!=`）
+- ✅ 自動變數：`$@`, `$<`, `$^`, `$?`, `$*`, `$+`
+- ✅ `.PHONY` 偽目標
+- ✅ 檔案時間戳記比較（判斷是否需要重建）
+- ✅ Recipe 前綴：`@`（靜音）、`-`（忽略錯誤）、`+`（強制執行）
+- ✅ 內建函式：`wildcard`, `shell`, `notdir`, `dir`, `basename`, `suffix`, `subst`, `patsubst`, `filter`, `strip`, `word`, `words`, `firstword`, `lastword`
+- ✅ `include` 指令
+- ✅ Dry-run 模式 (`-n`)
+- ✅ 彩色輸出
 
 ## 安裝
 
 ```bash
-pip install make0
+chmod +x make0.py
+# 或直接用 python3 執行
+python3 make0.py
 ```
 
-## 使用方法
-
-在專案目錄下建立 
-
-檔案： make0.py
-
-```python
-app = target("ssl_app")
-app.set_kind("binary")
-app.add_files("main.c", "math_utils.c")
-app.add_packages("openssl")
-```
-
-檔案： main.c
-
-```c
-#include <stdio.h>
-#include <string.h>
-#include <openssl/sha.h>  // 由 pmake 的 add_packages("openssl") 處理路徑
-#include "math_utils.h"
-
-int main() {
-    // 1. 測試自定義函式庫
-    int num = 5;
-    printf("--- pmake 跨平台測試 ---\n");
-    printf("數字 %d 的平方是: %d\n", num, square(num));
-
-    // 2. 測試 OpenSSL SHA256
-    const char *data = "Hello make0!";
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-
-    // 呼叫 OpenSSL 函式
-    SHA256((unsigned char*)data, strlen(data), hash);
-
-    printf("字串: \"%s\"\n", data);
-    printf("SHA256 結果: ");
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        printf("%02x", hash[i]);
-    }
-    printf("\n------------------------\n");
-
-    return 0;
-}
+## 用法
 
 ```
+make0 [選項] [target ...]
 
-檔案： math_util.h
-
-```h
-#ifndef MATH_UTILS_H
-#define MATH_UTILS_H
-
-int square(int a);
-
-#endif
+選項:
+  -f FILE       指定 Makefile（預設: Makefile）
+  -n            Dry-run，只印出命令不執行
+  -s            靜音模式，不印出 recipe 命令
+  -p            印出解析後的變數與規則資料庫
+  -l            列出所有 target
+  -C DIR        切換至 DIR 目錄後再執行
+  -e            環境變數覆蓋 Makefile 變數
+  --var VAR=VAL 覆蓋特定變數
 ```
 
-檔案： math_util.c
-
-```c
-#include "math_utils.h"
-
-int square(int a) {
-    return a * a;
-}
-```
-
-然後執行建置：
+## 範例
 
 ```bash
-make0 build
+# 建置預設 target
+python3 make0.py
+
+# 建置多個 targets
+python3 make0.py all clean
+
+# 使用指定 Makefile
+python3 make0.py -f Makefile.demo greet
+
+# Dry-run
+python3 make0.py -n all
+
+# 列出所有 target
+python3 make0.py -l
+
+# 印出解析的資料庫
+python3 make0.py -p
+
+# 覆蓋變數
+python3 make0.py --var CC=clang all
 ```
 
-這樣就會產生
+## Makefile 語法支援
 
-```sh
-(venv) cccuser@cccimacdeiMac hello_make0 % ls -all
-total 104
-drwxr-xr-x@ 8 cccuser  staff    256 Mar 15 17:32 .
-drwxr-xr-x@ 3 cccuser  staff     96 Mar 15 17:32 ..
-drwxr-xr-x@ 4 cccuser  staff    128 Mar 15 17:32 .pmake_cache
--rw-r--r--@ 1 cccuser  staff    752 Mar 15 20:14 main.c
--rw-r--r--@ 1 cccuser  staff     64 Mar 15 16:14 math_utils.c
--rw-r--r--@ 1 cccuser  staff     69 Mar 15 16:01 math_utils.h
--rw-r--r--@ 1 cccuser  staff    195 Mar 15 16:28 make0file
--rwxr-xr-x@ 1 cccuser  staff  33688 Mar 15 17:32 ssl_app
-```
-
-最後你就可以執行
-
-```sh
-(venv) cccuser@cccimacdeiMac hello_make0 % make0    
-🛠️  正在建置目標: ssl_app
-  [CC] main.c
-  [LINK] ssl_app
-✅ 建置成功: ssl_app
-
-(venv) cccuser@cccimacdeiMac hello_make0 % ./ssl_app
---- pmake 跨平台測試 ---
-數字 5 的平方是: 25
-字串: "Hello make0!"
-SHA256 結果: 7125ba4e245a131db68a904342602208aefed07ace1b6ea02a8efff3fb07b6a4
-------------------------
-```
+| 語法 | 說明 |
+|------|------|
+| `VAR = val` | 遞迴展開（lazy） |
+| `VAR := val` | 立即展開 |
+| `VAR ?= val` | 僅在未定義時設定 |
+| `VAR += val` | 附加 |
+| `VAR != cmd` | Shell 命令輸出 |
+| `$(VAR)` | 變數引用 |
+| `$(shell cmd)` | 執行 shell |
+| `$(wildcard *.c)` | 萬用字元 |
+| `.PHONY: t` | 宣告偽目標 |
+| `$@` | 目標名稱 |
+| `$<` | 第一個 prerequisite |
+| `$^` | 所有 prerequisites（去重） |
+| `$?` | 比目標新的 prerequisites |
+| `@cmd` | 靜音執行 |
+| `-cmd` | 忽略錯誤 |
