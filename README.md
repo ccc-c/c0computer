@@ -4,31 +4,31 @@
 
 ## 工具流程
 
-自製 C 語言編譯器 c0c 的使用流程
+自製 C 語言編譯器 [c0c] 的使用流程
 
     c0c fact.c -o fact.ll # 編譯 fact.c 為 fact.ll
     ll0c fact.ll -o fact.o # 將 fact.ll 轉換為 RISC-V 上的目的檔
     rv0vm fact.o # RISC-V 虛擬機 rv0vm 執行 fact.o 
 
-自製 Python 語言編譯器 py0c 的使用流程
+自製 Python 語言編譯器 [py0c] 的使用流程
 
     py0c fact.py -o fact.qd # 編譯 fact.py 為 fact.qd
     qd0c fact.qd -o fact.ll # 轉換 fact.qd 為 fact.ll
     ll0c fact.ll qd0lib.o -o fact.o  # 將 fact.ll 轉換為 RISC-V 上的目的檔（連結 qd0lib.o)
     rv0vm fact.o  # RISC-V 虛擬機 rv0vm 執行 fact.o 
 
-然後我們會將 xv6-riscv 作業系統，修改為 os0
+然後我們會將 [xv6-riscv] 作業系統，修改為 [os0]
 
-有了上述兩個工具，以及 os0 之後，我們就可以在上面建構出
+有了上述兩個工具，以及 [os0] 之後，我們就可以在上面建構出
 
-1. 用 c0 寫的系統程式，包含
-    * tcpip0 堆疊：包含 socket 網路函式庫，接著建構應用 telnet/webserver/...
-    * nn0.c 神經網路後端，gpt0.c 語言模型
-2. 用 py0 寫的應用程式
-    * py0i 解譯器
-    * fastapi0 框架
-    * nn0.py, gpt0.py 神經網路前端 (會呼叫 nn0.c, gpt0.c)
-    * agent0 代理人（類似 openclaw)
+1. 用 [c0] 寫的系統程式，包含
+    * [tcpip0] 堆疊：包含 socket 網路函式庫，接著建構應用 [telnet0] / [webserver0] /...
+    * [nn0.c] 神經網路後端， [gpt0.c] 語言模型
+2. 用 [py0] 寫的應用程式
+    * [py0i] 解譯器
+    * [fastapi0] 框架
+    * [nn0.py], [gpt0.py] 神經網路前端 (會呼叫 [nn0.c], [gpt0.c])
+    * [agent0] 代理人（類似 openclaw)
 
 ## 語言與格式
 
