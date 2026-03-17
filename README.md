@@ -60,7 +60,7 @@
 * compiler -- 編譯器
     * [x] [c0c] -- c0 之編譯器，類似 gcc (C 語言:ccc 用 AI 建構)
     * [x] [py0c] -- py0 之編譯器，輸出 qd 檔案 (C 語言:ccc 用 AI 建構)
-    * [x] [py0i] -- py0 的解譯器，可以直接執行 .py 的檔案 (Python: ccc 用 AI 建構，但先用 [py0c] 編譯為 py0c.o ，交由 [rv0vm] 執行)
+    * [x] [py0i] -- py0 的解譯器，可以直接執行 .py 的檔案 (Python: ccc 用 AI 建構，但先用 [py0c] 編譯為 py0c.o ，交由 rv0vm 執行)
     * [x] [qd0c] -- qd0 轉為 ll0 的編譯器 (C 語言:ccc 用 AI 建構)
     * [x] [qd0lib] -- qd0 的指令呼叫與函式庫 (C 語言:ccc 用 AI 建構)
     * [x] [ll0i] -- ll0 中間碼虛擬機，類似 lli (C 語言:ccc 用 AI 建構)
