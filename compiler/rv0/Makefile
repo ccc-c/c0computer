@@ -1,3 +1,4 @@
+SHELL := /bin/bash -x
 # ==========================================
 # 1. 定義變數與編譯器路徑
 # ==========================================
@@ -53,16 +54,14 @@ rv0vm: rv0vm.c
 
 # 執行 llvm 原生 objdump
 run-dump: rv0objdump fact.o
-	set -x
 	$(RV_OBJDUMP) -h -d fact.o
 	./rv0objdump -h -d fact.o
 
 # 執行自製的 rv0as 並驗證
 run-as: rv0as fact.s rv0objdump
-	set -x
 	$(RV_CC) $(RV_CFLAGS) -c fact.s -o fact.o
 	$(RV_OBJDUMP) -h -d fact.o
-	./rv0as fact.s fact2.o
+	./rv0as fact.s -o fact2.o
 	./rv0objdump -h -d fact2.o
 	./rv0vm fact2.o
 

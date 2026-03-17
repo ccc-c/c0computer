@@ -265,8 +265,8 @@ void write_elf(const char *filename) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 3) {
-        printf("Usage: %s <input.s> <output.o>\n", argv[0]);
+    if (argc == 4 && strcmp(argv[2], "-o")==1) {
+        printf("Usage: %s <input.s> -o <output.o>\n", argv[0]);
         return 1;
     }
 
@@ -290,8 +290,8 @@ int main(int argc, char **argv) {
     fclose(f);
 
     assemble(lines, line_count);
-    write_elf(argv[2]);
-    printf("Successfully assembled %s into %s\n", argv[1], argv[2]);
+    write_elf(argv[3]);
+    printf("Successfully assembled %s into %s\n", argv[1], argv[3]);
 
     return 0;
 }
