@@ -10,7 +10,7 @@ int main() {
     printf("數字 %d 的平方是: %d\n", num, square(num));
 
     // 2. 測試 OpenSSL SHA256
-    const char *data = "Hello Gemini & pmake!";
+    const char *data = "Hello make0!";
     unsigned char hash[SHA256_DIGEST_LENGTH];
 
     // 呼叫 OpenSSL 函式

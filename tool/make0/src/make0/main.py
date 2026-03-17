@@ -187,12 +187,12 @@ def main():
     parser.add_argument("action", choices=["build", "clean"], default="build", nargs="?")
     args = parser.parse_args()
 
-    if not os.path.exists("Pcmakefile"):
-        print("❌ 錯誤: 找不到 Pcmakefile")
+    if not os.path.exists("make0.py"):
+        print("❌ 錯誤: 找不到 make0.py")
         return
 
-    # 執行 Pcmakefile 配置
-    with open("Pcmakefile", "r") as f:
+    # 執行 make0.py 配置
+    with open("make0.py", "r") as f:
         exec(f.read(), globals())
 
     builder = Builder()

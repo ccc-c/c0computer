@@ -1,4 +1,4 @@
-# Pmakefile
+# Makefile0
 app = target("ssl_app")
 app.set_kind("binary")
 app.add_files("main.c", "math_utils.c")

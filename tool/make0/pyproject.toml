@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 # 套件名稱 (使用者用 pip install pcmake 安裝)
-name = "pcmake" 
-version = "0.1.1"
+name = "make0" 
+version = "0.1.0"
 authors =[
-  { name="Your Name", email="your.email@example.com" },
+  { name="ccckmit", email="ccckmit@gmail.com" },
 ]
 description = "A lightweight cross-platform C/C++ build system written in Python."
 readme = "README.md"
@@ -20,4 +20,4 @@ classifiers =[
 
 [project.scripts]
 # 左邊是終端機執行的指令，右邊是對應到 src/pcmake/main.py 裡的 main() 函式
-pcmake = "pcmake.main:main"
+make0 = "make0.main:main"

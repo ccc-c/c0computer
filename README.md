@@ -76,10 +76,11 @@
     * [x] [xv6] -- 在 RISC-V 上移植自 UNIXv6 的作業系統 (C語言：來自 MIT [xv6-riscv] )
     * [ ] [os0] -- 擴充 [xv6] 的作業系統，支援 [tcpip0] (C語言:融合 jserv [nstack] 專案) 
 
-[pcmake]:compiler/pcmake/
+[make0]:tool/make0/
+[git0]:tool/git0/
 
 * tool -- 專案工具
-    * [x] [pcmake] --  (Python:類似 c 工具鏈中的 make，但是用 Python 的想法設計) 
+    * [x] [make0] --  (Python:類似 c 工具鏈中的 make，但是用 Python 的想法設計) 
     * [ ] [git0] -- (C語言：構想中)
     * [ ] [docker0] -- (C語言：構想中)
 
