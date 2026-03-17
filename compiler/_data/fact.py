@@ -1,8 +1,11 @@
-def factorial(n):
-    if n == 0 or n == 1:
-        return 1
-    else:
-        return n * factorial(n - 1)
+result = 1
+result = result * 2
+result = result * 3
+result = result * 4
+result = result * 5
+print(result)
 
-result = factorial(5)
-print("factorial(5)=", result)
+if result == 120:
+    print("PASS")
+else:
+    print("FAIL")

@@ -438,9 +438,34 @@ static void emit_code(void) {
             else if (strcmp(op,"MOD")==0)      fn="qd_mod";
             else if (strcmp(op,"POW")==0)      fn="qd_pow";
             if (fn) {
-                const char *a=emit_val(q->arg1), *b=emit_val(q->arg2);
+                // Fix: emit_val uses static buffer, so we need to load both values BEFORE calling the function
+                // Generate variable names for both args first
+                int id1 = gc++;
+                int id2 = gc++;
+                char a_buf[64], b_buf[64];
+                snprintf(a_buf, sizeof(a_buf), "%%_v%d", id1);
+                snprintf(b_buf, sizeof(b_buf), "%%_v%d", id2);
+                
+                // Now emit the loads for both args using emit_val which will use id1 and id2
+                // But emit_val also increments gc, so we need to call it in a way that works
+                // Actually, let's just emit the loads manually based on the argument names
+                const char *sl1 = slot_get(q->arg1);
+                const char *sl2 = slot_get(q->arg2);
+                if (sl1) {
+                    fprintf(CF,"  %s = load %%QdObj*, %%QdObj** %s\n", a_buf, sl1);
+                } else {
+                    const char *cs1 = emit_cstr(q->arg1);
+                    fprintf(CF,"  %s = call %%QdObj* @qd_env_get(i8* %s)\n", a_buf, cs1);
+                }
+                if (sl2) {
+                    fprintf(CF,"  %s = load %%QdObj*, %%QdObj** %s\n", b_buf, sl2);
+                } else {
+                    const char *cs2 = emit_cstr(q->arg2);
+                    fprintf(CF,"  %s = call %%QdObj* @qd_env_get(i8* %s)\n", b_buf, cs2);
+                }
+                
                 char t[256]; snprintf(t,sizeof(t),"%%_ar%d",NEXT());
-                fprintf(CF,"  %s = call %%QdObj* @%s(%%QdObj* %s, %%QdObj* %s)\n",t,fn,a,b);
+                fprintf(CF,"  %s = call %%QdObj* @%s(%%QdObj* %s, %%QdObj* %s)\n",t,fn,a_buf,b_buf);
                 fprintf(CF,"  store %%QdObj* %s, %%QdObj** %s\n",t,get_slot(q->result));
                 term=0; continue;
             }
@@ -473,18 +498,60 @@ static void emit_code(void) {
             else if (strcmp(op,"CMP_GE")==0) fn="qd_cmp_ge";
             else if (strcmp(op,"CMP_IS")==0) fn="qd_cmp_is";
             if (fn) {
-                const char *a=emit_val(q->arg1), *b=emit_val(q->arg2);
+                // Fix: emit_val uses static buffer
+                int id1 = gc++;
+                int id2 = gc++;
+                char a_buf[64], b_buf[64];
+                snprintf(a_buf, sizeof(a_buf), "%%_v%d", id1);
+                snprintf(b_buf, sizeof(b_buf), "%%_v%d", id2);
+                
+                const char *sl1 = slot_get(q->arg1);
+                const char *sl2 = slot_get(q->arg2);
+                if (sl1) {
+                    fprintf(CF,"  %s = load %%QdObj*, %%QdObj** %s\n", a_buf, sl1);
+                } else {
+                    const char *cs1 = emit_cstr(q->arg1);
+                    fprintf(CF,"  %s = call %%QdObj* @qd_env_get(i8* %s)\n", a_buf, cs1);
+                }
+                if (sl2) {
+                    fprintf(CF,"  %s = load %%QdObj*, %%QdObj** %s\n", b_buf, sl2);
+                } else {
+                    const char *cs2 = emit_cstr(q->arg2);
+                    fprintf(CF,"  %s = call %%QdObj* @qd_env_get(i8* %s)\n", b_buf, cs2);
+                }
+                
                 char t[256]; snprintf(t,sizeof(t),"%%_cm%d",NEXT());
-                fprintf(CF,"  %s = call %%QdObj* @%s(%%QdObj* %s, %%QdObj* %s)\n",t,fn,a,b);
+                fprintf(CF,"  %s = call %%QdObj* @%s(%%QdObj* %s, %%QdObj* %s)\n",t,fn,a_buf,b_buf);
                 fprintf(CF,"  store %%QdObj* %s, %%QdObj** %s\n",t,get_slot(q->result));
                 term=0; continue;
             }
             if (strcmp(op,"CMP_IS_NOT")==0) {
-                const char *a=emit_val(q->arg1), *b=emit_val(q->arg2);
+                // Fix: emit_val uses static buffer
+                int id1 = gc++;
+                int id2 = gc++;
+                char a_buf[64], b_buf[64];
+                snprintf(a_buf, sizeof(a_buf), "%%_v%d", id1);
+                snprintf(b_buf, sizeof(b_buf), "%%_v%d", id2);
+                
+                const char *sl1 = slot_get(q->arg1);
+                const char *sl2 = slot_get(q->arg2);
+                if (sl1) {
+                    fprintf(CF,"  %s = load %%QdObj*, %%QdObj** %s\n", a_buf, sl1);
+                } else {
+                    const char *cs1 = emit_cstr(q->arg1);
+                    fprintf(CF,"  %s = call %%QdObj* @qd_env_get(i8* %s)\n", a_buf, cs1);
+                }
+                if (sl2) {
+                    fprintf(CF,"  %s = load %%QdObj*, %%QdObj** %s\n", b_buf, sl2);
+                } else {
+                    const char *cs2 = emit_cstr(q->arg2);
+                    fprintf(CF,"  %s = call %%QdObj* @qd_env_get(i8* %s)\n", b_buf, cs2);
+                }
+                
                 char t1[256],t2[256];
                 snprintf(t1,sizeof(t1),"%%_ci%d",NEXT());
                 snprintf(t2,sizeof(t2),"%%_cn%d",NEXT());
-                fprintf(CF,"  %s = call %%QdObj* @qd_cmp_is(%%QdObj* %s, %%QdObj* %s)\n",t1,a,b);
+                fprintf(CF,"  %s = call %%QdObj* @qd_cmp_is(%%QdObj* %s, %%QdObj* %s)\n",t1,a_buf,b_buf);
                 fprintf(CF,"  %s = call %%QdObj* @qd_not(%%QdObj* %s)\n",t2,t1);
                 fprintf(CF,"  store %%QdObj* %s, %%QdObj** %s\n",t2,get_slot(q->result));
                 term=0; continue;
@@ -752,7 +819,7 @@ int main(int argc, char *argv[]) {
     CF = tmp;
 
     /* 輸出 alloca slots（函式入口） */
-    fprintf(CF,"define i32 @main() {\nentry:\n");
+    fprintf(CF,"define %%QdObj* @main() {\nentry:\n");
     fprintf(CF,"  call void @qd_env_init()\n\n");
 
     /* alloca 所有 slot */
@@ -774,7 +841,7 @@ int main(int argc, char *argv[]) {
     emit_code();
 
     /* 結尾 */
-    fprintf(CF,"\n  ret i32 0\n}\n");
+    fprintf(CF,"\n  ret %%QdObj* zeroinitializer\n}\n");
 
     /* ---- 組合最終輸出 ---- */
     FILE *fout = fopen(outp, "w");
