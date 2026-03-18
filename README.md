@@ -83,7 +83,7 @@ rv0vm fact.o  # RISC-V 虛擬機 rv0vm 執行 fact.o
 
 * os -- 作業系統
     * [x] [xv6] -- 在 RISC-V 上移植自 UNIXv6 的作業系統 (C語言：來自 MIT [xv6-riscv] )
-    * [ ] [os0] -- 構想中，擴充自 [xv6]，支援 [tcpip0] (C語言:融合 jserv [nstack] 專案) 
+    * [x] [os0] -- 擴充自 [xv6]，支援 [tcpip0] (C 語言:ccc 用 AI 建構， OpenCode+BigPickle) 
 
 [make0]:tool/make0/
 [git0]:tool/git0/
