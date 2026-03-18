@@ -216,12 +216,14 @@ virtio_net_write(struct net_device *dev, const uint8_t *data, size_t len)
         return -1;
     }
 
+    intr_off();
     acquire(&nic->lock);
 
     // Allocate descriptor
     idx = virtq_alloc_desc(&nic->tx_q);
     if (idx == -1) {
         release(&nic->lock);
+        intr_on();
         return -1;
     }
 
@@ -250,6 +252,7 @@ virtio_net_write(struct net_device *dev, const uint8_t *data, size_t len)
     __sync_synchronize();
 
     release(&nic->lock);
+    intr_on();
 
     // Notify the device of a new TX packet.
     *R(VIRTIO_MMIO_QUEUE_NOTIFY) = TXQ;
@@ -291,6 +294,10 @@ virtio_net_intr(void)
 {
     struct virtio_net *nic = &_nic0;
 
+    if(nic->dev == 0)
+        return;
+
+    push_off();
     acquire(&nic->lock);
 
     // Acknowledge the interrupt and clear the status by writing it back.
@@ -336,61 +343,46 @@ virtio_net_init(void)
     struct virtio_net *nic = &_nic0;
     uint8_t addr[6];
     struct net_device *dev;
-    char mac[ETHER_ADDR_STR_LEN];
 
     initlock(&nic->lock, "virtio-net");
 
-    // find virtio-net device
     if (*R(VIRTIO_MMIO_MAGIC_VALUE) != 0x74726976 ||
         *R(VIRTIO_MMIO_VERSION) != 2 ||
-        *R(VIRTIO_MMIO_DEVICE_ID) != 1 || // network device
+        *R(VIRTIO_MMIO_DEVICE_ID) != 1 ||
         *R(VIRTIO_MMIO_VENDOR_ID) != 0x554d4551){
         panic("virtio-net: device not found");
     }
 
-    debugf("device found");
-
-    // reset device
     nic->status = 0;
     *R(VIRTIO_MMIO_STATUS) = nic->status;
 
-    // set ACKNOWLEDGE status bit
     nic->status |= VIRTIO_CONFIG_S_ACKNOWLEDGE;
     *R(VIRTIO_MMIO_STATUS) = nic->status;
 
-    // set DRIVER status bit
     nic->status |= VIRTIO_CONFIG_S_DRIVER;
     *R(VIRTIO_MMIO_STATUS) = nic->status;
 
-    // negotiate features
     nic->features = *R(VIRTIO_MMIO_DEVICE_FEATURES);
     nic->features &= ~(1ULL << VIRTIO_RING_F_EVENT_IDX);
     nic->features &= ~(1ULL << VIRTIO_NET_F_CSUM);
     nic->features |= (1ULL << VIRTIO_NET_F_GUEST_CSUM);
     *R(VIRTIO_MMIO_DRIVER_FEATURES) = nic->features;
 
-    // tell device that feature negotiation is complete.
     nic->status |= VIRTIO_CONFIG_S_FEATURES_OK;
     *R(VIRTIO_MMIO_STATUS) = nic->status;
 
-    // re-read status to ensure FEATURES_OK is set.
     if (!(*R(VIRTIO_MMIO_STATUS) & VIRTIO_CONFIG_S_FEATURES_OK)) {
         panic("virtio-net: FEATURES_OK failed");
     }
 
-    // read MAC address
     if (nic->features & (1 << VIRTIO_NET_F_MAC)) {
         for (int i = 0; i < 6; i++) {
             addr[i] = *(volatile uint8_t *)((uint64)(VIRTIO1 + VIRTIO_MMIO_CONFIG + i));
         }
-    } else {
-        debugf("device does not provide a MAC address");
     }
 
-    // initialize TXQ
     virtq_init(&nic->tx_q, TXQ, QSIZE);
 
-    // initialize RXQ
     virtq_init(&nic->rx_q, RXQ, QSIZE);
     for (int i = 0; i < QSIZE; i++) {
         nic->rx_q.desc[i].addr = (uint64_t)nic->rx_bufs[i];
@@ -402,14 +394,11 @@ virtio_net_init(void)
     __sync_synchronize();
     nic->rx_q.avail->idx = QSIZE;
 
-    // tell device we're completely ready.
     nic->status |= VIRTIO_CONFIG_S_DRIVER_OK;
     *R(VIRTIO_MMIO_STATUS) = nic->status;
 
-    // setup device driver structure
     dev = net_device_alloc();
     if (!dev) {
-        errorf("net_device_alloc() failure");
         return;
     }
     ether_setup_helper(dev);
@@ -417,11 +406,8 @@ virtio_net_init(void)
     dev->priv = nic;
     dev->ops = &virtio_net_ops;
     if (net_device_register(dev) == -1) {
-        errorf("net_device_register() failure");
         memory_free(dev);
         return;
     }
     nic->dev = dev;
-
-    debugf("initialized, addr=%s", ether_addr_ntop(dev->addr, mac, sizeof(mac)));
 }

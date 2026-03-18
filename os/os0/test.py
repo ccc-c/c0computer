@@ -18,11 +18,14 @@ args = parser.parse_args()
 
 class QEMU(object):
 
-    def __init__(self, reset=False):
+    def __init__(self, reset=False, net=False):
         if reset:
             self.build_xv6()
             self.reset_fs()
-        q = ["make", "qemu"]
+        if net:
+            q = ["make", "qemu-net"]
+        else:
+            q = ["make", "qemu"]
         self.proc = subprocess.Popen(q, stdin=subprocess.PIPE,
                                       stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT)
@@ -201,76 +204,135 @@ def test_usertests(test=""):
     q.stop()
 
 def test_tcpecho():
-    print("Test tcpecho server starts correctly")
-    q = QEMU(True)
+    print("Test TCP echo server responds to request")
+    q = QEMU(True, net=True)
     time.sleep(2)
     q.cmd("tcpecho\n")
-    time.sleep(2)
+    time.sleep(3)
     q.read()
     ok, _ = q.match('Starting TCP Echo Server', exit=False)
     if not ok:
         ok, _ = q.match('socket: success', exit=False)
-    q.stop()
-    if ok:
-        print("OK")
-    else:
-        print("FAIL")
+    if not ok:
+        q.stop()
+        print("FAIL: tcpecho did not start")
         sys.exit(1)
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect(("localhost", 7))
+        test_msg = b"Hello TCP"
+        s.sendall(test_msg)
+        data = s.recv(256)
+        s.close()
+        if data == test_msg:
+            print("OK")
+        else:
+            print(f"FAIL: expected {test_msg}, got {data}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"FAIL: {e}")
+        sys.exit(1)
+    q.stop()
 
 def test_udpecho():
-    print("Test udpecho server starts correctly")
-    q = QEMU(True)
+    print("Test UDP echo server responds to request")
+    q = QEMU(True, net=True)
     time.sleep(2)
     q.cmd("udpecho\n")
-    time.sleep(2)
+    time.sleep(3)
     q.read()
     ok, _ = q.match('Starting UDP Echo Server', exit=False)
     if not ok:
         ok, _ = q.match('socket: success', exit=False)
-    q.stop()
-    if ok:
-        print("OK")
-    else:
-        print("FAIL")
+    if not ok:
+        q.stop()
+        print("FAIL: udpecho did not start")
         sys.exit(1)
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(5)
+        test_msg = b"Hello UDP"
+        s.sendto(test_msg, ("localhost", 7))
+        data, addr = s.recvfrom(256)
+        s.close()
+        if data == test_msg:
+            print("OK")
+        else:
+            print(f"FAIL: expected {test_msg}, got {data}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"FAIL: {e}")
+        sys.exit(1)
+    q.stop()
 
 def test_httpd():
-    print("Test httpd server starts correctly")
-    q = QEMU(True)
+    print("Test HTTP server responds to request")
+    q = QEMU(True, net=True)
     time.sleep(2)
     q.cmd("httpd\n")
-    time.sleep(2)
+    time.sleep(3)
     q.read()
     ok, _ = q.match('HTTP Server', exit=False)
     if not ok:
         ok, _ = q.match('starting', exit=False)
-    q.stop()
-    if ok:
-        print("OK")
-    else:
-        print("FAIL")
+    if not ok:
+        print("QEMU output:")
+        print(q.output)
+        q.stop()
+        print("FAIL: httpd did not start")
         sys.exit(1)
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen("http://localhost:18080/", timeout=5)
+        content = resp.read().decode('utf-8')
+        if "xv6" in content:
+            print("OK")
+        else:
+            print("FAIL: unexpected response")
+            sys.exit(1)
+    except Exception as e:
+        print(f"FAIL: {e}")
+        sys.exit(1)
+    q.stop()
 
 def test_telnetd():
-    print("Test telnetd server starts correctly")
-    q = QEMU(True)
+    print("Test telnetd server accepts connection")
+    q = QEMU(True, net=True)
     time.sleep(2)
     q.cmd("telnetd\n")
-    time.sleep(2)
+    time.sleep(3)
     q.read()
     ok, _ = q.match('Telnet Server', exit=False)
     if not ok:
         ok, _ = q.match('starting', exit=False)
-    q.stop()
-    if ok:
-        print("OK")
-    else:
-        print("FAIL")
+    if not ok:
+        q.stop()
+        print("FAIL: telnetd did not start")
         sys.exit(1)
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect(("localhost", 12323))
+        s.sendall(b"\r\n")
+        data = s.recv(256)
+        s.close()
+        if data:
+            print("OK")
+        else:
+            print("FAIL: no data received")
+            sys.exit(1)
+    except Exception as e:
+        print(f"FAIL: {e}")
+        sys.exit(1)
+    q.stop()
 
 def test_ping():
-    print("Test ping program starts correctly")
-    q = QEMU(True)
+    print("Test ping program shows usage")
+    q = QEMU(True, net=True)
     time.sleep(2)
     q.cmd("ping\n")
     time.sleep(2)
@@ -284,8 +346,8 @@ def test_ping():
         sys.exit(1)
 
 def test_curl():
-    print("Test curl program starts correctly")
-    q = QEMU(True)
+    print("Test curl program shows usage")
+    q = QEMU(True, net=True)
     time.sleep(2)
     q.cmd("curl\n")
     time.sleep(2)
@@ -299,8 +361,8 @@ def test_curl():
         sys.exit(1)
 
 def test_telnet():
-    print("Test telnet client starts correctly")
-    q = QEMU(True)
+    print("Test telnet client shows usage")
+    q = QEMU(True, net=True)
     time.sleep(2)
     q.cmd("telnet\n")
     time.sleep(2)

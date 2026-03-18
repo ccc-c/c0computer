@@ -28,6 +28,13 @@ main()
     iinit();         // inode table
     fileinit();      // file table
     virtio_disk_init(); // emulated hard disk
+    printf("calling netinit\n");
+    netinit();         // initialize network stack
+    printf("calling virtio_net_init\n");
+    virtio_net_init();  // emulated network device
+    printf("calling netrun\n");
+    netrun();          // start network
+    printf("done net init\n");
     userinit();      // first user process
     __sync_synchronize();
     started = 1;

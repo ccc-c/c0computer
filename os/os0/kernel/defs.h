@@ -193,6 +193,14 @@ void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
+// virtio_net.c
+void            virtio_net_init(void);
+void            virtio_net_intr(void);
+
+// net.c
+void            netinit(void);
+void            netrun(void);
+
 // socket.c
 struct file *   socket_alloc(int, int, int);
 int             socket_close(struct socket*);

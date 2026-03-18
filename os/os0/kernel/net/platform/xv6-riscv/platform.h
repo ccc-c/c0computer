@@ -42,7 +42,7 @@ memory_free(void *ptr)
 
 typedef struct spinlock mutex_t;
 
-#define MUTEX_INITIALIZER {0}
+#define MUTEX_INITIALIZER {0, 0, 0}
 
 static inline int
 mutex_init(mutex_t *mutex)

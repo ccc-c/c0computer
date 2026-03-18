@@ -196,6 +196,13 @@ QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 #QEMUOPTS += -netdev tap,ifname=$(TAPDEV),id=en0
 #QEMUOPTS += -device virtio-net-device,netdev=en0,csum=off,gso=off,guest_csum=off,bus=virtio-mmio-bus.1
 
+QEMUOPTS_NET = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
+QEMUOPTS_NET += -global virtio-mmio.force-legacy=false
+QEMUOPTS_NET += -drive file=fs.img,if=none,format=raw,id=x0
+QEMUOPTS_NET += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+QEMUOPTS_NET += -netdev user,id=en0,hostfwd=tcp::18081-:80,hostfwd=tcp::12325-:23,hostfwd=tcp::12324-:22
+QEMUOPTS_NET += -device virtio-net-device,netdev=en0,bus=virtio-mmio-bus.1
+
 TAPDEV=tap0
 TAPADDR=192.0.2.1/24
 
@@ -210,6 +217,9 @@ tap:
 
 qemu: check-qemu-version $K/kernel fs.img
 	$(QEMU) $(QEMUOPTS)
+
+qemu-net: check-qemu-version $K/kernel fs.img
+	$(QEMU) $(QEMUOPTS_NET)
 
 .gdbinit: .gdbinit.tmpl-riscv
 	sed "s/:1234/:$(GDBPORT)/" < $^ > $@
