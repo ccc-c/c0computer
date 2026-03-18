@@ -88,6 +88,8 @@ rv0vm fact.o  # RISC-V 虛擬機 rv0vm 執行 fact.o
 [make0]:tool/make0/
 [git0]:tool/git0/
 [docker0]:tool/docker0/
+[pip0]:tool/pip0/
+[vi0]:tool/vi0/
 
 * tool -- 專案工具
     * [x] [make0] -- 專案建置工具，類似 GNU make (Python: ccc 用 AI 建構)
