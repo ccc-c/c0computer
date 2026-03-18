@@ -51,22 +51,74 @@ void decode_riscv(uint32_t inst) {
     switch (opcode) {
         case 0x13: // OP-IMM
             if (funct3 == 0) printf("addi\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
+            else if (funct3 == 1) printf("slli\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i & 0x1F);
+            else if (funct3 == 2) printf("slti\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
+            else if (funct3 == 3) printf("sltiu\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
+            else if (funct3 == 4) printf("xori\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
+            else if (funct3 == 5 && (imm_i & 0x1000)) printf("srai\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i & 0x1F);
+            else if (funct3 == 5) printf("srli\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i & 0x1F);
+            else if (funct3 == 6) printf("ori\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
+            else if (funct3 == 7) printf("andi\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
             else printf("op-imm\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
+            break;
+        case 0x1B: // OP-IMM-32
+            if (funct3 == 0) printf("addiw\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
+            else if (funct3 == 1) printf("slliw\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i & 0x1F);
+            else if (funct3 == 5 && (imm_i & 0x1000)) printf("sraiw\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i & 0x1F);
+            else if (funct3 == 5) printf("srliw\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i & 0x1F);
+            else printf("op-imm-32\t%s, %s, %d\n", reg_names[rd], reg_names[rs1], imm_i);
             break;
         case 0x33: // OP
             if (funct3 == 0 && funct7 == 0) printf("add \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
             else if (funct3 == 0 && funct7 == 0x20) printf("sub \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 1) printf("mul \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 2) printf("mulh\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 3) printf("mulhsu\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 4) printf("mulhu\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 5) printf("div \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 6) printf("divu\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 7) printf("rem \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 8) printf("remu\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 1 && funct7 == 0) printf("sll \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 2 && funct7 == 0) printf("slt \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 3 && funct7 == 0) printf("sltu\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 4 && funct7 == 0) printf("xor \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 5 && funct7 == 0) printf("srl \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 5 && funct7 == 0x20) printf("sra \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 6 && funct7 == 0) printf("or  \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 7 && funct7 == 0) printf("and \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
             else printf("op  \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
             break;
+        case 0x3B: // OP-32
+            if (funct3 == 0 && funct7 == 0) printf("addw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 0x20) printf("subw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 1) printf("mulw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 5) printf("divw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 6) printf("divuw\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 7) printf("remw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 0 && funct7 == 8) printf("remuw\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 1 && funct7 == 0) printf("sllw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 5 && funct7 == 0) printf("srlw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else if (funct3 == 5 && funct7 == 0x20) printf("sraw \t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            else printf("op-32\t%s, %s, %s\n", reg_names[rd], reg_names[rs1], reg_names[rs2]);
+            break;
         case 0x03: // LOAD
-            if (funct3 == 2) printf("lw  \t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
+            if (funct3 == 0) printf("lb  \t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
+            else if (funct3 == 1) printf("lh  \t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
+            else if (funct3 == 2) printf("lw  \t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
+            else if (funct3 == 3) printf("ld  \t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
+            else if (funct3 == 4) printf("lbu \t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
+            else if (funct3 == 5) printf("lhu \t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
             else printf("load\t%s, %d(%s)\n", reg_names[rd], imm_i, reg_names[rs1]);
             break;
         case 0x23: // STORE
             {
                 int32_t imm_s = ((inst >> 25) << 5) | ((inst >> 7) & 0x1F);
                 imm_s = (imm_s << 20) >> 20; // sign extension
-                if (funct3 == 2) printf("sw  \t%s, %d(%s)\n", reg_names[rs2], imm_s, reg_names[rs1]);
+                if (funct3 == 0) printf("sb  \t%s, %d(%s)\n", reg_names[rs2], imm_s, reg_names[rs1]);
+                else if (funct3 == 1) printf("sh  \t%s, %d(%s)\n", reg_names[rs2], imm_s, reg_names[rs1]);
+                else if (funct3 == 2) printf("sw  \t%s, %d(%s)\n", reg_names[rs2], imm_s, reg_names[rs1]);
+                else if (funct3 == 3) printf("sd  \t%s, %d(%s)\n", reg_names[rs2], imm_s, reg_names[rs1]);
                 else printf("store\t%s, %d(%s)\n", reg_names[rs2], imm_s, reg_names[rs1]);
             }
             break;

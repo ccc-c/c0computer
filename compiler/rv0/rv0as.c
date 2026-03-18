@@ -143,6 +143,53 @@ void assemble(char lines[][256], int line_count) {
         else if (strcmp(mnem, "sllw") == 0) inst = enc_R(0x3b, 1, 0, get_reg(op1), get_reg(op2), get_reg(op3));
         else if (strcmp(mnem, "srlw") == 0) inst = enc_R(0x3b, 5, 0, get_reg(op1), get_reg(op2), get_reg(op3));
         else if (strcmp(mnem, "sraw") == 0) inst = enc_R(0x3b, 5, 0x20, get_reg(op1), get_reg(op2), get_reg(op3));
+        
+        // RV64I 乘法指令
+        else if (strcmp(mnem, "mul") == 0) inst = enc_R(0x33, 0, 1, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "mulh") == 0) inst = enc_R(0x33, 0, 2, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "mulhsu") == 0) inst = enc_R(0x33, 0, 3, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "mulhu") == 0) inst = enc_R(0x33, 0, 4, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "mulw") == 0) inst = enc_R(0x3b, 0, 1, get_reg(op1), get_reg(op2), get_reg(op3));
+        
+        // RV64I 除法指令
+        else if (strcmp(mnem, "div") == 0) inst = enc_R(0x33, 0, 5, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "divu") == 0) inst = enc_R(0x33, 0, 6, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "divw") == 0) inst = enc_R(0x3b, 0, 5, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "divuw") == 0) inst = enc_R(0x3b, 0, 6, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "rem") == 0) inst = enc_R(0x33, 0, 7, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "remu") == 0) inst = enc_R(0x33, 0, 8, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "remw") == 0) inst = enc_R(0x3b, 0, 7, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "remuw") == 0) inst = enc_R(0x3b, 0, 8, get_reg(op1), get_reg(op2), get_reg(op3));
+        
+        // RV64I 邏輯指令
+        else if (strcmp(mnem, "and") == 0) inst = enc_R(0x33, 7, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "or") == 0) inst = enc_R(0x33, 6, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "xor") == 0) inst = enc_R(0x33, 4, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        
+        // RV64I 比較指令
+        else if (strcmp(mnem, "slt") == 0) inst = enc_R(0x33, 2, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "sltu") == 0) inst = enc_R(0x33, 3, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        
+        // RV64I I-type 立即數版本
+        else if (strcmp(mnem, "andi") == 0) inst = enc_I(0x13, 7, get_reg(op1), get_reg(op2), atoi(op3));
+        else if (strcmp(mnem, "ori") == 0) inst = enc_I(0x13, 6, get_reg(op1), get_reg(op2), atoi(op3));
+        else if (strcmp(mnem, "xori") == 0) inst = enc_I(0x13, 4, get_reg(op1), get_reg(op2), atoi(op3));
+        else if (strcmp(mnem, "slti") == 0) inst = enc_I(0x13, 2, get_reg(op1), get_reg(op2), atoi(op3));
+        else if (strcmp(mnem, "sltiu") == 0) inst = enc_I(0x13, 3, get_reg(op1), get_reg(op2), atoi(op3));
+        
+        // RV64I 載入指令 (lb, lbu, lh, lhu)
+        else if (strcmp(mnem, "lb") == 0) inst = enc_I(0x03, 0, get_reg(op1), get_reg(op2), mem_imm);
+        else if (strcmp(mnem, "lbu") == 0) inst = enc_I(0x03, 4, get_reg(op1), get_reg(op2), mem_imm);
+        else if (strcmp(mnem, "lh") == 0) inst = enc_I(0x03, 1, get_reg(op1), get_reg(op2), mem_imm);
+        else if (strcmp(mnem, "lhu") == 0) inst = enc_I(0x03, 5, get_reg(op1), get_reg(op2), mem_imm);
+        
+        // RV64I 儲存指令 (sb, sh)
+        else if (strcmp(mnem, "sb") == 0) inst = enc_S(0x23, 0, get_reg(op2), get_reg(op1), mem_imm);
+        else if (strcmp(mnem, "sh") == 0) inst = enc_S(0x23, 1, get_reg(op2), get_reg(op1), mem_imm);
+        
+        // LUI 和 AUIPC
+        else if (strcmp(mnem, "lui") == 0) inst = enc_U(0x37, get_reg(op1), atoi(op2));
+        
         // ... 前面的 addi, lw, sw, mul 等等保留 ...
         else if (strcmp(mnem, "beq") == 0) inst = enc_B(0x63, 0, get_reg(op1), get_reg(op2), resolve_label(op3) - pc);
         else if (strcmp(mnem, "bne") == 0) inst = enc_B(0x63, 1, get_reg(op1), get_reg(op2), resolve_label(op3) - pc);

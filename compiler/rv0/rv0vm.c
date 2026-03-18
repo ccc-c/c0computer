@@ -174,8 +174,13 @@ int main(int argc, char **argv) {
         uint64_t next_pc = PC + 4;
         
         switch (opcode) {
-            case 0x13: // OP-IMM (addi)
-                if (f3 == 0) X[rd] = X[rs1] + imm_i;
+            case 0x13: // OP-IMM (addi, andi, ori, xori, slti, sltiu)
+                if (f3 == 0) X[rd] = X[rs1] + imm_i; // addi
+                else if (f3 == 7) X[rd] = X[rs1] & imm_i; // andi
+                else if (f3 == 6) X[rd] = X[rs1] | imm_i; // ori
+                else if (f3 == 4) X[rd] = X[rs1] ^ imm_i; // xori
+                else if (f3 == 2) X[rd] = ((int64_t)X[rs1] < (int64_t)imm_i) ? 1 : 0; // slti
+                else if (f3 == 3) X[rd] = (X[rs1] < (uint64_t)(uint32_t)imm_i) ? 1 : 0; // sltiu
                 break;
             case 0x1B: // OP-IMM-32 (addiw, slli, srli, srai)
                 if (f3 == 0) X[rd] = (int32_t)(X[rs1] + imm_i);       // addiw
@@ -183,20 +188,57 @@ int main(int argc, char **argv) {
                 else if (f3 == 5 && (imm_i & 0x1000)) X[rd] = (int32_t)X[rs1] >> (imm_i & 0x1F); // sraiw
                 else if (f3 == 5) X[rd] = (uint32_t)(X[rs1] >> (imm_i & 0x1F)); // srliw
                 break;
-            case 0x33: // OP (add, mul, sub, sll, srl, sra)
+            case 0x33: // OP (add, mul, sub, sll, srl, sra, and, or, xor, slt, sltu, div, rem, mulh, mulhsu, mulhu)
                 if (f3 == 0 && f7 == 0) X[rd] = X[rs1] + X[rs2];       // add
                 else if (f3 == 0 && f7 == 1) X[rd] = X[rs1] * X[rs2]; // mul
                 else if (f3 == 0 && f7 == 0x20) X[rd] = X[rs1] - X[rs2]; // sub
                 else if (f3 == 1 && f7 == 0) X[rd] = X[rs1] << (X[rs2] & 0x3F); // sll
                 else if (f3 == 5 && f7 == 0) X[rd] = X[rs1] >> (X[rs2] & 0x3F); // srl
                 else if (f3 == 5 && f7 == 0x20) X[rd] = (int64_t)X[rs1] >> (X[rs2] & 0x3F); // sra
+                else if (f3 == 7 && f7 == 0) X[rd] = X[rs1] & X[rs2]; // and
+                else if (f3 == 6 && f7 == 0) X[rd] = X[rs1] | X[rs2]; // or
+                else if (f3 == 4 && f7 == 0) X[rd] = X[rs1] ^ X[rs2]; // xor
+                else if (f3 == 2 && f7 == 0) X[rd] = ((int64_t)X[rs1] < (int64_t)X[rs2]) ? 1 : 0; // slt
+                else if (f3 == 3 && f7 == 0) X[rd] = (X[rs1] < X[rs2]) ? 1 : 0; // sltu
+                else if (f3 == 0 && f7 == 5) X[rd] = (X[rs2] != 0) ? (X[rs1] / X[rs2]) : -1; // div
+                else if (f3 == 0 && f7 == 6) X[rd] = (X[rs2] != 0) ? (X[rs1] / X[rs2]) : 0xFFFFFFFFFFFFFFFF; // divu
+                else if (f3 == 0 && f7 == 7) X[rd] = (X[rs2] != 0) ? (X[rs1] % X[rs2]) : X[rs1]; // rem
+                else if (f3 == 0 && f7 == 8) X[rd] = (X[rs2] != 0) ? (X[rs1] % X[rs2]) : X[rs1]; // remu
+                else if (f3 == 0 && f7 == 2) { // mulh (signed * signed)
+                    __int128 result = (__int128)(int64_t)X[rs1] * (__int128)(int64_t)X[rs2];
+                    X[rd] = (int64_t)(result >> 64);
+                } else if (f3 == 0 && f7 == 3) { // mulhsu (signed * unsigned)
+                    __int128 result = (__int128)(int64_t)X[rs1] * (__int128)X[rs2];
+                    X[rd] = (int64_t)(result >> 64);
+                } else if (f3 == 0 && f7 == 4) { // mulhu (unsigned * unsigned)
+                    __uint128_t result = (__uint128_t)X[rs1] * (__uint128_t)X[rs2];
+                    X[rd] = (int64_t)(result >> 64);
+                }
                 break;
-            case 0x3B: // OP-32 (addw, subw, sllw, srlw, sraw)
+            case 0x3B: // OP-32 (addw, subw, mulw, divw, divuw, remw, remuw, sllw, srlw, sraw)
                 if (f3 == 0 && f7 == 0) X[rd] = (int32_t)(X[rs1] + X[rs2]);       // addw
                 else if (f3 == 0 && f7 == 0x20) X[rd] = (int32_t)(X[rs1] - X[rs2]); // subw
+                else if (f3 == 0 && f7 == 1) X[rd] = (int32_t)(X[rs1] * X[rs2]); // mulw
                 else if (f3 == 1 && f7 == 0) X[rd] = (int32_t)(X[rs1] << (X[rs2] & 0x1F)); // sllw
                 else if (f3 == 5 && f7 == 0) X[rd] = (uint32_t)(X[rs1] >> (X[rs2] & 0x1F)); // srlw
                 else if (f3 == 5 && f7 == 0x20) X[rd] = (int32_t)X[rs1] >> (X[rs2] & 0x1F); // sraw
+                else if (f3 == 0 && f7 == 5) { // divw
+                    int32_t a = (int32_t)X[rs1];
+                    int32_t b = (int32_t)X[rs2];
+                    X[rd] = (b != 0) ? (a / b) : -1;
+                } else if (f3 == 0 && f7 == 6) { // divuw
+                    uint32_t a = (uint32_t)X[rs1];
+                    uint32_t b = (uint32_t)X[rs2];
+                    X[rd] = (b != 0) ? (a / b) : 0xFFFFFFFF;
+                } else if (f3 == 0 && f7 == 7) { // remw
+                    int32_t a = (int32_t)X[rs1];
+                    int32_t b = (int32_t)X[rs2];
+                    X[rd] = (b != 0) ? (a % b) : a;
+                } else if (f3 == 0 && f7 == 8) { // remuw
+                    uint32_t a = (uint32_t)X[rs1];
+                    uint32_t b = (uint32_t)X[rs2];
+                    X[rd] = (b != 0) ? (a % b) : a;
+                }
                 break;
             case 0x67: // JALR (ret)
                 PC = (X[rs1] + imm_i) & ~1ULL;
@@ -234,15 +276,22 @@ case 0x63: // BRANCH 完整版
             case 0x17: // AUIPC (call)
                 X[rd] = PC + (int32_t)(inst & 0xFFFFF000);
                 break;
-            case 0x03: // LOAD (lw, ld)
+            case 0x37: // LUI
+                X[rd] = (int32_t)(inst & 0xFFFFF000);
+                break;
+            case 0x03: // LOAD (lw, ld, lb, lbu, lh, lhu)
                 {
                     uint64_t addr = X[rs1] + imm_i;
                     if (addr >= RAM_SIZE) { printf("Memory Read Fault\n"); goto end; }
                     if (f3 == 2) X[rd] = (int32_t)(*(uint32_t*)(RAM + addr)); // lw
                     else if (f3 == 3) X[rd] = *(int64_t*)(RAM + addr);        // ld
+                    else if (f3 == 0) X[rd] = (int8_t)(*(int8_t*)(RAM + addr)); // lb
+                    else if (f3 == 4) X[rd] = *(uint8_t*)(RAM + addr); // lbu
+                    else if (f3 == 1) X[rd] = (int16_t)(*(uint16_t*)(RAM + addr)); // lh
+                    else if (f3 == 5) X[rd] = *(uint16_t*)(RAM + addr); // lhu
                 }
                 break;
-            case 0x23: // STORE (sw, sd)
+            case 0x23: // STORE (sw, sd, sb, sh)
                 {
                     int32_t imm_s = ((inst >> 25) << 5) | ((inst >> 7) & 0x1F);
                     imm_s = (imm_s << 20) >> 20;
@@ -250,9 +299,33 @@ case 0x63: // BRANCH 完整版
                     if (addr >= RAM_SIZE) { printf("Memory Write Fault\n"); goto end; }
                     if (f3 == 2) *(uint32_t*)(RAM + addr) = (uint32_t)X[rs2]; // sw
                     else if (f3 == 3) *(uint64_t*)(RAM + addr) = X[rs2];      // sd
+                    else if (f3 == 0) *(uint8_t*)(RAM + addr) = (uint8_t)X[rs2]; // sb
+                    else if (f3 == 1) *(uint16_t*)(RAM + addr) = (uint16_t)X[rs2]; // sh
                 }
                 break;
             default:
+                if (opcode == 0x73) { // ECALL
+                    // 简单的系统调用处理
+                    // a7 = 系统调用号, a0-a5 = 参数
+                    // 1 = write, 2 = exit
+                    long long syscall = X[17]; // a7
+                    if (syscall == 1) { // write
+                        int fd = (int)X[10]; // a0
+                        char *buf = (char*)(RAM + X[11]); // a1
+                        size_t count = (size_t)X[12]; // a2
+                        if (fd == 1 || fd == 2) {
+                            write(fd, buf, count);
+                        }
+                    } else if (syscall == 2) { // exit
+                        printf("Program exited with code %lld\n", (long long)X[10]);
+                        goto end;
+                    } else if (syscall == 93) { // exit (new)
+                        printf("Program exited with code %lld\n", (long long)X[10]);
+                        goto end;
+                    }
+                    X[10] = 0; // 返回值
+                    break;
+                }
                 printf("Fault: Unknown Opcode 0x%x at PC=0x%llx\n", opcode, (unsigned long long)PC);
                 goto end;
         }
