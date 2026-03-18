@@ -199,6 +199,129 @@ def test_usertests(test=""):
     q.monitor('^ALL TESTS PASSED', progress='test', timeout=timeout)
     q.stop()
 
+def test_tcpecho():
+    print("Test tcpecho server starts correctly")
+    q = QEMU(True)
+    time.sleep(2)
+    q.cmd("tcpecho\n")
+    time.sleep(2)
+    q.read()
+    ok, _ = q.match('Starting TCP Echo Server', exit=False)
+    if not ok:
+        ok, _ = q.match('socket: success', exit=False)
+    q.stop()
+    if ok:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
+
+def test_udpecho():
+    print("Test udpecho server starts correctly")
+    q = QEMU(True)
+    time.sleep(2)
+    q.cmd("udpecho\n")
+    time.sleep(2)
+    q.read()
+    ok, _ = q.match('Starting UDP Echo Server', exit=False)
+    if not ok:
+        ok, _ = q.match('socket: success', exit=False)
+    q.stop()
+    if ok:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
+
+def test_httpd():
+    print("Test httpd server starts correctly")
+    q = QEMU(True)
+    time.sleep(2)
+    q.cmd("httpd\n")
+    time.sleep(2)
+    q.read()
+    ok, _ = q.match('HTTP Server', exit=False)
+    if not ok:
+        ok, _ = q.match('starting', exit=False)
+    q.stop()
+    if ok:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
+
+def test_telnetd():
+    print("Test telnetd server starts correctly")
+    q = QEMU(True)
+    time.sleep(2)
+    q.cmd("telnetd\n")
+    time.sleep(2)
+    q.read()
+    ok, _ = q.match('Telnet Server', exit=False)
+    if not ok:
+        ok, _ = q.match('starting', exit=False)
+    q.stop()
+    if ok:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
+
+def test_ping():
+    print("Test ping program starts correctly")
+    q = QEMU(True)
+    time.sleep(2)
+    q.cmd("ping\n")
+    time.sleep(2)
+    q.read()
+    ok, _ = q.match('Usage', exit=False)
+    q.stop()
+    if ok:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
+
+def test_curl():
+    print("Test curl program starts correctly")
+    q = QEMU(True)
+    time.sleep(2)
+    q.cmd("curl\n")
+    time.sleep(2)
+    q.read()
+    ok, _ = q.match('Usage', exit=False)
+    q.stop()
+    if ok:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
+
+def test_telnet():
+    print("Test telnet client starts correctly")
+    q = QEMU(True)
+    time.sleep(2)
+    q.cmd("telnet\n")
+    time.sleep(2)
+    q.read()
+    ok, _ = q.match('Usage', exit=False)
+    q.stop()
+    if ok:
+        print("OK")
+    else:
+        print("FAIL")
+        sys.exit(1)
+
+def test_network_programs():
+    test_tcpecho()
+    test_udpecho()
+    test_httpd()
+    test_telnetd()
+    test_ping()
+    test_curl()
+    test_telnet()
+    print("All network program tests passed!")
+
 def main():
     print(args)
     rex = r'%s' % args.testrex
