@@ -1,7 +1,7 @@
 CC ?= cc
 CFLAGS ?= -O2 -Wall -Wextra
 
-SRCS = main.c lexer.c parser.c ast.c codegen.c
+SRCS = main.c lexer.c parser.c ast.c codegen.c c0macro.c
 OBJS = $(SRCS:.c=.o)
 
 all: c0c
