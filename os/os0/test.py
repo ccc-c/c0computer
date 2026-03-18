@@ -58,11 +58,12 @@ class QEMU(object):
         self.proc.stdin.flush()
         
     def crash(self):
-        ps = run(['ps', '-opid', '--no-headers', '--ppid', str(self.proc.pid)], stdout=subprocess.PIPE, encoding='utf8')
+        ps = run(['pgrep', '-P', str(self.proc.pid)], stdout=subprocess.PIPE, encoding='utf8')
+        kids = [int(line) for line in ps.stdout.splitlines() if line.strip()]
         kids = [int(line) for line in ps.stdout.splitlines()]
         if len(kids) == 0:
             print("no qemu")
-            os.exit(1)
+            sys.exit(1)
         print("kill", kids[0])
         os.kill(kids[0], signal.SIGKILL)
 
