@@ -59,6 +59,21 @@ printptr(uint64 x)
     consputc(digits[x >> (sizeof(uint64) * 8 - 4)]);
 }
 
+static void
+putch(int ch, int *cnt)
+{
+  consputc(ch);
+  (*cnt)++;
+}
+
+int
+vcprintf(const char *fmt, va_list ap)
+{
+  int cnt = 0;
+  vprintfmt((void*)putch, &cnt, fmt, ap);
+  return cnt;
+}
+
 // Print to the console.
 int
 printf(char *fmt, ...)

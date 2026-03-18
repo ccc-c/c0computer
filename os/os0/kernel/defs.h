@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 struct buf;
 struct context;
 struct file;
@@ -8,6 +10,9 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct socket;
+struct sockaddr;
+struct sockaddr_in;
 
 // bio.c
 void            binit(void);
@@ -22,6 +27,11 @@ void            consoleinit(void);
 void            consoleintr(int);
 void            consputc(int);
 
+// printfmt.c
+void            vprintfmt(void (*)(int, void*), void*, const char*, void*);
+int             vsnprintf(char*, size_t, const char*, va_list);
+int             snprintf(char*, size_t, const char*, ...);
+
 // exec.c
 int             kexec(char*, char**);
 
@@ -33,6 +43,8 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
+int             fdalloc(struct file *f);
+int             argfd(int n, int *pfd, struct file **pf);
 
 // fs.c
 void            fsinit(int);
@@ -180,6 +192,19 @@ void            plic_complete(int);
 void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
+
+// socket.c
+struct file *   socket_alloc(int, int, int);
+int             socket_close(struct socket*);
+int             socket_bind(struct socket*, struct sockaddr*, int);
+int             socket_recvfrom(struct socket*, char*, int, struct sockaddr*, int*);
+int             socket_sendto(struct socket*, char*, int, struct sockaddr*, int);
+int             socket_connect(struct socket*, struct sockaddr*, int);
+int             socket_listen(struct socket*, int);
+struct file *   socket_accept(struct socket*, struct sockaddr*, int*);
+int             socket_read(struct socket*, char*, int);
+int             socket_write(struct socket*, char*, int);
+int             socket_ioctl(struct socket*, int, void*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

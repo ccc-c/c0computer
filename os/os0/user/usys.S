@@ -105,3 +105,48 @@ uptime:
  li a7, SYS_uptime
  ecall
  ret
+.global socket
+socket:
+ li a7, SYS_socket
+ ecall
+ ret
+.global bind
+bind:
+ li a7, SYS_bind
+ ecall
+ ret
+.global listen
+listen:
+ li a7, SYS_listen
+ ecall
+ ret
+.global accept
+accept:
+ li a7, SYS_accept
+ ecall
+ ret
+.global connect
+connect:
+ li a7, SYS_connect
+ ecall
+ ret
+.global send
+send:
+ li a7, SYS_send
+ ecall
+ ret
+.global recv
+recv:
+ li a7, SYS_recv
+ ecall
+ ret
+.global sendto
+sendto:
+ li a7, SYS_sendto
+ ecall
+ ret
+.global recvfrom
+recvfrom:
+ li a7, SYS_recvfrom
+ ecall
+ ret

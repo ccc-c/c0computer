@@ -36,6 +36,41 @@ strcmp(const char *p, const char *q)
   return (uchar)*p - (uchar)*q;
 }
 
+int
+strncmp(const char *p, const char *q, uint n)
+{
+  while(n > 0 && *p && *p == *q) {
+    p++, q++, n--;
+  }
+  if (n == 0)
+    return 0;
+  return (uchar)*p - (uchar)*q;
+}
+
+char*
+strcat(char *dst, const char *src)
+{
+  char *p = dst;
+  while(*p) p++;
+  while((*p++ = *src++) != 0);
+  return dst;
+}
+
+char*
+strncpy(char *dst, const char *src, int n)
+{
+  char *p = dst;
+  while(n > 0 && *src) {
+    *p++ = *src++;
+    n--;
+  }
+  while(n > 0) {
+    *p++ = 0;
+    n--;
+  }
+  return dst;
+}
+
 uint
 strlen(const char *s)
 {
@@ -157,5 +192,36 @@ sbrk(int n) {
 char *
 sbrklazy(int n) {
   return sys_sbrk(n, SBRK_LAZY);
+}
+
+// Byte order conversion functions
+unsigned short
+htons(unsigned short hostshort)
+{
+  return ((hostshort >> 8) & 0xff) | ((hostshort & 0xff) << 8);
+}
+
+unsigned short
+ntohs(unsigned short netshort)
+{
+  return ((netshort >> 8) & 0xff) | ((netshort & 0xff) << 8);
+}
+
+unsigned long
+htonl(unsigned long hostlong)
+{
+  return ((hostlong >> 24) & 0xff) |
+         ((hostlong >> 8) & 0xff00) |
+         ((hostlong & 0xff00) << 8) |
+         ((hostlong & 0xff) << 24);
+}
+
+unsigned long
+ntohl(unsigned long netlong)
+{
+  return ((netlong >> 24) & 0xff) |
+         ((netlong >> 8) & 0xff00) |
+         ((netlong & 0xff00) << 8) |
+         ((netlong & 0xff) << 24);
 }
 

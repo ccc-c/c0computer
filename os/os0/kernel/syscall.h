@@ -20,3 +20,12 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+#define SYS_socket 22
+#define SYS_bind   23
+#define SYS_listen 24
+#define SYS_accept 25
+#define SYS_connect 26
+#define SYS_send   27
+#define SYS_recv   28
+#define SYS_sendto 29
+#define SYS_recvfrom 30
