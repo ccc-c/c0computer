@@ -16,6 +16,10 @@ char param_name[MAX_TOKEN_LEN] = {0};
 void next_token();
 void parse_statement();
 void parse_expression(char *res_t);
+void parse_or(char *res_t);
+void parse_and(char *res_t);
+void parse_not(char *res_t);
+void parse_cmp(char *res_t);
 
 // --- 工具與 IR 輸出函式 ---
 void get_t(char* buf, size_t size) { snprintf(buf, size, "t%d", t_idx++); }
@@ -63,6 +67,18 @@ void next_token() {
         int next_c = fgetc(in_fp);
         if (next_c == '=') { strcpy(token, "=="); } 
         else { ungetc(next_c, in_fp); strcpy(token, "="); }
+    } else if (c == '!') {
+        int next_c = fgetc(in_fp);
+        if (next_c == '=') { strcpy(token, "!="); }
+        else { ungetc(next_c, in_fp); strcpy(token, "!"); }
+    } else if (c == '<') {
+        int next_c = fgetc(in_fp);
+        if (next_c == '=') { strcpy(token, "<="); }
+        else { ungetc(next_c, in_fp); strcpy(token, "<"); }
+    } else if (c == '>') {
+        int next_c = fgetc(in_fp);
+        if (next_c == '=') { strcpy(token, ">="); }
+        else { ungetc(next_c, in_fp); strcpy(token, ">"); }
     } else {
         token[0] = c; token[1] = '\0';
     }
@@ -138,26 +154,56 @@ void parse_add(char *res_t) {
     }
 }
 
-// 比較運算 (==)
+// 比較運算 (==, !=, <, >, <=, >=)
 void parse_cmp(char *res_t) {
     parse_add(res_t);
-    while (strcmp(token, "==") == 0) {
-        next_token();
+    while (strcmp(token, "==") == 0 || strcmp(token, "!=") == 0 ||
+           strcmp(token, "<") == 0 || strcmp(token, ">") == 0 ||
+           strcmp(token, "<=") == 0 || strcmp(token, ">=") == 0) {
+        char op[16]; strcpy(op, token); next_token();
         char rhs_t[16]; parse_add(rhs_t);
         char new_res[16]; get_t(new_res, 16);
-        emit("CMP_EQ", res_t, rhs_t, new_res);
+        if (strcmp(op, "==") == 0) emit("CMP_EQ", res_t, rhs_t, new_res);
+        else if (strcmp(op, "!=") == 0) emit("CMP_NE", res_t, rhs_t, new_res);
+        else if (strcmp(op, "<") == 0) emit("CMP_LT", res_t, rhs_t, new_res);
+        else if (strcmp(op, ">") == 0) emit("CMP_GT", res_t, rhs_t, new_res);
+        else if (strcmp(op, "<=") == 0) emit("CMP_LE", res_t, rhs_t, new_res);
+        else if (strcmp(op, ">=") == 0) emit("CMP_GE", res_t, rhs_t, new_res);
         strcpy(res_t, new_res);
     }
 }
 
-// 邏輯 OR 運算 (or) -> 對應 DynIR 的 BITOR (或可視作動態語言的邏輯操作)
+// 邏輯 OR 運算 (or) -> 對應 DynIR 的 BITOR
 void parse_or(char *res_t) {
-    parse_cmp(res_t);
+    parse_and(res_t);
     while (accept("or")) {
-        char rhs_t[16]; parse_cmp(rhs_t);
+        char rhs_t[16]; parse_and(rhs_t);
         char new_res[16]; get_t(new_res, 16);
         emit("BITOR", res_t, rhs_t, new_res);
         strcpy(res_t, new_res);
+    }
+}
+
+// 邏輯 AND 運算 (and)
+void parse_and(char *res_t) {
+    parse_not(res_t);
+    while (accept("and")) {
+        char rhs_t[16]; parse_not(rhs_t);
+        char new_res[16]; get_t(new_res, 16);
+        emit("BITAND", res_t, rhs_t, new_res);
+        strcpy(res_t, new_res);
+    }
+}
+
+// 邏輯 NOT 運算 (not)
+void parse_not(char *res_t) {
+    if (accept("not")) {
+        char rhs_t[16]; parse_not(rhs_t);
+        char new_res[16]; get_t(new_res, 16);
+        emit("NOT", rhs_t, "_", new_res);
+        strcpy(res_t, new_res);
+    } else {
+        parse_cmp(res_t);
     }
 }
 
@@ -244,6 +290,73 @@ void parse_statement() {
         
         emit("LABEL", l_end, "_", "_");
     } 
+    else if (accept("while")) {
+        char l_start[16], l_end[16];
+        get_l(l_start, 16); get_l(l_end, 16);
+        emit("LABEL", l_start, "_", "_");
+        
+        char cond_t[16]; parse_expression(cond_t);
+        expect(":");
+        
+        emit("BRANCH_IF_FALSE", cond_t, "_", l_end);
+        
+        int saved_in_function = in_function;
+        char saved_param_name[MAX_TOKEN_LEN];
+        strcpy(saved_param_name, param_name);
+        
+        parse_statement();
+        
+        in_function = saved_in_function;
+        strcpy(param_name, saved_param_name);
+        
+        emit("JUMP", l_start, "_", "_");
+        emit("LABEL", l_end, "_", "_");
+    }
+    else if (accept("for")) {
+        char var_name[64]; strcpy(var_name, token); next_token();
+        expect("in");
+        expect("range");
+        expect("(");
+        char limit_t[16]; parse_expression(limit_t);
+        expect(")");
+        expect(":");
+        
+        char l_start[16], l_end[16];
+        get_l(l_start, 16); get_l(l_end, 16);
+        
+        char zero_t[16]; get_t(zero_t, 16);
+        emit("LOAD_CONST", "0", "_", zero_t);
+        emit("STORE", zero_t, "_", var_name);
+        emit("STORE", limit_t, "_", "__range_end");
+        emit("LABEL", l_start, "_", "_");
+        
+        char i_t[16]; get_t(i_t, 16);
+        emit("LOAD_NAME", var_name, "_", i_t);
+        char cond_t[16]; get_t(cond_t, 16);
+        char limit2_t[16]; get_t(limit2_t, 16);
+        emit("LOAD_NAME", "__range_end", "_", limit2_t);
+        emit("CMP_LT", i_t, limit2_t, cond_t);
+        emit("BRANCH_IF_FALSE", cond_t, "_", l_end);
+        
+        int saved_in_function = in_function;
+        char saved_param_name[MAX_TOKEN_LEN];
+        strcpy(saved_param_name, param_name);
+        
+        parse_statement();
+        
+        in_function = saved_in_function;
+        strcpy(param_name, saved_param_name);
+        
+        char next_i[16]; get_t(next_i, 16);
+        char i_t2[16]; get_t(i_t2, 16);
+        char one_t[16]; get_t(one_t, 16);
+        emit("LOAD_CONST", "1", "_", one_t);
+        emit("LOAD_NAME", var_name, "_", i_t2);
+        emit("ADD", i_t2, one_t, next_i);
+        emit("STORE", next_i, "_", var_name);
+        emit("JUMP", l_start, "_", "_");
+        emit("LABEL", l_end, "_", "_");
+    }
     else if (accept("return")) {
         // Save/restore param state for return expression
         int saved_in_function = in_function;

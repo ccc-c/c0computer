@@ -69,6 +69,8 @@ QdObj *qd_mod(QdObj *a, QdObj *b);
 QdObj *qd_pow(QdObj *a, QdObj *b);
 QdObj *qd_neg(QdObj *a);
 QdObj *qd_not(QdObj *a);
+QdObj *qd_bitand(QdObj *a, QdObj *b);
+QdObj *qd_bitor(QdObj *a, QdObj *b);
 
 QdObj *qd_cmp_eq(QdObj *a, QdObj *b);
 QdObj *qd_cmp_ne(QdObj *a, QdObj *b);

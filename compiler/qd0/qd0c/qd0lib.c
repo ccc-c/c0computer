@@ -158,6 +158,18 @@ QdObj *qd_neg(QdObj *a) {
 
 QdObj *qd_not(QdObj *a) { return qd_bool(!qd_truthy(a)); }
 
+QdObj *qd_bitand(QdObj *a, QdObj *b) {
+    if (a->type==QD_INT && b->type==QD_INT) return qd_int(a->ival & b->ival);
+    if (!qd_truthy(a)) return a;
+    return b;
+}
+
+QdObj *qd_bitor(QdObj *a, QdObj *b) {
+    if (a->type==QD_INT && b->type==QD_INT) return qd_int(a->ival | b->ival);
+    if (qd_truthy(a)) return a;
+    return b;
+}
+
 /* ------------------------------------------------------------------ */
 /*  比較                                                                */
 /* ------------------------------------------------------------------ */
