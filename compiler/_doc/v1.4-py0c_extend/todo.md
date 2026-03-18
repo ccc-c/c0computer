@@ -1,6 +1,4 @@
-請為 c0c 加入巨集展開功能，放在 c0macro.c, c0macro.h 裡面
-
-也就是 #define 的那種展開功能，語法採用和 gcc 一樣，加上 -E 就可以只展開
+請為 py0c 加上 while, for, bool 的功能
 
 必要的時候可以修正其他相關程式
 
