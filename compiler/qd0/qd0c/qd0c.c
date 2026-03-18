@@ -437,6 +437,8 @@ static void emit_code(void) {
             else if (strcmp(op,"FLOORDIV")==0) fn="qd_floordiv";
             else if (strcmp(op,"MOD")==0)      fn="qd_mod";
             else if (strcmp(op,"POW")==0)      fn="qd_pow";
+            else if (strcmp(op,"BITAND")==0)   fn="qd_bitand";
+            else if (strcmp(op,"BITOR")==0)    fn="qd_bitor";
             if (fn) {
                 // Fix: emit_val uses static buffer, so we need to load both values BEFORE calling the function
                 // Generate variable names for both args first
@@ -754,6 +756,8 @@ static void emit_decls(FILE *fout) {
         "declare %%QdObj*  @qd_pow(%%QdObj*, %%QdObj*)\n"
         "declare %%QdObj*  @qd_neg(%%QdObj*)\n"
         "declare %%QdObj*  @qd_not(%%QdObj*)\n"
+        "declare %%QdObj*  @qd_bitand(%%QdObj*, %%QdObj*)\n"
+        "declare %%QdObj*  @qd_bitor(%%QdObj*, %%QdObj*)\n"
         "declare %%QdObj*  @qd_cmp_eq(%%QdObj*, %%QdObj*)\n"
         "declare %%QdObj*  @qd_cmp_ne(%%QdObj*, %%QdObj*)\n"
         "declare %%QdObj*  @qd_cmp_lt(%%QdObj*, %%QdObj*)\n"
