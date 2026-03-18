@@ -38,6 +38,7 @@ declare -a TESTS=(
     "test_long 100 0x0"
     "test_array2d 7 0x0"
     "test_ptr_arith 3 0x0"
+    "test_float_simple 8 0x0"
 )
 
 PASS=0

@@ -33,11 +33,26 @@ const char* reg_names[32] = {
     "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6"
 };
 
+// RISC-V Floating-Point Registers map
+const char* freg_names[32] = {
+    "ft0", "ft1", "ft2", "ft3", "ft4", "ft5", "ft6", "ft7",
+    "fs0", "fs1", "fa0", "fa1", "fa2", "fa3", "fa4", "fa5",
+    "fa6", "fa7", "fs2", "fs3", "fs4", "fs5", "fs6", "fs7",
+    "fs8", "fs9", "fs10", "fs11", "ft12", "ft13", "ft14", "ft15"
+};
+
 int get_reg(const char *name) {
     for (int i = 0; i < 32; i++) {
         if (strcmp(name, reg_names[i]) == 0) return i;
     }
     return 0; // fallback to zero
+}
+
+int get_freg(const char *name) {
+    for (int i = 0; i < 32; i++) {
+        if (strcmp(name, freg_names[i]) == 0) return i;
+    }
+    return 0; // fallback to ft0
 }
 
 uint32_t resolve_label(const char *name) {
@@ -67,6 +82,24 @@ uint32_t enc_U(int op, int rd, int imm) {
     return ((imm & 0xFFFFF) << 12) | (rd << 7) | op;
 }
 
+// RISC-V Floating-Point Encoders
+// FP R-type: opcode(7) | rs3(5) | rs2(5) | rs1(5) | f3(3) | rd(5) | opcode2(7)
+uint32_t enc_R4(int op, int f3, int rd, int rs1, int rs2, int rs3) {
+    return (rs3 << 27) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op;
+}
+// FP R-type (2 operands): opcode(7) | f7 | rs2 | rs1 | f3 | rd | opcode2
+uint32_t enc_FP_R(int op, int f7, int rs2, int rs1, int f3, int rd) {
+    return (f7 << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op;
+}
+// FP I-type: opcode(7) | imm[11:0] | rs1 | f3 | rd | opcode2
+uint32_t enc_FP_I(int op, int f3, int rd, int rs1, int imm) {
+    return ((imm & 0xFFF) << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op;
+}
+// FP S-type: opcode(7) | imm[11:5] | rs2 | rs1 | f3 | imm[4:0] | opcode2
+uint32_t enc_FP_S(int op, int f3, int rs2, int rs1, int imm) {
+    return (((imm >> 5) & 0x7F) << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | ((imm & 0x1F) << 7) | op;
+}
+
 // Helper to strip commas and whitespace
 void clean_operand(char *op) {
     char *p = op;
@@ -74,6 +107,15 @@ void clean_operand(char *op) {
         if (*p == ',' || *p == '\n' || *p == '\r') *p = '\0';
         p++;
     }
+}
+
+int get_rounding_mode(const char *rm) {
+    if (strcmp(rm, "rne") == 0 || strcmp(rm, "") == 0) return 0; // round to nearest, ties to even
+    if (strcmp(rm, "rtz") == 0) return 1; // round towards zero
+    if (strcmp(rm, "rdn") == 0) return 2; // round down (towards -infinity)
+    if (strcmp(rm, "rup") == 0) return 3; // round up (towards +infinity)
+    if (strcmp(rm, "rmm") == 0) return 4; // round to nearest, ties to max magnitude
+    return 0; // default
 }
 
 // Two-pass assemble function
@@ -189,6 +231,60 @@ void assemble(char lines[][256], int line_count) {
         
         // LUI 和 AUIPC
         else if (strcmp(mnem, "lui") == 0) inst = enc_U(0x37, get_reg(op1), atoi(op2));
+        
+        // ==================== RV64F 浮點數指令 ====================
+        // FLW/FSD (載入/儲存)
+        else if (strcmp(mnem, "flw") == 0) inst = enc_FP_I(0x07, 2, get_freg(op1), get_reg(op2), mem_imm);
+        else if (strcmp(mnem, "fsw") == 0) inst = enc_FP_S(0x27, 2, get_freg(op1), get_reg(op2), mem_imm);
+        
+        // FADD.S, FSUB.S, FMUL.S, FDIV.S
+        else if (strcmp(mnem, "fadd.s") == 0) inst = enc_FP_R(0x43, 0, get_freg(op1), get_reg(op2), get_freg(op3), 0);
+        else if (strcmp(mnem, "fsub.s") == 0) inst = enc_FP_R(0x43, 0, get_freg(op1), get_reg(op2), get_freg(op3), 4);
+        else if (strcmp(mnem, "fmul.s") == 0) inst = enc_FP_R(0x43, 0, get_freg(op1), get_reg(op2), get_freg(op3), 8);
+        else if (strcmp(mnem, "fdiv.s") == 0) inst = enc_FP_R(0x43, 0, get_freg(op1), get_reg(op2), get_freg(op3), 12);
+        else if (strcmp(mnem, "fsqrt.s") == 0) inst = enc_FP_R(0x43, 0, get_freg(op1), 0, get_freg(op2), 0x2C);
+        
+        // 比較指令
+        else if (strcmp(mnem, "feq.s") == 0) inst = enc_FP_R(0x53, 2, get_reg(op1), get_freg(op2), get_freg(op3), 0);
+        else if (strcmp(mnem, "flt.s") == 0) inst = enc_FP_R(0x53, 2, get_reg(op1), get_freg(op2), get_freg(op3), 1);
+        else if (strcmp(mnem, "fle.s") == 0) inst = enc_FP_R(0x53, 2, get_reg(op1), get_freg(op2), get_freg(op3), 2);
+        
+        // ==================== RV64D 浮點數指令 ====================
+        // FLD/FSD (雙精度載入/儲存)
+        else if (strcmp(mnem, "fld") == 0) inst = enc_FP_I(0x07, 3, get_freg(op1), get_reg(op2), mem_imm);
+        else if (strcmp(mnem, "fsd") == 0) inst = enc_FP_S(0x27, 3, get_freg(op1), get_reg(op2), mem_imm);
+        
+        // FADD.D, FSUB.D, FMUL.D, FDIV.D
+        else if (strcmp(mnem, "fadd.d") == 0) inst = enc_FP_R(0x47, 0, get_freg(op1), get_freg(op2), get_freg(op3), 0);
+        else if (strcmp(mnem, "fsub.d") == 0) inst = enc_FP_R(0x47, 0, get_freg(op1), get_freg(op2), get_freg(op3), 4);
+        else if (strcmp(mnem, "fmul.d") == 0) inst = enc_FP_R(0x47, 0, get_freg(op1), get_freg(op2), get_freg(op3), 8);
+        else if (strcmp(mnem, "fdiv.d") == 0) inst = enc_FP_R(0x47, 0, get_freg(op1), get_freg(op2), get_freg(op3), 12);
+        else if (strcmp(mnem, "fsqrt.d") == 0) inst = enc_FP_R(0x47, 0, get_freg(op1), 0, get_freg(op2), 0x2C);
+        
+        // 比較指令
+        else if (strcmp(mnem, "feq.d") == 0) inst = enc_FP_R(0x57, 2, get_reg(op1), get_freg(op2), get_freg(op3), 0);
+        else if (strcmp(mnem, "flt.d") == 0) inst = enc_FP_R(0x57, 2, get_reg(op1), get_freg(op2), get_freg(op3), 1);
+        else if (strcmp(mnem, "fle.d") == 0) inst = enc_FP_R(0x57, 2, get_reg(op1), get_freg(op2), get_freg(op3), 2);
+        
+        // 轉換指令 - 修正參數順序並處理 rounding mode
+        else if (strcmp(mnem, "fcvt.w.s") == 0) inst = enc_FP_R(0x43, 0x60, get_rounding_mode(op3), get_freg(op2), 0, get_reg(op1));  // FCVT.W.S
+        else if (strcmp(mnem, "fcvt.wu.s") == 0) inst = enc_FP_R(0x43, 0x61, get_rounding_mode(op3), get_freg(op2), 0, get_reg(op1)); // FCVT.WU.S
+        else if (strcmp(mnem, "fcvt.s.w") == 0) inst = enc_FP_R(0x43, 0x68, get_rounding_mode(op3), get_reg(op2), 0, get_freg(op1));  // FCVT.S.W
+        else if (strcmp(mnem, "fcvt.s.wu") == 0) inst = enc_FP_R(0x43, 0x69, get_rounding_mode(op3), get_reg(op2), 0, get_freg(op1)); // FCVT.S.WU
+        
+        else if (strcmp(mnem, "fcvt.w.d") == 0) inst = enc_FP_R(0x53, 0x60, get_rounding_mode(op3), get_freg(op2), 0, get_reg(op1));  // FCVT.W.D
+        else if (strcmp(mnem, "fcvt.wu.d") == 0) inst = enc_FP_R(0x53, 0x61, get_rounding_mode(op3), get_freg(op2), 0, get_reg(op1)); // FCVT.WU.D
+        else if (strcmp(mnem, "fcvt.d.w") == 0) inst = enc_FP_R(0x53, 0x68, get_rounding_mode(op3), get_reg(op2), 0, get_freg(op1));  // FCVT.D.W
+        else if (strcmp(mnem, "fcvt.d.wu") == 0) inst = enc_FP_R(0x53, 0x69, get_rounding_mode(op3), get_reg(op2), 0, get_freg(op1)); // FCVT.D.WU
+        else if (strcmp(mnem, "fcvt.d.s") == 0) inst = enc_FP_R(0x53, 0x20, 0, get_freg(op2), 0, get_freg(op1)); // FCVT.D.S
+        else if (strcmp(mnem, "fcvt.s.d") == 0) inst = enc_FP_R(0x53, 0x21, 0, get_freg(op2), 0, get_freg(op1)); // FCVT.S.D
+        
+        // 移動指令 - 修正參數順序
+        else if (strcmp(mnem, "fmv.w.x") == 0) inst = enc_FP_R(0x43, 0x70, 0, get_reg(op2), 0, get_freg(op1));  // FMV.W.X (int to float)
+        else if (strcmp(mnem, "fmv.x.w") == 0) inst = enc_FP_R(0x43, 0x78, 0, get_freg(op2), 0, get_reg(op1));  // FMV.X.W (float to int)
+        
+        else if (strcmp(mnem, "fmv.d.x") == 0) inst = enc_FP_R(0x53, 0x70, 0, get_reg(op2), 0, get_freg(op1));  // FMV.D.X (int to double)
+        else if (strcmp(mnem, "fmv.x.d") == 0) inst = enc_FP_R(0x53, 0x78, 0, get_freg(op2), 0, get_reg(op1));  // FMV.X.D (double to int)
         
         // ... 前面的 addi, lw, sw, mul 等等保留 ...
         else if (strcmp(mnem, "beq") == 0) inst = enc_B(0x63, 0, get_reg(op1), get_reg(op2), resolve_label(op3) - pc);

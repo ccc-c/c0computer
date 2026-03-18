@@ -20,6 +20,14 @@ const char* reg_names[32] = {
     "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6"
 };
 
+// RISC-V Floating-Point Register names
+const char* freg_names[32] = {
+    "ft0", "ft1", "ft2", "ft3", "ft4", "ft5", "ft6", "ft7",
+    "fs0", "fs1", "fa0", "fa1", "fa2", "fa3", "fa4", "fa5",
+    "fa6", "fa7", "fs2", "fs3", "fs4", "fs5", "fs6", "fs7",
+    "fs8", "fs9", "fs10", "fs11", "ft12", "ft13", "ft14", "ft15"
+};
+
 // Helper to convert byte alignment to power of 2 for printing (like 2**2)
 int get_align_pow(uint64_t align) {
     if (align <= 1) return 0;
@@ -150,6 +158,63 @@ void decode_riscv(uint32_t inst) {
             break;
         case 0x17: // AUIPC
             printf("auipc\t%s, %d\n", reg_names[rd], (inst >> 12) & 0xFFFFF);
+            break;
+        // ==================== RV64F/RV64D 浮點數指令 ====================
+        case 0x07: // LOAD-FP
+            if (funct3 == 2) printf("flw \t%s, %d(%s)\n", freg_names[rd], imm_i, reg_names[rs1]);
+            else if (funct3 == 3) printf("fld \t%s, %d(%s)\n", freg_names[rd], imm_i, reg_names[rs1]);
+            else printf("load-fp\t%s, %d(%s)\n", freg_names[rd], imm_i, reg_names[rs1]);
+            break;
+        case 0x27: // STORE-FP
+            {
+                int32_t imm_s = ((inst >> 25) << 5) | ((inst >> 7) & 0x1F);
+                imm_s = (imm_s << 20) >> 20;
+                if (funct3 == 2) printf("fsw \t%s, %d(%s)\n", freg_names[rs2], imm_s, reg_names[rs1]);
+                else if (funct3 == 3) printf("fsd \t%s, %d(%s)\n", freg_names[rs2], imm_s, reg_names[rs1]);
+                else printf("store-fp\t%s, %d(%s)\n", freg_names[rs2], imm_s, reg_names[rs1]);
+            }
+            break;
+        case 0x53: // OP-FP (double precision)
+            {
+                int rs3 = (inst >> 27) & 0x1F;
+                if (funct7 == 0x00) printf("fadd.d\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x04) printf("fsub.d\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x08) printf("fmul.d\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x0C) printf("fdiv.d\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x2C) printf("fsqrt.d\t%s, %s\n", freg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x20 && funct3 == 2) printf("feq.d \t%s, %s, %s\n", reg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x21 && funct3 == 2) printf("flt.d \t%s, %s, %s\n", reg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x22 && funct3 == 2) printf("fle.d \t%s, %s, %s\n", reg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x60 && rs2 == 0) printf("fcvt.w.d\t%s, %s\n", reg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x61 && rs2 == 0) printf("fcvt.wu.d\t%s, %s\n", reg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x68 && rs2 == 0) printf("fcvt.d.w\t%s, %s\n", freg_names[rd], reg_names[rs1]);
+                else if (funct7 == 0x69 && rs2 == 0) printf("fcvt.d.wu\t%s, %s\n", freg_names[rd], reg_names[rs1]);
+                else if (funct7 == 0x70 && rs2 == 0) printf("fmv.x.d\t%s, %s\n", reg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x78 && rs2 == 0) printf("fmv.d.x\t%s, %s\n", freg_names[rd], reg_names[rs1]);
+                else if (funct7 == 0x20) printf("fcvt.d.s\t%s, %s\n", freg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x21) printf("fcvt.s.d\t%s, %s\n", freg_names[rd], freg_names[rs1]);
+                else printf("op-fp\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+            }
+            break;
+        case 0x43: // OP-FP (single precision)
+            {
+                int rs3 = (inst >> 27) & 0x1F;
+                if (funct7 == 0x00) printf("fadd.s\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x04) printf("fsub.s\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x08) printf("fmul.s\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x0C) printf("fdiv.s\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x2C) printf("fsqrt.s\t%s, %s\n", freg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x20 && funct3 == 2) printf("feq.s \t%s, %s, %s\n", reg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x21 && funct3 == 2) printf("flt.s \t%s, %s, %s\n", reg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x22 && funct3 == 2) printf("fle.s \t%s, %s, %s\n", reg_names[rd], freg_names[rs1], freg_names[rs2]);
+                else if (funct7 == 0x60 && rs2 == 0) printf("fcvt.w.s\t%s, %s\n", reg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x61 && rs2 == 0) printf("fcvt.wu.s\t%s, %s\n", reg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x68 && rs2 == 0) printf("fcvt.s.w\t%s, %s\n", freg_names[rd], reg_names[rs1]);
+                else if (funct7 == 0x69 && rs2 == 0) printf("fcvt.s.wu\t%s, %s\n", freg_names[rd], reg_names[rs1]);
+                else if (funct7 == 0x70 && rs2 == 0) printf("fmv.x.w\t%s, %s\n", reg_names[rd], freg_names[rs1]);
+                else if (funct7 == 0x78 && rs2 == 0) printf("fmv.w.x\t%s, %s\n", freg_names[rd], reg_names[rs1]);
+                else printf("op-fp-s\t%s, %s, %s\n", freg_names[rd], freg_names[rs1], freg_names[rs2]);
+            }
             break;
         default:
             printf(".word\t0x%08x\n", inst);

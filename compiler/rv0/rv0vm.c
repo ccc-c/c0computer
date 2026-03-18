@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <elf.h>
+#include <math.h>
 
 #ifndef EM_RISCV
 #define EM_RISCV 243
@@ -24,11 +25,21 @@
 #ifndef R_RISCV_RELAX
 #define R_RISCV_RELAX 51
 #endif
+#ifndef R_RISCV_HI20
+#define R_RISCV_HI20 2
+#endif
+#ifndef R_RISCV_LO12_I
+#define R_RISCV_LO12_I 3
+#endif
+#ifndef R_RISCV_LO12_S
+#define R_RISCV_LO12_S 4
+#endif
 
 #define RAM_SIZE (1024 * 1024) // 1MB 虛擬記憶體
 
 uint8_t RAM[RAM_SIZE];
 int64_t X[32] = {0}; // 32 個 64-bit 暫存器
+double F[32] = {0};  // 32 個 64-bit 浮點暫存器 (可存放 double 或 float)
 uint64_t PC = 0;
 
 const char* reg_names[32] = {
@@ -88,11 +99,14 @@ int main(int argc, char **argv) {
     
     int rela_text_idx = -1;
     int symtab_idx = -1;
+    uint64_t rodata_addr = 0x10000000; // Load .rodata at fixed address
 
     for (int i = 0; i < ehdr->e_shnum; i++) {
         const char *name = shstrtab + shdrs[i].sh_name;
         if (strcmp(name, ".text") == 0) {
             memcpy(RAM, map + shdrs[i].sh_offset, shdrs[i].sh_size);
+        } else if (strcmp(name, ".rodata") == 0) {
+            memcpy(RAM + rodata_addr, map + shdrs[i].sh_offset, shdrs[i].sh_size);
         } else if (strcmp(name, ".rela.text") == 0) {
             rela_text_idx = i;
         } else if (shdrs[i].sh_type == SHT_SYMTAB) {
@@ -114,23 +128,30 @@ int main(int argc, char **argv) {
             
             // 由於只執行單一 .o 檔案，假定所有目標都相對於 0x0
             uint64_t sym_val = syms[r_sym].st_value;
-            int64_t diff = (sym_val + addend) - offset;
             
             if (r_type == R_RISCV_CALL || r_type == R_RISCV_CALL_PLT) {
+                int64_t diff = (sym_val + addend) - offset;
                 uint32_t *inst_auipc = (uint32_t*)(RAM + offset);
                 uint32_t *inst_jalr  = (uint32_t*)(RAM + offset + 4);
                 int32_t hi20 = (diff + 0x800) & 0xFFFFF000;
                 int32_t lo12 = diff - hi20;
                 *inst_auipc = (*inst_auipc & 0x00000FFF) | hi20;
                 *inst_jalr  = (*inst_jalr  & 0x000FFFFF) | ((lo12 & 0xFFF) << 20);
-                // printf("Relocating CALL at 0x%lx to 0x%lx (diff=%ld)\n", offset, sym_val + addend, diff);
             } else if (r_type == R_RISCV_JAL) {
+                int64_t diff = (sym_val + addend) - offset;
                 uint32_t *inst_jal = (uint32_t*)(RAM + offset);
                 uint32_t imm20 = ((diff >> 20) & 1) << 31;
                 uint32_t imm10_1 = ((diff >> 1) & 0x3FF) << 21;
                 uint32_t imm11 = ((diff >> 11) & 1) << 20;
                 uint32_t imm19_12 = ((diff >> 12) & 0xFF) << 12;
                 *inst_jal = (*inst_jal & 0x00000FFF) | imm20 | imm10_1 | imm11 | imm19_12;
+            } else if (r_type == 2) { // R_RISCV_HI20 (LUI)
+                uint32_t *inst_lui = (uint32_t*)(RAM + offset);
+                // Set the upper 20 bits to point to .rodata
+                *inst_lui = (*inst_lui & 0xFFF) | ((rodata_addr + sym_val + addend) & 0xFFFFF000);
+            } else if (r_type == 3) { // R_RISCV_LO12_I (load from LUI address)
+                // The lui has already been patched, we just need to add the offset
+                // This is handled by the instruction itself
             }
         }
     }
@@ -301,6 +322,123 @@ case 0x63: // BRANCH 完整版
                     else if (f3 == 3) *(uint64_t*)(RAM + addr) = X[rs2];      // sd
                     else if (f3 == 0) *(uint8_t*)(RAM + addr) = (uint8_t)X[rs2]; // sb
                     else if (f3 == 1) *(uint16_t*)(RAM + addr) = (uint16_t)X[rs2]; // sh
+                }
+                break;
+            
+            // ==================== RV64F/RV64D 浮點數指令 ====================
+            case 0x07: // LOAD-FP (flw, fld)
+                {
+                    uint64_t addr = X[rs1] + imm_i;
+                    if (addr + 8 > RAM_SIZE) { printf("Memory Read Fault (FP)\n"); goto end; }
+                    if (f3 == 2) {
+                        // FLW - load 32-bit float, NaN-box it into 64 bits
+                        uint32_t val = *(uint32_t*)(RAM + addr);
+                        F[rd] = (double)*(float*)&val;
+                    } else if (f3 == 3) {
+                        // FLD - load 64-bit double
+                        F[rd] = *(double*)(RAM + addr);
+                    }
+                }
+                break;
+            case 0x27: // STORE-FP (fsw, fsd)
+                {
+                    int32_t imm_s = ((inst >> 25) << 5) | ((inst >> 7) & 0x1F);
+                    imm_s = (imm_s << 20) >> 20;
+                    uint64_t addr = X[rs1] + imm_s;
+                    if (addr >= RAM_SIZE) { printf("Memory Write Fault (FP)\n"); goto end; }
+                    if (f3 == 2) {
+                        // FSW - store 32-bit float
+                        float val = (float)F[rs2];
+                        *(uint32_t*)(RAM + addr) = *(uint32_t*)&val;
+                    } else if (f3 == 3) {
+                        // FSD - store 64-bit double
+                        if (addr + 8 > RAM_SIZE) { printf("Memory Write Fault (FP)\n"); goto end; }
+                        *(double*)(RAM + addr) = F[rs2];
+                    }
+                }
+                break;
+            case 0x53: // OP-FP (double precision / single precision)
+                {
+                    // f7 = funct7, f3 = funct3, rs1 = src1, rs2 = src2, rd = dest
+                    int rs3 = (inst >> 27) & 0x1F; // for madd/msub/nmadd/nmsub
+                    
+                    if (f7 == 0x00) { // FADD.D
+                        F[rd] = F[rs1] + F[rs2];
+                    } else if (f7 == 0x04) { // FSUB.D
+                        F[rd] = F[rs1] - F[rs2];
+                    } else if (f7 == 0x08) { // FMUL.D
+                        F[rd] = F[rs1] * F[rs2];
+                    } else if (f7 == 0x0C) { // FDIV.D
+                        if (F[rs2] != 0.0) F[rd] = F[rs1] / F[rs2];
+                        else F[rd] = 0.0;
+                    } else if (f7 == 0x2C) { // FSQRT.D
+                        F[rd] = sqrt(F[rs2]);
+                    } else if (f7 == 0x20 && f3 == 2) { // FEQ.D
+                        X[rd] = (F[rs1] == F[rs2]) ? 1 : 0;
+                    } else if (f7 == 0x21 && f3 == 2) { // FLT.D
+                        X[rd] = (F[rs1] < F[rs2]) ? 1 : 0;
+                    } else if (f7 == 0x22 && f3 == 2) { // FLE.D
+                        X[rd] = (F[rs1] <= F[rs2]) ? 1 : 0;
+                    } else if (f7 == 0x60) { // FCVT.W.D (any rounding mode)
+                        X[rd] = (int32_t)F[rs1];
+                    } else if (f7 == 0x61) { // FCVT.WU.D (any rounding mode)
+                        X[rd] = (uint32_t)F[rs1];
+                    } else if (f7 == 0x68 && rs2 == 0) { // FCVT.D.W
+                        F[rd] = (double)(int32_t)X[rs1];
+                    } else if (f7 == 0x69 && rs2 == 0) { // FCVT.D.WU
+                        F[rd] = (double)(uint32_t)X[rs1];
+                    } else if (f7 == 0x70 && rs2 == 0) { // FMV.X.D
+                        X[rd] = *(int64_t*)&F[rs1];
+                    } else if (f7 == 0x78 && rs2 == 0) { // FMV.D.X
+                        F[rd] = *(double*)&X[rs1];
+                    } else if (f7 == 0x20) { // FCVT.D.S
+                        F[rd] = (double)(float)F[rs1];
+                    } else if (f7 == 0x21) { // FCVT.S.D
+                        F[rd] = (double)(float)F[rs1];
+                    }
+                }
+                break;
+            case 0x43: // OP-FP single precision
+                {
+                    int rs3 = (inst >> 27) & 0x1F;
+                    
+                    float fs1 = (float)F[rs1];
+                    float fs2 = (float)F[rs2];
+                    float fd;
+                    
+                    if (f7 == 0x00) { // FADD.S
+                        fd = fs1 + fs2;
+                    } else if (f7 == 0x04) { // FSUB.S
+                        fd = fs1 - fs2;
+                    } else if (f7 == 0x08) { // FMUL.S
+                        fd = fs1 * fs2;
+                    } else if (f7 == 0x0C) { // FDIV.S
+                        if (fs2 != 0.0f) fd = fs1 / fs2;
+                        else fd = 0.0f;
+                    } else if (f7 == 0x2C) { // FSQRT.S
+                        fd = sqrtf(fs2);
+                    } else if (f7 == 0x20 && f3 == 2) { // FEQ.S
+                        X[rd] = (fs1 == fs2) ? 1 : 0;
+                    } else if (f7 == 0x21 && f3 == 2) { // FLT.S
+                        X[rd] = (fs1 < fs2) ? 1 : 0;
+                    } else if (f7 == 0x22 && f3 == 2) { // FLE.S
+                        X[rd] = (fs1 <= fs2) ? 1 : 0;
+                    } else if (f7 == 0x60) { // FCVT.W.S (any rounding mode)
+                        X[rd] = (int32_t)fs1;
+                    } else if (f7 == 0x61) { // FCVT.WU.S (any rounding mode)
+                        X[rd] = (uint32_t)fs1;
+                    } else if (f7 == 0x68 && rs2 == 0) { // FCVT.S.W
+                        fd = (float)(int32_t)X[rs1];
+                    } else if (f7 == 0x69 && rs2 == 0) { // FCVT.S.WU
+                        fd = (float)(uint32_t)X[rs1];
+                    } else if (f7 == 0x70 && rs2 == 0) { // FMV.X.W
+                        X[rd] = (int32_t)fs1;
+                    } else if (f7 == 0x78 && rs2 == 0) { // FMV.W.X
+                        fd = *(float*)&X[rs1];
+                    }
+                    
+                    // Store the result as double for simplicity
+                    F[rd] = (double)fd;
                 }
                 break;
             default:

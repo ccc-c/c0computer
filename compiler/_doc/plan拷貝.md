@@ -1,112 +1,5 @@
 # c0computer 編譯器發展計劃
 
-## RISC-V 指令集擴展測試計劃
-
-### 已支援的擴展
-
-| 擴展 | 名稱 | 狀態 | 說明 |
-|------|------|------|------|
-| **RV64I** | 64-bit 基本整數 | ✓ 完成 | add, sub, and, or, xor, slt, sll, sr, load, store, branch, jump |
-| **RV64IM** | 乘除法 | ✓ 完成 | mul, mulh, mulhu, div, divu, rem, remu 及 32-bit 版本 |
-
-### 待支援的擴展測試計劃
-
-#### 階段 RVM: M 擴展 (乘法/除法) - 現已完成
-- [x] mul, mulh, mulhu, mulw
-- [x] div, divu, divw, divuw
-- [x] rem, remu, remw, remuw
-- 測試檔案: test_arith.c, test_function.c
-
-#### 階段 RVA: A 擴展 (原子操作)
-| 優先級 | 指令 | 測試檔案 |
-|--------|------|----------|
-| 高 | lr.w, sc.w, lr.d, sc.d | test_atomic.c |
-| 高 | amoadd.w, amoadd.d | test_atomic.c |
-| 中 | amoswap.w, amoswap.d | test_atomic.c |
-| 低 | amoand.w, amoor.w, amoxor.w | test_atomic.c |
-
-#### 階段 RVF: F 擴展 (單精度浮點)
-| 優先級 | 指令 | 測試檔案 |
-|--------|------|----------|
-| 高 | fadd.s, fsub.s, fmul.s, fdiv.s | test_float.c |
-| 高 | flw, fsw, flw | test_float.c |
-| 中 | feq.s, flt.s, fle.s | test_float.c |
-| 中 | fcvt.w.s, fcvt.s.w | test_float.c |
-| 低 | fsqrt.s, fmax.s, fmin.s | test_float.c |
-
-#### 階段 RVD: D 擴展 (雙精度浮點)
-| 優先級 | 指令 | 測試檔案 |
-|--------|------|----------|
-| 高 | fadd.d, fsub.d, fmul.d, fdiv.d | test_double.c |
-| 高 | fld, fsd | test_double.c |
-| 中 | fcvt.d.s, fcvt.s.d | test_double.c |
-| 低 | fsqrt.d | test_double.c |
-
-#### 階段 RVB: B 擴展 (位元操作)
-| 優先級 | 指令 | 測試檔案 |
-|--------|------|----------|
-| 高 | andn, orn, xnor | test_bitop.c |
-| 高 | clz, ctz, pcnt | test_bitop.c |
-| 中 | max, maxu, min, minu | test_bitop.c |
-| 低 | rol, ror, rori | test_bitop.c |
-| 低 | bclr, bset, binv | test_bitop.c |
-
-#### 階段 RVC: C 擴展 (壓縮指令)
-- 支援 16-bit 壓縮指令格式
-- 需要修改組譯器和解譯器
-- 測試: 比較程式大小
-
-#### 階段 RVV: V 擴展 (向量指令)
-| 優先級 | 指令類別 | 測試檔案 |
-|--------|----------|----------|
-| 高 | vsetvl, vle.v, vse.v | test_vector.c |
-| 中 | vadd.vv, vsub.vv, vmul.vv | test_vector.c |
-| 低 | vload.v, vstore.v | test_vector.c |
-
-### 測試案例建檔
-
-在 `compiler/_data/` 目錄下建立對應測試檔案：
-
-```bash
-# 原子操作測試
-test_atomic.c      # A 擴展
-
-# 浮點數測試
-test_float.c       # F 擴展
-test_double.c      # D 擴展
-
-# 位元操作測試
-test_bitop.c       # B 擴展
-
-# 向量測試
-test_vector.c      # V 擴展
-
-# 更多基礎測試
-test_neg.c         # 負數運算
-test_divzero.c     # 除以零處理
-test_overflow.c    # 溢位處理
-test_compare64.c   # 64-bit 比較
-test_shift64.c     # 64-bit 移位
-```
-
-### 測試執行方式
-
-```bash
-# 執行所有測試
-./test.sh
-
-# 執行特定擴展測試
-make test_atomic
-make test_float
-make test_double
-make test_bitop
-
-# 單一測試
-make test_float && ./rv0/rv0vm -e 0x0 _data/test_float.o
-```
-
----
-
 ## 發展策略：測試驅動開發 (TDD)
 
 ### 核心原則
@@ -166,12 +59,12 @@ test_regress:  # 執行回歸測試，確保不破壞現有功能
 
 | 優先級 | 指令類別 | 具體指令 | 狀態 |
 |--------|----------|----------|------|
-| 高 | 算術 | add, sub, mul, div, rem, addw, subw, mulw, divw, remw | ✓ 完成 |
-| 高 | 邏輯 | and, or, xor, andi, ori, xori | ✓ 完成 |
+| 高 | 算術 | add, sub, mul, div, rem, addw, subw, mulw, divw, remw | 待完成 |
+| 高 | 邏輯 | and, or, xor, andi, ori, xori | 待完成 |
 | 中 | 移位 | sll, srl, sra, sllw, srlw, sraw | ✓ 完成 |
-| 中 | 比較 | slt, sltu, slti, sltiu | ✓ 完成 |
-| 低 | 載入/儲存 | lbu, lhu, sb, sh | ✓ 完成 |
-| 低 | 環境 | ecall, ebreak | ✓ 完成 |
+| 中 | 比較 | slt, sltu, slti, sltui | 待完成 |
+| 低 | 載入/儲存 | lbu, lhu, sb, sh | 待完成 |
+| 低 | 環境 | ecall, ebreak | 待完成 |
 
 ### 2.2 實作步驟
 ```
@@ -245,14 +138,11 @@ test_regress:  # 執行回歸測試，確保不破壞現有功能
 
 ## 短期目標（1-2 週）
 
-1. [x] 建立 `_test/` 目錄結構
-2. [x] 新增 10 個基礎測試案例
-3. [x] 完善 rv0vm：支援 div, rem, 邏輯運算
-4. [x] 完善 rv0as：支援 RV64I + M 完整指令集
-5. [x] 建立自動化測試腳本 (test.sh)
-6. [ ] 新增 RVA (原子操作) 擴展支援
-7. [ ] 新增 RVF/RVD (浮點數) 擴展支援
-8. [ ] 新增 RVB (位元操作) 擴展支援
+1. [ ] 建立 `_test/` 目錄結構
+2. [ ] 新增 10 個基礎測試案例
+3. [ ] 完善 rv0vm：支援 div, rem, 邏輯運算
+4. [ ] 嘗試修復 c0c → ll0c → rv0as 管線
+5. [ ] 建立自動化測試腳本
 
 ---
 
