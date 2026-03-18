@@ -8,12 +8,12 @@ including factorial, fibonacci, sorting, etc.
 
 import sys
 import os
+import operator
 import math
 
-# 使用本地手寫的 ast.py 和 operator.py，不依賴標準函式庫
+# 使用本地手寫的 ast.py，不依賴標準函式庫的 ast 模組
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ast
-import operator
 
 # ─── Environment (scope chain) ───────────────────────────────────────────────
 
