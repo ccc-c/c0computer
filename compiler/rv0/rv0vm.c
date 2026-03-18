@@ -357,6 +357,113 @@ case 0x63: // BRANCH 完整版
                     }
                 }
                 break;
+            
+            // ==================== RV64A 原子指令 ====================
+            case 0x2F: // AMO (Atomic Memory Operations)
+                {
+                    uint32_t funct5 = (inst >> 27) & 0x1F;
+                    uint32_t funct3 = (inst >> 12) & 0x7;
+                    uint64_t addr = X[rs1];
+                    
+                    if (addr >= RAM_SIZE) { printf("Memory Fault (AMO)\n"); goto end; }
+                    
+                    if (funct3 == 2) { // 32-bit operations
+                        int32_t old_val = *(int32_t*)(RAM + addr);
+                        int32_t new_val;
+                        
+                        if (funct5 == 0x02) { // LR.W
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x03) { // SC.W
+                            new_val = (int32_t)X[rs2];
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = 0; // success
+                        } else if (funct5 == 0x00) { // AMOADD.W
+                            new_val = old_val + (int32_t)X[rs2];
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x01) { // AMOSWAP.W
+                            new_val = (int32_t)X[rs2];
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x04) { // AMOXOR.W
+                            new_val = old_val ^ (int32_t)X[rs2];
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x03) { // AMOAND.W
+                            new_val = old_val & (int32_t)X[rs2];
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x06) { // AMOOR.W
+                            new_val = old_val | (int32_t)X[rs2];
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x05) { // AMOMIN.W
+                            new_val = ((int32_t)X[rs2] < old_val) ? (int32_t)X[rs2] : old_val;
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x07) { // AMOMAX.W
+                            new_val = ((int32_t)X[rs2] > old_val) ? (int32_t)X[rs2] : old_val;
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x09) { // AMOMINU.W
+                            new_val = ((uint32_t)X[rs2] < (uint32_t)old_val) ? (int32_t)X[rs2] : old_val;
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        } else if (funct5 == 0x0A) { // AMOMAXU.W
+                            new_val = ((uint32_t)X[rs2] > (uint32_t)old_val) ? (int32_t)X[rs2] : old_val;
+                            *(int32_t*)(RAM + addr) = new_val;
+                            X[rd] = (int64_t)old_val;
+                        }
+                    } else if (funct3 == 3) { // 64-bit operations
+                        int64_t old_val = *(int64_t*)(RAM + addr);
+                        int64_t new_val;
+                        
+                        if (funct5 == 0x02) { // LR.D
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x03) { // SC.D
+                            new_val = X[rs2];
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = 0; // success
+                        } else if (funct5 == 0x00) { // AMOADD.D
+                            new_val = old_val + X[rs2];
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x01) { // AMOSWAP.D
+                            new_val = X[rs2];
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x04) { // AMOXOR.D
+                            new_val = old_val ^ X[rs2];
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x03) { // AMOAND.D
+                            new_val = old_val & X[rs2];
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x06) { // AMOOR.D
+                            new_val = old_val | X[rs2];
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x05) { // AMOMIN.D
+                            new_val = (X[rs2] < old_val) ? X[rs2] : old_val;
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x07) { // AMOMAX.D
+                            new_val = (X[rs2] > old_val) ? X[rs2] : old_val;
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x09) { // AMOMINU.D
+                            new_val = ((uint64_t)X[rs2] < (uint64_t)old_val) ? X[rs2] : old_val;
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        } else if (funct5 == 0x0A) { // AMOMAXU.D
+                            new_val = ((uint64_t)X[rs2] > (uint64_t)old_val) ? X[rs2] : old_val;
+                            *(int64_t*)(RAM + addr) = new_val;
+                            X[rd] = old_val;
+                        }
+                    }
+                }
+                break;
             case 0x53: // OP-FP (double precision / single precision)
                 {
                     // f7 = funct7, f3 = funct3, rs1 = src1, rs2 = src2, rd = dest

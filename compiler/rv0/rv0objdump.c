@@ -159,6 +159,42 @@ void decode_riscv(uint32_t inst) {
         case 0x17: // AUIPC
             printf("auipc\t%s, %d\n", reg_names[rd], (inst >> 12) & 0xFFFFF);
             break;
+        // ==================== RV64A 原子指令 ====================
+        case 0x2F: // AMO
+            {
+                uint32_t funct5 = (inst >> 27) & 0x1F;
+                uint32_t funct3 = (inst >> 12) & 0x7;
+                if (funct3 == 2) { // 32-bit
+                    if (funct5 == 0x02) printf("lr.w\t%s, (%s)\n", reg_names[rd], reg_names[rs1]);
+                    else if (funct5 == 0x03) printf("sc.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x00) printf("amoadd.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x01) printf("amoswap.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x04) printf("amoxor.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x03) printf("amoand.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x06) printf("amoor.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x05) printf("amomin.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x07) printf("amomax.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x09) printf("amominu.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x0A) printf("amomaxu.w\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else printf("amo32\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                } else if (funct3 == 3) { // 64-bit
+                    if (funct5 == 0x02) printf("lr.d\t%s, (%s)\n", reg_names[rd], reg_names[rs1]);
+                    else if (funct5 == 0x03) printf("sc.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x00) printf("amoadd.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x01) printf("amoswap.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x04) printf("amoxor.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x03) printf("amoand.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x06) printf("amoor.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x05) printf("amomin.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x07) printf("amomax.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x09) printf("amominu.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else if (funct5 == 0x0A) printf("amomaxu.d\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                    else printf("amo64\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                } else {
+                    printf("amo\t%s, %s, (%s)\n", reg_names[rd], reg_names[rs2], reg_names[rs1]);
+                }
+            }
+            break;
         // ==================== RV64F/RV64D 浮點數指令 ====================
         case 0x07: // LOAD-FP
             if (funct3 == 2) printf("flw \t%s, %d(%s)\n", freg_names[rd], imm_i, reg_names[rs1]);

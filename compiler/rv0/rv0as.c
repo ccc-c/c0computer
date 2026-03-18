@@ -102,11 +102,25 @@ uint32_t enc_FP_S(int op, int f3, int rs2, int rs1, int imm) {
 
 // Helper to strip commas and whitespace
 void clean_operand(char *op) {
+    char temp[32];
     char *p = op;
+    int j = 0;
     while (*p) {
-        if (*p == ',' || *p == '\n' || *p == '\r') *p = '\0';
+        if (*p != ',' && *p != '\n' && *p != '\r') {
+            temp[j++] = *p;
+        }
         p++;
     }
+    temp[j] = '\0';
+    strcpy(op, temp);
+}
+
+// Parse number (supports decimal and hex like 0x100)
+int parse_imm(const char *s) {
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        return (int)strtol(s, NULL, 16);
+    }
+    return atoi(s);
 }
 
 int get_rounding_mode(const char *rm) {
@@ -157,19 +171,32 @@ void assemble(char lines[][256], int line_count) {
         // Parse format like offset(reg) => e.g., 40(sp)
         int mem_imm = 0;
         char mem_reg[32] = {0};
+        char offset_str[32] = {0};
         if (strchr(op2, '(')) {
-            sscanf(op2, "%d(%[^)])", &mem_imm, mem_reg);
+            sscanf(op2, "%[^ (](%[^)])", offset_str, mem_reg);
+            mem_imm = parse_imm(offset_str);
             strcpy(op2, mem_reg);
         }
+        
+        // Parse format like (reg) for AMO instructions => e.g., (t2)
+        if (op3[0] == '(') {
+            sscanf(op3, "(%[^)])", mem_reg);
+            strcpy(op3, mem_reg);
+        }
+        
+        // Clean up any remaining parentheses in all operands
+        for (int i = 0; op1[i]; i++) if (op1[i] == '(' || op1[i] == ')') op1[i] = 0;
+        for (int i = 0; op2[i]; i++) if (op2[i] == '(' || op2[i] == ')') op2[i] = 0;
+        for (int i = 0; op3[i]; i++) if (op3[i] == '(' || op3[i] == ')') op3[i] = 0;
 
-        if (strcmp(mnem, "addi") == 0) inst = enc_I(0x13, 0, get_reg(op1), get_reg(op2), atoi(op3));
-        else if (strcmp(mnem, "addiw") == 0) inst = enc_I(0x1b, 0, get_reg(op1), get_reg(op2), atoi(op3));
-        else if (strcmp(mnem, "slli") == 0) inst = enc_I(0x13, 1, get_reg(op1), get_reg(op2), atoi(op3));  // slli
-        else if (strcmp(mnem, "srli") == 0) inst = enc_I(0x13, 5, get_reg(op1), get_reg(op2), atoi(op3));  // srli
-        else if (strcmp(mnem, "srai") == 0) inst = enc_I(0x13, 5, get_reg(op1), get_reg(op2), atoi(op3) | 0x1000);  // srai
-        else if (strcmp(mnem, "slliw") == 0) inst = enc_I(0x1b, 1, get_reg(op1), get_reg(op2), atoi(op3));  // slliw
-        else if (strcmp(mnem, "srliw") == 0) inst = enc_I(0x1b, 5, get_reg(op1), get_reg(op2), atoi(op3));  // srliw
-        else if (strcmp(mnem, "sraiw") == 0) inst = enc_I(0x1b, 5, get_reg(op1), get_reg(op2), atoi(op3) | 0x1000);  // sraiw
+        if (strcmp(mnem, "addi") == 0) inst = enc_I(0x13, 0, get_reg(op1), get_reg(op2), parse_imm(op3));
+        else if (strcmp(mnem, "addiw") == 0) inst = enc_I(0x1b, 0, get_reg(op1), get_reg(op2), parse_imm(op3));
+        else if (strcmp(mnem, "slli") == 0) inst = enc_I(0x13, 1, get_reg(op1), get_reg(op2), parse_imm(op3));  // slli
+        else if (strcmp(mnem, "srli") == 0) inst = enc_I(0x13, 5, get_reg(op1), get_reg(op2), parse_imm(op3));  // srli
+        else if (strcmp(mnem, "srai") == 0) inst = enc_I(0x13, 5, get_reg(op1), get_reg(op2), parse_imm(op3) | 0x1000);  // srai
+        else if (strcmp(mnem, "slliw") == 0) inst = enc_I(0x1b, 1, get_reg(op1), get_reg(op2), parse_imm(op3));  // slliw
+        else if (strcmp(mnem, "srliw") == 0) inst = enc_I(0x1b, 5, get_reg(op1), get_reg(op2), parse_imm(op3));  // srliw
+        else if (strcmp(mnem, "sraiw") == 0) inst = enc_I(0x1b, 5, get_reg(op1), get_reg(op2), parse_imm(op3) | 0x1000);  // sraiw
         else if (strcmp(mnem, "lw") == 0) inst = enc_I(0x03, 2, get_reg(op1), get_reg(op2), mem_imm);
         else if (strcmp(mnem, "ld") == 0) inst = enc_I(0x03, 3, get_reg(op1), get_reg(op2), mem_imm);
         else if (strcmp(mnem, "sw") == 0) inst = enc_S(0x23, 2, get_reg(op2), get_reg(op1), mem_imm);
@@ -213,11 +240,11 @@ void assemble(char lines[][256], int line_count) {
         else if (strcmp(mnem, "sltu") == 0) inst = enc_R(0x33, 3, 0, get_reg(op1), get_reg(op2), get_reg(op3));
         
         // RV64I I-type 立即數版本
-        else if (strcmp(mnem, "andi") == 0) inst = enc_I(0x13, 7, get_reg(op1), get_reg(op2), atoi(op3));
-        else if (strcmp(mnem, "ori") == 0) inst = enc_I(0x13, 6, get_reg(op1), get_reg(op2), atoi(op3));
-        else if (strcmp(mnem, "xori") == 0) inst = enc_I(0x13, 4, get_reg(op1), get_reg(op2), atoi(op3));
-        else if (strcmp(mnem, "slti") == 0) inst = enc_I(0x13, 2, get_reg(op1), get_reg(op2), atoi(op3));
-        else if (strcmp(mnem, "sltiu") == 0) inst = enc_I(0x13, 3, get_reg(op1), get_reg(op2), atoi(op3));
+        else if (strcmp(mnem, "andi") == 0) inst = enc_I(0x13, 7, get_reg(op1), get_reg(op2), parse_imm(op3));
+        else if (strcmp(mnem, "ori") == 0) inst = enc_I(0x13, 6, get_reg(op1), get_reg(op2), parse_imm(op3));
+        else if (strcmp(mnem, "xori") == 0) inst = enc_I(0x13, 4, get_reg(op1), get_reg(op2), parse_imm(op3));
+        else if (strcmp(mnem, "slti") == 0) inst = enc_I(0x13, 2, get_reg(op1), get_reg(op2), parse_imm(op3));
+        else if (strcmp(mnem, "sltiu") == 0) inst = enc_I(0x13, 3, get_reg(op1), get_reg(op2), parse_imm(op3));
         
         // RV64I 載入指令 (lb, lbu, lh, lhu)
         else if (strcmp(mnem, "lb") == 0) inst = enc_I(0x03, 0, get_reg(op1), get_reg(op2), mem_imm);
@@ -230,7 +257,7 @@ void assemble(char lines[][256], int line_count) {
         else if (strcmp(mnem, "sh") == 0) inst = enc_S(0x23, 1, get_reg(op2), get_reg(op1), mem_imm);
         
         // LUI 和 AUIPC
-        else if (strcmp(mnem, "lui") == 0) inst = enc_U(0x37, get_reg(op1), atoi(op2));
+        else if (strcmp(mnem, "lui") == 0) inst = enc_U(0x37, get_reg(op1), parse_imm(op2));
         
         // ==================== RV64F 浮點數指令 ====================
         // FLW/FSD (載入/儲存)
@@ -286,6 +313,36 @@ void assemble(char lines[][256], int line_count) {
         else if (strcmp(mnem, "fmv.d.x") == 0) inst = enc_FP_R(0x53, 0x70, 0, get_reg(op2), 0, get_freg(op1));  // FMV.D.X (int to double)
         else if (strcmp(mnem, "fmv.x.d") == 0) inst = enc_FP_R(0x53, 0x78, 0, get_freg(op2), 0, get_reg(op1));  // FMV.X.D (double to int)
         
+        // ==================== RV64A 原子指令 ====================
+        // AMO 編碼格式: opcode(7) | funct5(5) | rs2(5) | rs1(5) | funct3(3) | rd(5) | opcode2(7)
+        // opcode = 0x2F
+        // 語法: amo<op>.d rd, rs2, (rs1) => op1=rd, op2=rs2, op3=rs1 (address in parentheses)
+        // LR/SC: funct5=0x02 for LR, 0x03 for SC
+        else if (strcmp(mnem, "lr.w") == 0) inst = (0x02 << 27) | (0 << 20) | (get_reg(op2) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F; // LR.W: funct5=2
+        else if (strcmp(mnem, "lr.d") == 0) inst = (0x02 << 27) | (0 << 20) | (get_reg(op2) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F; // LR.D: funct5=2, funct3=3
+        else if (strcmp(mnem, "sc.w") == 0) inst = (0x03 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F; // SC.W: funct5=3, funct3=2
+        else if (strcmp(mnem, "sc.d") == 0) inst = (0x03 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F; // SC.D: funct5=3, funct3=3
+        // 32-bit AMO (funct5 varies, funct3=2 for word)
+        else if (strcmp(mnem, "amoadd.w") == 0) inst = (0x00 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoswap.w") == 0) inst = (0x01 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoxor.w") == 0) inst = (0x04 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoand.w") == 0) inst = (0x03 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoor.w") == 0) inst = (0x06 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amomin.w") == 0) inst = (0x05 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amomax.w") == 0) inst = (0x07 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amominu.w") == 0) inst = (0x09 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amomaxu.w") == 0) inst = (0x0A << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (2 << 12) | (get_reg(op1) << 7) | 0x2F;
+        // 64-bit AMO (funct5=0x01 for AMOSWAP, funct3=3 for doubleword)
+        else if (strcmp(mnem, "amoadd.d") == 0) inst = (0x00 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoswap.d") == 0) inst = (0x01 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoxor.d") == 0) inst = (0x04 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoand.d") == 0) inst = (0x03 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amoor.d") == 0) inst = (0x06 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amomin.d") == 0) inst = (0x05 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amomax.d") == 0) inst = (0x07 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amominu.d") == 0) inst = (0x09 << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        else if (strcmp(mnem, "amomaxu.d") == 0) inst = (0x0A << 27) | (get_reg(op2) << 20) | (get_reg(op3) << 15) | (3 << 12) | (get_reg(op1) << 7) | 0x2F;
+        
         // ... 前面的 addi, lw, sw, mul 等等保留 ...
         else if (strcmp(mnem, "beq") == 0) inst = enc_B(0x63, 0, get_reg(op1), get_reg(op2), resolve_label(op3) - pc);
         else if (strcmp(mnem, "bne") == 0) inst = enc_B(0x63, 1, get_reg(op1), get_reg(op2), resolve_label(op3) - pc);
@@ -304,7 +361,7 @@ void assemble(char lines[][256], int line_count) {
             inst = enc_J(0x6f, 0, offset); // jal zero, offset
         }
         // Pseudo-instructions handling
-        else if (strcmp(mnem, "li") == 0) inst = enc_I(0x13, 0, get_reg(op1), 0, atoi(op2)); // addi rd, zero, imm
+        else if (strcmp(mnem, "li") == 0) inst = enc_I(0x13, 0, get_reg(op1), 0, parse_imm(op2)); // addi rd, zero, imm
         else if (strcmp(mnem, "mv") == 0) inst = enc_I(0x13, 0, get_reg(op1), get_reg(op2), 0); // addi rd, rs, 0
         else if (strcmp(mnem, "ret") == 0) inst = enc_I(0x67, 0, 0, get_reg("ra"), 0); // jalr zero, 0(ra)
         else if (strcmp(mnem, "call") == 0) {
