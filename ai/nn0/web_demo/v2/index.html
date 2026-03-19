@@ -13,8 +13,8 @@
   <!-- ════ Header ════ -->
   <header>
     <div class="badge">AUTO-GRAD ENGINE</div>
-    <h1>nn<span>0</span><br> 神經網路引擎互動學習</h1>
-    <p class="subtitle">用純 Python 實作的自動微分引擎與 Adam 優化器，可視化神經網路訓練過程。</p>
+    <h1>nn0 - 梯度引擎 應用展示</h1>
+    <p class="subtitle">從頭實作的自動微分引擎與 Adam 優化器，可視化神經網路訓練過程。</p>
   </header>
 
   <!-- ════ Tabs ════ -->
@@ -354,7 +354,8 @@
           ↺ 重置
         </button>
         <span id="mnistStatus"
-              style="font-family:'Syne Mono',monospace;font-size:10px;color:var(--muted);align-self:flex-end">
+              style="font-family:'Syne Mono',monospace;font-size:10px;
+                     color:var(--muted);align-self:flex-end">
           尚未訓練
         </span>
       </div>
@@ -370,56 +371,58 @@
         訓練 Epoch 數 → 看準確率曲線，平穩後再畫就有效
       </div>
 
-      <!-- ── 訓練進度 + 準確率曲線 ── -->
-      <div style="margin-bottom:14px">
-        <div class="progress-wrap" id="mnistProgWrap" style="display:none">
-          <div class="progress-bar" id="mnistProgBar"></div>
-        </div>
-        <div class="section-title">// 訓練準確率曲線</div>
-        <canvas id="mnistAccCanvas" height="100"
-                style="background:var(--code-bg);border:1px solid var(--border);
-                       width:100%;display:block">
-        </canvas>
-      </div>
+      <!-- ── 主體：左欄進度 / 右欄即時辨識展示 ── -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
-      <!-- ── 訓練樣本展示 ── -->
-      <div style="margin-bottom:14px">
-        <div class="section-title">// 合成訓練樣本（每個數字隨機取 1 張）</div>
-        <div id="mnistSampleRow"
-             style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
-          <!-- 10 個 canvas，JS 填入 -->
-        </div>
-      </div>
-
-      <!-- ── 繪圖 + 預測 ── -->
-      <div style="display:grid;grid-template-columns:180px 1fr;gap:20px;align-items:start">
+        <!-- 左：準確率曲線 + 手寫測試 -->
         <div>
-          <div class="section-title">// 在此繪圖測試</div>
-          <canvas id="mnistDraw" width="180" height="180"
-                  style="width:180px;height:180px;display:block;
-                         border:1px solid var(--border);background:var(--code-bg);
-                         cursor:crosshair;touch-action:none;image-rendering:pixelated">
+          <div class="progress-wrap" id="mnistProgWrap" style="display:none;margin-bottom:8px">
+            <div class="progress-bar" id="mnistProgBar"></div>
+          </div>
+          <div class="section-title">// 訓練準確率曲線</div>
+          <canvas id="mnistAccCanvas" height="120"
+                  style="background:var(--code-bg);border:1px solid var(--border);
+                         width:100%;display:block;margin-bottom:14px">
           </canvas>
-          <div style="display:flex;gap:6px;margin-top:8px">
-            <button class="btn btn-primary"
-                    style="flex:1;padding:7px 0;font-size:11px"
-                    onclick="mnistPredict()">▶ 辨識</button>
-            <button class="btn"
-                    style="border-color:var(--muted);color:var(--muted);
-                           flex:1;padding:7px 0;font-size:11px"
-                    onclick="mnistClear()">✕ 清除</button>
+
+          <div class="section-title">// 手寫測試</div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div>
+              <canvas id="mnistDraw" width="140" height="140"
+                      style="width:140px;height:140px;display:block;
+                             border:1px solid var(--border);background:var(--code-bg);
+                             cursor:crosshair;touch-action:none;image-rendering:pixelated">
+              </canvas>
+              <div style="display:flex;gap:4px;margin-top:6px">
+                <button class="btn btn-primary"
+                        style="flex:1;padding:5px 0;font-size:10px"
+                        onclick="mnistPredict()">▶ 辨識</button>
+                <button class="btn"
+                        style="border-color:var(--muted);color:var(--muted);
+                               flex:1;padding:5px 0;font-size:10px"
+                        onclick="mnistClear()">✕ 清除</button>
+              </div>
+            </div>
+            <div style="flex:1">
+              <div id="mnistResult"
+                   style="font-family:'Syne Mono',monospace;font-size:36px;
+                          color:var(--accent);margin-bottom:8px;letter-spacing:2px">—</div>
+              <div class="pred-bars" id="predBars"><!-- JS 生成 --></div>
+            </div>
           </div>
         </div>
+
+        <!-- 右：即時辨識結果展示（類 ConvNetJS 風格） -->
         <div>
-          <div class="section-title">// 預測信心分數</div>
-          <div id="mnistResult"
-               style="font-family:'Syne Mono',monospace;font-size:40px;
-                      color:var(--accent);margin-bottom:10px;letter-spacing:2px">
-            —
+          <div class="section-title">// 即時辨識結果（每 epoch 更新）</div>
+          <div id="mnistLiveGrid"
+               style="display:flex;flex-wrap:wrap;gap:5px;
+                      min-height:200px;align-content:flex-start">
+            <!-- JS 動態填入 .mnist-cell -->
           </div>
-          <div class="pred-bars" id="predBars"><!-- JS 生成 --></div>
         </div>
-      </div>
+
+      </div><!-- /grid -->
     </div>
 
     <!-- 函數逼近 + 邏輯電路 -->

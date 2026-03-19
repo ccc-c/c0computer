@@ -807,6 +807,87 @@ function mnistRenderSampleCanvas(canvas, px) {
   ctx.drawImage(tmp, 0, 0, size, size);
 }
 
+// ── 即時辨識結果展示（類 ConvNetJS 風格）────────
+
+/**
+ * 從訓練集隨機抽取 SHOW_N 個樣本，
+ * 把每張圖 + 正確標籤 + 預測標籤 + 信心分數畫成小卡片。
+ */
+function mnistUpdateLiveGrid() {
+  const grid = document.getElementById('mnistLiveGrid');
+  if (!grid || !mnistModel) return;
+
+  const SHOW_N  = 40;
+  const { allX, allY } = mnistTrainData;
+  if (allX.length === 0) return;
+
+  // 隨機抽樣
+  const picks = Array.from({ length: SHOW_N }, () =>
+    Math.floor(Math.random() * allX.length)
+  );
+
+  grid.innerHTML = '';
+
+  picks.forEach(idx => {
+    const px     = allX[idx];
+    const truth  = allY[idx];
+    const inp    = px.map(v => new Value(v));
+    const logits = mnistModel.forward(inp, ['relu', 'relu']);
+    const maxL   = Math.max(...logits.map(v => v.data));
+    const exps   = logits.map(v => Math.exp(v.data - maxL));
+    const sum    = exps.reduce((a, b) => a + b, 0);
+    const probs  = exps.map(v => v / sum);
+    const pred   = probs.indexOf(Math.max(...probs));
+    const conf   = probs[pred];
+    const ok     = pred === truth;
+
+    // 外層 cell
+    const cell = document.createElement('div');
+    cell.className = `mnist-cell ${ok ? 'correct' : 'wrong'}`;
+
+    // 縮圖 canvas (28×28 → 40×40)
+    const canv = document.createElement('canvas');
+    canv.width = canv.height = MNIST_W;
+    const ctx = canv.getContext('2d');
+    const img = ctx.createImageData(MNIST_W, MNIST_W);
+    for (let i = 0; i < MNIST_W * MNIST_W; i++) {
+      const v = Math.round(px[i] * 255);
+      img.data[i * 4]     = v;
+      img.data[i * 4 + 1] = v;
+      img.data[i * 4 + 2] = v;
+      img.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    cell.appendChild(canv);
+
+    // 標籤列：真實 / 預測
+    const lbl = document.createElement('div');
+    lbl.className = 'mnist-cell-label';
+    lbl.innerHTML =
+      `<span class="truth">${truth}</span>` +
+      ` → ` +
+      `<span class="${ok ? 'pred-ok' : 'pred-err'}">${pred}</span>`;
+    cell.appendChild(lbl);
+
+    // 信心分數條
+    const bar = document.createElement('div');
+    bar.className = 'mnist-conf-bar';
+    const fill = document.createElement('div');
+    fill.className = `mnist-conf-fill ${ok ? '' : 'wrong'}`;
+    fill.style.width = (conf * 100).toFixed(1) + '%';
+    bar.appendChild(fill);
+    cell.appendChild(bar);
+
+    // 信心數字
+    const confLbl = document.createElement('div');
+    confLbl.className = 'mnist-cell-label';
+    confLbl.textContent = (conf * 100).toFixed(0) + '%';
+    cell.appendChild(confLbl);
+
+    grid.appendChild(cell);
+  });
+}
+
 // ── 準確率曲線 ───────────────────────────────
 
 function mnistDrawAccCurve() {
@@ -873,9 +954,6 @@ function mnistStartTrain() {
       mnistTrainData.allX.push(px);
       mnistTrainData.allY.push(d);
     });
-    // 展示第一個樣本
-    const sc = document.getElementById(`mnistSample${d}`);
-    if (sc) mnistRenderSampleCanvas(sc, samples[0]);
   }
 
   document.getElementById('mnistProgWrap').style.display = 'block';
@@ -890,6 +968,7 @@ function mnistStartTrain() {
       document.getElementById('mnistTrainBtn').disabled = false;
       document.getElementById('mnistStatus').textContent =
         `✓ 完成  最終準確率 ${(mnistAccHistory[mnistAccHistory.length - 1] * 100).toFixed(1)}%`;
+      mnistUpdateLiveGrid();
       return;
     }
 
@@ -930,6 +1009,7 @@ function mnistStartTrain() {
       `epoch ${mnistEp}/${mnistTotalEp}  acc ${(acc * 100).toFixed(1)}%`;
 
     mnistDrawAccCurve();
+    mnistUpdateLiveGrid();   // ← 每 epoch 更新即時辨識展示
     setTimeout(runEpoch, 0);
   };
 
@@ -943,17 +1023,14 @@ function mnistReset() {
   mnistModel      = null;
   mnistAccHistory = [];
   mnistEp         = 0;
-  document.getElementById('mnistTrainBtn').disabled     = false;
-  document.getElementById('mnistStatus').textContent    = '尚未訓練';
+  document.getElementById('mnistTrainBtn').disabled      = false;
+  document.getElementById('mnistStatus').textContent     = '尚未訓練';
   document.getElementById('mnistProgWrap').style.display = 'none';
-  document.getElementById('mnistProgBar').style.width   = '0%';
+  document.getElementById('mnistProgBar').style.width    = '0%';
+  const grid = document.getElementById('mnistLiveGrid');
+  if (grid) grid.innerHTML = '';
   mnistDrawAccCurve();
   mnistClear();
-  // 清除樣本圖
-  for (let d = 0; d < 10; d++) {
-    const sc = document.getElementById(`mnistSample${d}`);
-    if (sc) sc.getContext('2d').clearRect(0, 0, sc.width, sc.height);
-  }
 }
 
 // ── 繪圖 canvas 事件 ──────────────────────────
@@ -1027,24 +1104,10 @@ function mnistPredict() {
   }
 }
 
-// ── 初始化：建立樣本 canvas + 預測列 ──────────
+// ── 初始化：建立預測列 + 綁 canvas 事件 ────────
 
 function mnistInit() {
-  // 建立 10 個小 canvas 展示訓練樣本
-  const row = document.getElementById('mnistSampleRow');
-  if (row) {
-    row.innerHTML = Array.from({ length: 10 }, (_, d) => `
-      <div style="text-align:center">
-        <canvas id="mnistSample${d}" width="40" height="40"
-                style="display:block;border:1px solid var(--border);
-                       background:var(--code-bg);image-rendering:pixelated;
-                       width:40px;height:40px"></canvas>
-        <span style="font-family:'Syne Mono',monospace;font-size:9px;
-                     color:var(--muted)">${d}</span>
-      </div>`).join('');
-  }
-
-  // 建立預測 bar
+  // 建立預測 bar (0–9)
   const bars = document.getElementById('predBars');
   if (bars) {
     bars.innerHTML = Array.from({ length: 10 }, (_, i) => `

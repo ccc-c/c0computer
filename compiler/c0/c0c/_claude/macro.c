@@ -500,55 +500,6 @@ static void preprocess_into(const char *src, const char *filename,
         }
         free(line);
     }
-
-    /* post-process: concatenate adjacent string literals across lines */
-    const char *op = out->data;
-    size_t olen = out->len;
-    size_t i = 0;
-    char *result = malloc(olen + 1);
-    size_t rlen = 0;
-    int pending_close_quote = 0;
-
-    while (i < olen) {
-        if (op[i] == '"') {
-            if (!pending_close_quote) {
-                result[rlen++] = op[i];
-            }
-            pending_close_quote = 0;
-            i++;
-            while (i < olen && op[i] != '"') {
-                if (op[i] == '\\' && i + 1 < olen) {
-                    result[rlen++] = op[i++];
-                    if (i < olen) result[rlen++] = op[i++];
-                } else {
-                    result[rlen++] = op[i++];
-                }
-            }
-            if (i < olen && op[i] == '"') {
-                i++;
-                /* skip whitespace and newlines */
-                while (i < olen && (op[i] == ' ' || op[i] == '\t')) i++;
-                while (i < olen && (op[i] == '\n' || op[i] == '\r')) i++;
-                while (i < olen && (op[i] == ' ' || op[i] == '\t')) i++;
-                if (i < olen && op[i] == '"') {
-                    /* next is another string, skip the closing quote */
-                    pending_close_quote = 1;
-                    continue;
-                } else {
-                    /* no more strings, add the closing quote */
-                    result[rlen++] = '"';
-                }
-            }
-        } else {
-            result[rlen++] = op[i++];
-        }
-    }
-    result[rlen] = '\0';
-
-    free(out->data);
-    out->data = result;
-    out->len = rlen;
-    out->cap = rlen + 1;
 }
 
 /* ---------------------------------------------------------------- public API */
