@@ -1,4 +1,4 @@
-#include "c0macro.h"
+#include "macro.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,9 +16,34 @@ typedef struct {
 
 static Macro macros[MAX_MACROS];
 static int macro_count = 0;
+static char included_files[128][64];
+static int included_count = 0;
+
+static void add_macro(const char *name, const char *replacement) {
+    Macro *m = NULL;
+    for (int i = 0; i < macro_count; i++) {
+        if (strcmp(macros[i].name, name) == 0) { m = &macros[i]; break; }
+    }
+    if (!m && macro_count < MAX_MACROS) {
+        m = &macros[macro_count++];
+        strncpy(m->name, name, sizeof(m->name) - 1);
+        m->name[sizeof(m->name) - 1] = '\0';
+    }
+    if (m) {
+        strncpy(m->replacement, replacement, sizeof(m->replacement) - 1);
+        m->replacement[sizeof(m->replacement) - 1] = '\0';
+        m->is_function = 0;
+        m->arg_count = 0;
+    }
+}
 
 void macro_init(void) {
     macro_count = 0;
+    included_count = 0;
+    add_macro("NULL", "0");
+    add_macro("SEEK_SET", "0");
+    add_macro("SEEK_END", "2");
+    add_macro("SEEK_CUR", "1");
 }
 
 void macro_free(void) {
@@ -30,19 +55,6 @@ static Macro *find_macro(const char *name) {
         if (strcmp(macros[i].name, name) == 0) return &macros[i];
     }
     return NULL;
-}
-
-static void add_macro(const char *name, const char *replacement) {
-    Macro *m = find_macro(name);
-    if (!m && macro_count < MAX_MACROS) {
-        m = &macros[macro_count++];
-        strncpy(m->name, name, sizeof(m->name) - 1);
-        m->name[sizeof(m->name) - 1] = '\0';
-    }
-    if (m) {
-        strncpy(m->replacement, replacement, sizeof(m->replacement) - 1);
-        m->replacement[sizeof(m->replacement) - 1] = '\0';
-    }
 }
 
 void macro_define(const char *name, const char *replacement) {
@@ -175,23 +187,18 @@ static void process_undef(char *line) {
         p++;
     }
     name[i] = '\0';
-    
     macro_undef(name);
 }
 
 static void expand_function_macro(char *output, Macro *m, char *args[], int arg_count) {
     char buf[512];
     strcpy(buf, m->replacement);
-    
     output[0] = '\0';
     char *p = buf;
-    
     while (*p) {
         if (*p == '$' && *(p+1) >= '1' && *(p+1) <= '9') {
             int idx = *(p+1) - '1';
-            if (idx < arg_count && idx < 10) {
-                strcat(output, args[idx]);
-            }
+            if (idx < arg_count && idx < 10) strcat(output, args[idx]);
             p += 2;
         } else {
             char c[2] = {*p, '\0'};
@@ -203,16 +210,13 @@ static void expand_function_macro(char *output, Macro *m, char *args[], int arg_
 
 static void expand_line(char *output, const char *input) {
     strcpy(output, input);
-    
     int changed = 1;
     while (changed) {
         changed = 0;
         char temp[MAX_OUTPUT_SIZE];
         temp[0] = '\0';
-        
         char *p = output;
         char *out = temp;
-        
         while (*p) {
             if (isalpha(*p) || *p == '_') {
                 char name[64];
@@ -223,23 +227,18 @@ static void expand_line(char *output, const char *input) {
                     p++;
                 }
                 name[len] = '\0';
-                
                 Macro *m = find_macro(name);
                 if (m && m->is_function && *p == '(') {
                     p++;
-                    
                     char *args[10];
                     char arg_bufs[10][256];
                     int arg_count = 0;
                     int depth = 1;
                     int pos = 0;
-                    
                     args[0] = arg_bufs[0];
-                    
                     while (*p && depth > 0) {
                         if (*p == '(') depth++;
                         else if (*p == ')') depth--;
-                        
                         if (depth == 1 && *p == ',') {
                             arg_bufs[arg_count][pos] = '\0';
                             arg_count++;
@@ -248,15 +247,11 @@ static void expand_line(char *output, const char *input) {
                             p++;
                             continue;
                         }
-                        
-                        if (depth > 0 && pos < 255) {
-                            arg_bufs[arg_count][pos++] = *p;
-                        }
+                        if (depth > 0 && pos < 255) arg_bufs[arg_count][pos++] = *p;
                         p++;
                     }
                     arg_bufs[arg_count][pos] = '\0';
                     arg_count++;
-                    
                     char expanded[512];
                     expand_function_macro(expanded, m, args, arg_count);
                     strcpy(out, expanded);
@@ -271,57 +266,85 @@ static void expand_line(char *output, const char *input) {
                     out[len] = '\0';
                     out += len;
                 }
-            } else {
-                *out++ = *p++;
-            }
+            } else *out++ = *p++;
             *out = '\0';
         }
-        
         strcpy(output, temp);
     }
 }
 
 char *macro_expand(const char *input) {
-    char *output = malloc(MAX_OUTPUT_SIZE);
-    char *lines = malloc(strlen(input) + 1);
-    strcpy(lines, input);
-    
-    macro_init();
-    
     char *result = malloc(MAX_OUTPUT_SIZE);
     result[0] = '\0';
     
-    char *line = strtok(lines, "\n");
-    while (line) {
-        while (*line == ' ' || *line == '\t') line++;
-        
-        if (strncmp(line, "#define ", 8) == 0) {
-            process_define(line);
-        } else if (strncmp(line, "#undef ", 7) == 0) {
-            process_undef(line);
-        } else if (strncmp(line, "#ifdef ", 7) == 0) {
-        } else if (strncmp(line, "#ifndef ", 8) == 0) {
-        } else if (strncmp(line, "#else", 5) == 0) {
-        } else if (strncmp(line, "#endif", 6) == 0) {
+    const char *pos = input;
+    while (*pos) {
+        if (*pos == '#') {
+            const char *line_start = pos;
+            while (*pos && *pos != '\n') pos++;
+            int line_len = pos - line_start;
+            char line[512];
+            if (line_len > 511) line_len = 511;
+            strncpy(line, line_start, line_len);
+            line[line_len] = '\0';
+            
+            if (strncmp(line, "#define ", 8) == 0) {
+                process_define(line);
+            } else if (strncmp(line, "#undef ", 7) == 0) {
+                process_undef(line);
+            } else if (strncmp(line, "#include ", 9) == 0) {
+                char *start = strchr(line, '"');
+                char *angle = strchr(line, '<');
+                if (start && (!angle || start < angle)) {
+                    char *end = strchr(start + 1, '"');
+                    if (end) {
+                        char fname[64];
+                        int len = end - (start + 1);
+                        if (len > 63) len = 63;
+                        strncpy(fname, start + 1, len);
+                        fname[len] = '\0';
+                        int already = 0;
+                        for(int i=0; i<included_count; i++) {
+                            if(strcmp(included_files[i], fname) == 0) { already = 1; break; }
+                        }
+                        if (!already) {
+                            strcpy(included_files[included_count++], fname);
+                            char *inc = macro_expand_file(fname);
+                            if (inc) {
+                                strcat(result, inc);
+                                free(inc);
+                            }
+                        }
+                    }
+                } else if (angle) {
+                    if (strstr(line, "<stdio.h>")) strcat(result, "typedef void FILE;\nextern void *stdin;\nextern void *stdout;\nextern void *stderr;\nextern void *fopen(char *name, char *mode);\nextern int fclose(void *f);\nextern int fseek(void *f, long offset, int whence);\nextern long ftell(void *f);\nextern int fread(void *ptr, int size, int nmemb, void *f);\nextern int fputs(char *s, void *f);\nextern int printf(char *fmt, ...);\nextern int sprintf(char *str, char *fmt, ...);\nextern int snprintf(char *str, int size, char *fmt, ...);\nextern int fprintf(void *f, char *fmt, ...);\nextern void perror(char *s);\n");
+                    else if (strstr(line, "<stdlib.h>")) strcat(result, "#define NULL ((void*)0)\nextern void *malloc(int size);\nextern void *calloc(int nmemb, int size);\nextern void free(void *ptr);\nextern void exit(int status);\nextern long strtol(char *nptr, char *endptr, int base);\nextern double strtod(char *nptr, char *endptr);\n");
+                    else if (strstr(line, "<string.h>")) strcat(result, "extern int strlen(char *s);\nextern char *strcpy(char *dest, char *src);\nextern char *strncpy(char *dest, char *src, int n);\nextern char *strcat(char *dest, char *src);\nextern int strcmp(char *s1, char *s2);\nextern int strncmp(char *s1, char *s2, int n);\nextern char *strchr(char *s, int c);\nextern char *strstr(char *haystack, char *needle);\nextern char *strtok(char *str, char *delim);\n");
+                    else if (strstr(line, "<ctype.h>")) strcat(result, "extern int isalpha(int c);\nextern int isalnum(int c);\nextern int isdigit(int c);\nextern int isspace(int c);\nextern int isxdigit(int c);\n");
+                    else if (strstr(line, "<stddef.h>")) strcat(result, "typedef int size_t;\n");
+                }
+            }
         } else {
+            const char *line_start = pos;
+            while (*pos && *pos != '\n') pos++;
+            int line_len = pos - line_start;
+            char line[512];
+            if (line_len > 511) line_len = 511;
+            strncpy(line, line_start, line_len);
+            line[line_len] = '\0';
             char expanded[MAX_OUTPUT_SIZE];
             expand_line(expanded, line);
             strcat(result, expanded);
             strcat(result, "\n");
         }
-        
-        line = strtok(NULL, "\n");
+        if (*pos == '\n') pos++;
     }
-    
-    free(lines);
-    free(output);
-    macro_free();
     
     return result;
 }
 
 char *macro_expand_file(const char *filename) {
-    FILE *f = fopen(filename, "r");
+    FILE *f = fopen((char*)filename, "r");
     if (!f) return NULL;
     
     fseek(f, 0, SEEK_END);

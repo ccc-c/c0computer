@@ -1,7 +1,8 @@
-#include "codegen.h"
+#include "ast.h"
 #include "lexer.h"
 #include "parser.h"
 #include "macro.h"
+#include "codegen.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,7 +57,10 @@ int main(int argc, char **argv) {
     }
     
     FILE *f = fopen(input_file, "rb");
-    if (!f) error("無法開啟輸入檔案");
+    if (!f) {
+        fprintf(stderr, "無法開啟輸入檔案: %s\n", input_file);
+        exit(1);
+    }
     fseek(f, 0, SEEK_END);
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -74,9 +78,14 @@ int main(int argc, char **argv) {
     }
     
     FILE *out = fopen(output_file, "w");
-    if (!out) error("無法開啟輸出檔案");
+    if (!out) {
+        fprintf(stderr, "無法開啟輸出檔案: %s\n", output_file);
+        exit(1);
+    }
     
     p = src;
+    cur_line = 1;
+    cur_col = 1;
     next_token();
     ASTNode *ast = parse_program();
     gen_llvm_ir(ast, out);
