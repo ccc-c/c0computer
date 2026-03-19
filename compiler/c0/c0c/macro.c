@@ -606,6 +606,14 @@ char *macro_preprocess(const char *src, const char *filename, int include_depth)
         macro_define("__STDC__",  "1",    NULL, 0, 0);
         macro_define("NULL",      "((void*)0)", NULL, 0, 0);
         macro_define("__LP64__",  "1",    NULL, 0, 0);
+        /* stdio SEEK constants */
+        macro_define("SEEK_SET",  "0",    NULL, 0, 0);
+        macro_define("SEEK_CUR",  "1",    NULL, 0, 0);
+        macro_define("SEEK_END",  "2",    NULL, 0, 0);
+        /* common size macros */
+        macro_define("EOF",       "(-1)", NULL, 0, 0);
+        macro_define("EXIT_SUCCESS", "0", NULL, 0, 0);
+        macro_define("EXIT_FAILURE", "1", NULL, 0, 0);
     }
 
     preprocess_into(src, filename, &out, include_depth, if_stack, &if_depth);

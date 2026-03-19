@@ -7,18 +7,43 @@
 /* ---------------------------------------------------------------- symbol table (typedef tracking) */
 
 #define MAX_TYPEDEFS 512
+#define MAX_ENUM_CONSTS 1024
 
 typedef struct {
     char *name;
     Type *type;
 } TypedefEntry;
 
+typedef struct {
+    char    *name;
+    long long value;
+} EnumConst;
+
 struct Parser {
     Lexer       *lexer;
     Token        cur;
     TypedefEntry typedefs[MAX_TYPEDEFS];
     int          n_typedefs;
+    EnumConst    enum_consts[MAX_ENUM_CONSTS];
+    int          n_enum_consts;
 };
+
+static void register_enum_const(Parser *p, const char *name, long long val) {
+    if (p->n_enum_consts >= MAX_ENUM_CONSTS) return;
+    p->enum_consts[p->n_enum_consts].name  = strdup(name);
+    p->enum_consts[p->n_enum_consts].value = val;
+    p->n_enum_consts++;
+}
+
+static int lookup_enum_const(Parser *p, const char *name, long long *out) {
+    for (int i = 0; i < p->n_enum_consts; i++) {
+        if (strcmp(p->enum_consts[i].name, name) == 0) {
+            *out = p->enum_consts[i].value;
+            return 1;
+        }
+    }
+    return 0;
+}
 
 static void p_error(Parser *p, const char *msg) {
     fprintf(stderr, "parse error (line %d): %s (got '%s')\n",
@@ -185,12 +210,43 @@ static Type *parse_enum_specifier(Parser *p) {
     }
     if (check(p, TOK_LBRACE)) {
         advance(p);
-        long val = 0;
+        long long val = 0;
         while (!check(p, TOK_RBRACE) && !check(p, TOK_EOF)) {
-            /* just skip enum body */
-            if (check(p, TOK_COMMA)) advance(p);
-            else advance(p);
-            (void)val;
+            if (check(p, TOK_IDENT)) {
+                char *name = strdup(p->cur.text);
+                advance(p);
+                if (match(p, TOK_ASSIGN)) {
+                    /* parse constant expression — handle simple cases */
+                    if (check(p, TOK_INT_LIT)) {
+                        val = (long long)strtoll(p->cur.text, NULL, 0);
+                        advance(p);
+                    } else if (check(p, TOK_MINUS)) {
+                        advance(p);
+                        if (check(p, TOK_INT_LIT)) {
+                            val = -(long long)strtoll(p->cur.text, NULL, 0);
+                            advance(p);
+                        }
+                    } else if (check(p, TOK_IDENT)) {
+                        long long prev;
+                        if (lookup_enum_const(p, p->cur.text, &prev)) val = prev;
+                        advance(p);
+                        if (check(p, TOK_PLUS) || check(p, TOK_MINUS)) {
+                            int neg = (p->cur.type == TOK_MINUS);
+                            advance(p);
+                            if (check(p, TOK_INT_LIT)) {
+                                long long off = strtoll(p->cur.text, NULL, 0);
+                                val = neg ? val - off : val + off;
+                                advance(p);
+                            }
+                        }
+                    }
+                }
+                register_enum_const(p, name, val++);
+                free(name);
+            } else {
+                advance(p); /* skip unexpected tokens */
+            }
+            if (!match(p, TOK_COMMA)) break;
         }
         expect(p, TOK_RBRACE);
     }
@@ -236,11 +292,11 @@ static Type *parse_type_specifier(Parser *p, int *is_typedef_out,
         case TOK_UNION:
             direct   = parse_struct_union(p);
             base_set = 1;
-            goto done;
+            goto parse_type_done;
         case TOK_ENUM:
             direct   = parse_enum_specifier(p);
             base_set = 1;
-            goto done;
+            goto parse_type_done;
         case TOK_IDENT: {
             Type *td = lookup_typedef(p, p->cur.text);
             if (td) {
@@ -249,15 +305,15 @@ static Type *parse_type_specifier(Parser *p, int *is_typedef_out,
                 direct->name = strdup(p->cur.text);
                 base_set = 1;
                 advance(p);
-                goto done;
+                goto parse_type_done;
             }
-            goto done;
+            goto parse_type_done;
         }
         default:
-            goto done;
+            goto parse_type_done;
         }
     }
-done:;
+parse_type_done:;
 
     if (is_typedef_out)  *is_typedef_out  = is_typedef;
     if (is_static_out)   *is_static_out   = is_static;
@@ -469,6 +525,14 @@ static Node *parse_primary(Parser *p) {
         return n;
     }
     if (check(p, TOK_IDENT)) {
+        /* check if it's a known enum constant */
+        long long eval;
+        if (lookup_enum_const(p, p->cur.text, &eval)) {
+            Node *n = node_new(ND_INT_LIT, line);
+            n->ival = eval;
+            advance(p);
+            return n;
+        }
         Node *n  = node_new(ND_IDENT, line);
         n->sval  = strdup(p->cur.text);
         advance(p);
@@ -912,6 +976,7 @@ static Node *parse_block(Parser *p) {
     int line = p->cur.line;
     expect(p, TOK_LBRACE);
     Node *block = node_new(ND_BLOCK, line);
+    block->ival = 1;  /* 1 = create new scope */
     while (!check(p, TOK_RBRACE) && !check(p, TOK_EOF))
         node_add_child(block, parse_stmt(p));
     expect(p, TOK_RBRACE);
@@ -1037,6 +1102,7 @@ Parser *parser_new(Lexer *lexer) {
 void parser_free(Parser *p) {
     token_free(p->cur);
     for (int i = 0; i < p->n_typedefs; i++) free(p->typedefs[i].name);
+    for (int i = 0; i < p->n_enum_consts; i++) free(p->enum_consts[i].name);
     free(p);
 }
 
