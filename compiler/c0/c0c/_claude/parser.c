@@ -240,9 +240,7 @@ done:;
 static Type *parse_declarator(Parser *p, Type *base, char **out_name) {
     /* pointer prefixes */
     int ptr_count = 0;
-    int ptr_const[16];
-    int j;
-    for (j = 0; j < 16; j++) ptr_const[j] = 0;
+    int ptr_const[16] = {0};
     while (check(p, TOK_STAR) && ptr_count < 16) {
         advance(p);
         ptr_const[ptr_count] = 0;
@@ -259,7 +257,7 @@ static Type *parse_declarator(Parser *p, Type *base, char **out_name) {
         if (out_name) *out_name = strdup(p->cur.text);
         advance(p);
     } else if (check(p, TOK_LPAREN)) {
-        /* grouped declarator */
+        /* grouped declarator – handle minimally */
         advance(p);
         base = parse_declarator(p, base, out_name);
         expect(p, TOK_RPAREN);
@@ -288,13 +286,6 @@ static Type *parse_declarator(Parser *p, Type *base, char **out_name) {
             expect(p, TOK_RBRACKET);
             base = type_array(base, sz);
         } else if (check(p, TOK_LPAREN)) {
-            /* function suffix: apply pointers to base first for return type */
-            for (int i = ptr_count - 1; i >= 0; i--) {
-                base = type_ptr(base);
-                base->is_const = ptr_const[i];
-            }
-            ptr_count = 0;
-
             advance(p);
             Type *ft = type_new(TY_FUNC);
             ft->ret = base;
@@ -328,7 +319,7 @@ static Type *parse_declarator(Parser *p, Type *base, char **out_name) {
         }
     }
 
-    /* apply remaining pointer layers (for non-function cases) */
+    /* apply pointer layers (outermost first) */
     for (int i = ptr_count - 1; i >= 0; i--) {
         base = type_ptr(base);
         base->is_const = ptr_const[i];
@@ -837,18 +828,6 @@ Parser *parser_new(Lexer *lexer) {
     if (!p) { perror("calloc"); exit(1); }
     p->lexer = lexer;
     p->cur   = lexer_next(lexer);
-
-    Type *t_size = calloc(1, sizeof(Type));
-    t_size->kind = TY_ULONG;
-    register_typedef(p, "size_t", t_size);
-
-    Type *t_file_ptr = calloc(1, sizeof(Type));
-    t_file_ptr->kind = TY_PTR;
-    Type *t_file_base = calloc(1, sizeof(Type));
-    t_file_base->kind = TY_INT;
-    t_file_ptr->base = t_file_base;
-    register_typedef(p, "FILE", t_file_ptr);
-
     return p;
 }
 

@@ -40,38 +40,24 @@ static char *strndup_local(const char *s, size_t n) {
 
 typedef struct { const char *kw; TokenType tt; } KwEntry;
 static const KwEntry KEYWORDS[] = {
-    {"int",      TOK_INT},
-    {"char",     TOK_CHAR},
-    {"float",    TOK_FLOAT},
-    {"double",   TOK_DOUBLE},
-    {"void",     TOK_VOID},
-    {"long",     TOK_LONG},
-    {"short",    TOK_SHORT},
-    {"unsigned", TOK_UNSIGNED},
-    {"signed",   TOK_SIGNED},
-    {"if",       TOK_IF},
-    {"else",     TOK_ELSE},
-    {"while",    TOK_WHILE},
-    {"for",      TOK_FOR},
-    {"do",       TOK_DO},
-    {"return",   TOK_RETURN},
-    {"break",    TOK_BREAK},
-    {"continue", TOK_CONTINUE},
-    {"struct",   TOK_STRUCT},
-    {"union",    TOK_UNION},
-    {"enum",     TOK_ENUM},
-    {"typedef",  TOK_TYPEDEF},
-    {"static",   TOK_STATIC},
-    {"extern",   TOK_EXTERN},
-    {"const",    TOK_CONST},
-    {"volatile", TOK_VOLATILE},
-    {"sizeof",   TOK_SIZEOF},
-    {"NULL",     TOK_UNKNOWN}
+    {"int",      TOK_INT},     {"char",     TOK_CHAR},
+    {"float",    TOK_FLOAT},   {"double",   TOK_DOUBLE},
+    {"void",     TOK_VOID},    {"long",     TOK_LONG},
+    {"short",    TOK_SHORT},   {"unsigned", TOK_UNSIGNED},
+    {"signed",   TOK_SIGNED},  {"if",       TOK_IF},
+    {"else",     TOK_ELSE},    {"while",    TOK_WHILE},
+    {"for",      TOK_FOR},     {"do",       TOK_DO},
+    {"return",   TOK_RETURN},  {"break",    TOK_BREAK},
+    {"continue", TOK_CONTINUE},{"struct",   TOK_STRUCT},
+    {"union",    TOK_UNION},   {"enum",     TOK_ENUM},
+    {"typedef",  TOK_TYPEDEF}, {"static",   TOK_STATIC},
+    {"extern",   TOK_EXTERN},  {"const",    TOK_CONST},
+    {"volatile", TOK_VOLATILE},{"sizeof",   TOK_SIZEOF},
+    {NULL, TOK_UNKNOWN}
 };
 
 static TokenType keyword_lookup(const char *s) {
-    int i;
-    for (i = 0; KEYWORDS[i].kw; i++)
+    for (int i = 0; KEYWORDS[i].kw; i++)
         if (strcmp(KEYWORDS[i].kw, s) == 0)
             return KEYWORDS[i].tt;
     return TOK_IDENT;

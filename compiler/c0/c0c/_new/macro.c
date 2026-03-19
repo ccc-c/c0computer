@@ -274,72 +274,63 @@ static void expand_line(char *output, const char *input) {
 }
 
 char *macro_expand(const char *input) {
+    char *output = malloc(MAX_OUTPUT_SIZE);
+    char *lines = malloc(strlen(input) + 1);
+    strcpy(lines, input);
+    
     char *result = malloc(MAX_OUTPUT_SIZE);
     result[0] = '\0';
     
-    const char *pos = input;
-    while (*pos) {
-        if (*pos == '#') {
-            const char *line_start = pos;
-            while (*pos && *pos != '\n') pos++;
-            int line_len = pos - line_start;
-            char line[512];
-            if (line_len > 511) line_len = 511;
-            strncpy(line, line_start, line_len);
-            line[line_len] = '\0';
-            
-            if (strncmp(line, "#define ", 8) == 0) {
-                process_define(line);
-            } else if (strncmp(line, "#undef ", 7) == 0) {
-                process_undef(line);
-            } else if (strncmp(line, "#include ", 9) == 0) {
-                char *start = strchr(line, '"');
-                char *angle = strchr(line, '<');
-                if (start && (!angle || start < angle)) {
-                    char *end = strchr(start + 1, '"');
-                    if (end) {
-                        char fname[64];
-                        int len = end - (start + 1);
-                        if (len > 63) len = 63;
-                        strncpy(fname, start + 1, len);
-                        fname[len] = '\0';
-                        int already = 0;
-                        for(int i=0; i<included_count; i++) {
-                            if(strcmp(included_files[i], fname) == 0) { already = 1; break; }
-                        }
-                        if (!already) {
-                            strcpy(included_files[included_count++], fname);
-                            char *inc = macro_expand_file(fname);
-                            if (inc) {
-                                strcat(result, inc);
-                                free(inc);
-                            }
+    char *line = strtok(lines, "\n");
+    while (line) {
+        char *orig_line = line;
+        while (*line == ' ' || *line == '\t') line++;
+        if (strncmp(line, "#define ", 8) == 0) {
+            process_define(line);
+        } else if (strncmp(line, "#undef ", 7) == 0) {
+            process_undef(line);
+        } else if (strncmp(line, "#ifdef ", 7) == 0) {
+        } else if (strncmp(line, "#ifndef ", 8) == 0) {
+        } else if (strncmp(line, "#else", 5) == 0) {
+        } else if (strncmp(line, "#endif", 6) == 0) {
+        } else if (strncmp(line, "#include ", 9) == 0) {
+            char *start = strchr(line, '"');
+            if (start) {
+                char *end = strchr(start + 1, '"');
+                if (end) {
+                    *end = '\0';
+                    int already = 0;
+                    for(int i=0; i<included_count; i++) {
+                        if(strcmp(included_files[i], start + 1) == 0) { already = 1; break; }
+                    }
+                    if (!already) {
+                        strcpy(included_files[included_count++], start + 1);
+                        char *inc = macro_expand_file(start + 1);
+                        if (inc) {
+                            strcat(result, inc);
+                            free(inc);
                         }
                     }
-                } else if (angle) {
-                    if (strstr(line, "<stdio.h>")) strcat(result, "typedef void FILE;\nextern void *stdin;\nextern void *stdout;\nextern void *stderr;\nextern void *fopen(char *name, char *mode);\nextern int fclose(void *f);\nextern int fseek(void *f, long offset, int whence);\nextern long ftell(void *f);\nextern int fread(void *ptr, int size, int nmemb, void *f);\nextern int fputs(char *s, void *f);\nextern int printf(char *fmt, ...);\nextern int sprintf(char *str, char *fmt, ...);\nextern int snprintf(char *str, int size, char *fmt, ...);\nextern int fprintf(void *f, char *fmt, ...);\nextern void perror(char *s);\n");
-                    else if (strstr(line, "<stdlib.h>")) strcat(result, "#define NULL ((void*)0)\nextern void *malloc(int size);\nextern void *calloc(int nmemb, int size);\nextern void free(void *ptr);\nextern void exit(int status);\nextern long strtol(char *nptr, char *endptr, int base);\nextern double strtod(char *nptr, char *endptr);\n");
-                    else if (strstr(line, "<string.h>")) strcat(result, "extern int strlen(char *s);\nextern char *strcpy(char *dest, char *src);\nextern char *strncpy(char *dest, char *src, int n);\nextern char *strcat(char *dest, char *src);\nextern int strcmp(char *s1, char *s2);\nextern int strncmp(char *s1, char *s2, int n);\nextern char *strchr(char *s, int c);\nextern char *strstr(char *haystack, char *needle);\nextern char *strtok(char *str, char *delim);\n");
-                    else if (strstr(line, "<ctype.h>")) strcat(result, "extern int isalpha(int c);\nextern int isalnum(int c);\nextern int isdigit(int c);\nextern int isspace(int c);\nextern int isxdigit(int c);\n");
-                    else if (strstr(line, "<stddef.h>")) strcat(result, "typedef int size_t;\n");
                 }
+            } else if (strchr(line, '<')) {
+                // Mock libc
+                if (strstr(line, "<stdio.h>")) strcat(result, "typedef void FILE;\nextern void *stdin;\nextern void *stdout;\nextern void *stderr;\nextern void *fopen(char *name, char *mode);\nextern int fclose(void *f);\nextern int fseek(void *f, long offset, int whence);\nextern long ftell(void *f);\nextern int fread(void *ptr, int size, int nmemb, void *f);\nextern int fputs(char *s, void *f);\nextern int printf(char *fmt, ...);\nextern int sprintf(char *str, char *fmt, ...);\nextern int snprintf(char *str, int size, char *fmt, ...);\nextern int fprintf(void *f, char *fmt, ...);\nextern void perror(char *s);\n");
+                else if (strstr(line, "<stdlib.h>")) strcat(result, "extern void *malloc(int size);\nextern void *calloc(int nmemb, int size);\nextern void free(void *ptr);\nextern void exit(int status);\nextern long strtol(char *nptr, char *endptr, int base);\nextern double strtod(char *nptr, char *endptr);\n");
+                else if (strstr(line, "<string.h>")) strcat(result, "extern int strlen(char *s);\nextern char *strcpy(char *dest, char *src);\nextern char *strncpy(char *dest, char *src, int n);\nextern char *strcat(char *dest, char *src);\nextern int strcmp(char *s1, char *s2);\nextern int strncmp(char *s1, char *s2, int n);\nextern char *strchr(char *s, int c);\nextern char *strstr(char *haystack, char *needle);\nextern char *strtok(char *str, char *delim);\n");
+                else if (strstr(line, "<ctype.h>")) strcat(result, "extern int isalpha(int c);\nextern int isalnum(int c);\nextern int isdigit(int c);\nextern int isspace(int c);\nextern int isxdigit(int c);\n");
+                else if (strstr(line, "<stddef.h>")) strcat(result, "typedef int size_t;\n");
             }
         } else {
-            const char *line_start = pos;
-            while (*pos && *pos != '\n') pos++;
-            int line_len = pos - line_start;
-            char line[512];
-            if (line_len > 511) line_len = 511;
-            strncpy(line, line_start, line_len);
-            line[line_len] = '\0';
             char expanded[MAX_OUTPUT_SIZE];
-            expand_line(expanded, line);
+            expand_line(expanded, orig_line); // expand from orig_line to preserve spaces if needed
             strcat(result, expanded);
             strcat(result, "\n");
         }
-        if (*pos == '\n') pos++;
+        line = strtok(NULL, "\n");
     }
     
+    free(lines);
+    free(output);
     return result;
 }
 

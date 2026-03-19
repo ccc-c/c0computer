@@ -130,7 +130,6 @@ void next_token(void) {
         else if (strcmp(cur_tok.name, "continue") == 0) cur_tok.type = TK_CONTINUE;
         else if (strcmp(cur_tok.name, "sizeof") == 0) cur_tok.type = TK_SIZEOF;
         else if (strcmp(cur_tok.name, "extern") == 0) cur_tok.type = TK_EXTERN;
-        else if (strcmp(cur_tok.name, "static") == 0) cur_tok.type = TK_STATIC;
         else if (strcmp(cur_tok.name, "enum") == 0) cur_tok.type = TK_ENUM;
         else cur_tok.type = TK_IDENT;
         return;

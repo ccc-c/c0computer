@@ -279,7 +279,7 @@ static CType base_of(CType ty) {
 static CType parse_type_allow_void(int allow_void) {
     CType base;
     last_struct_id = -1;
-    while (cur_tok.type == TK_CONST || cur_tok.type == TK_STATIC || cur_tok.type == TK_EXTERN) next_token();
+    while (cur_tok.type == TK_CONST) next_token();
     if (allow_void && cur_tok.type == TK_VOID) { next_token(); base = TY_VOID; goto ptr_check; }
     if (cur_tok.type == TK_STRUCT) {
         next_token();
@@ -372,8 +372,7 @@ static int is_typedef_name(void) {
 static int is_type_start(void) {
     if (cur_tok.type == TK_INT || cur_tok.type == TK_CHAR || cur_tok.type == TK_FLOAT ||
         cur_tok.type == TK_DOUBLE || cur_tok.type == TK_UNSIGNED || cur_tok.type == TK_SHORT ||
-        cur_tok.type == TK_LONG || cur_tok.type == TK_CONST || cur_tok.type == TK_STRUCT ||
-        cur_tok.type == TK_VOID || cur_tok.type == TK_STATIC || cur_tok.type == TK_EXTERN) return 1;
+        cur_tok.type == TK_LONG || cur_tok.type == TK_CONST || cur_tok.type == TK_STRUCT) return 1;
     return is_typedef_name();
 }
 
@@ -541,7 +540,7 @@ static ASTNode* parse_unary() {
         if (is_type_start()) {
             p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
             expect(TK_LPAREN, "預期 '('");
-            CType ty = parse_type_allow_void(1);
+            CType ty = parse_type_allow_void(0);
             expect(TK_RPAREN, "預期 ')'");
             ASTNode *n = new_node(AST_CAST);
             n->ty = ty; n->struct_id = last_struct_id;
@@ -667,16 +666,10 @@ static ASTNode* parse_struct_decl_or_def() {
         while (cur_tok.type != TK_RBRACE && cur_tok.type != TK_EOF) {
             CType fty = parse_type_allow_void(0);
             StructField *f = &def->fields[def->field_cnt++];
-            strcpy(f->name, cur_tok.name); f->ty = fty; f->offset = def->size; f->struct_id = last_struct_id; f->array_len = 0;
-            next_token();
-            if (cur_tok.type == '[') {
-                next_token();
-                if (cur_tok.type == ']') { f->array_len = -1; next_token(); }
-                else { f->array_len = cur_tok.val; next_token(); expect(']', "預期 ']'"); }
-                f->ty = ptr_of(fty);
-            }
-            def->size += type_size(fty, f->struct_id) * (f->array_len > 0 ? f->array_len : 1);
-            expect(TK_SEMI, "預期 ';'");
+            strcpy(f->name, cur_tok.name);
+            f->ty = fty; f->offset = def->size; f->struct_id = last_struct_id;
+            def->size += type_size(fty, f->struct_id);
+            next_token(); expect(TK_SEMI, "預期 ';'");
         }
         expect(TK_RBRACE, "預期 '}'"); expect(TK_SEMI, "預期 ';'");
         return NULL;
@@ -699,16 +692,8 @@ static ASTNode* parse_typedef_stmt() {
             while (cur_tok.type != TK_RBRACE && cur_tok.type != TK_EOF) {
                 CType fty = parse_type_allow_void(0);
                 StructField *f = &def->fields[def->field_cnt++];
-                strcpy(f->name, cur_tok.name); f->ty = fty; f->offset = def->size; f->struct_id = last_struct_id; f->array_len = 0;
-                next_token();
-                if (cur_tok.type == '[') {
-                    next_token();
-                    if (cur_tok.type == ']') { f->array_len = -1; next_token(); }
-                    else { f->array_len = cur_tok.val; next_token(); expect(']', "預期 ']'"); }
-                    f->ty = ptr_of(fty);
-                }
-                def->size += type_size(fty, f->struct_id) * (f->array_len > 0 ? f->array_len : 1);
-                expect(TK_SEMI, "預期 ';'");
+                strcpy(f->name, cur_tok.name); f->ty = fty; f->offset = def->size; f->struct_id = last_struct_id;
+                def->size += type_size(fty, f->struct_id); next_token(); expect(TK_SEMI, "預期 ';'");
             }
             expect(TK_RBRACE, "預期 '}'");
         } else sid = struct_find(struct_name);
@@ -737,14 +722,14 @@ static ASTNode* parse_typedef_stmt() {
         next_token(); expect(TK_SEMI, "預期 ';'");
         return NULL;
     }
-    CType ty = parse_type_allow_void(1);
+    CType ty = parse_type_allow_void(0);
     typedef_add(cur_tok.name, ty, -1);
     next_token(); expect(TK_SEMI, "預期 ';'");
     return NULL;
 }
 
 static ASTNode* parse_decl_stmt(int expect_semi) {
-    CType decl_ty = parse_type_allow_void(1);
+    CType decl_ty = parse_type();
     ASTNode *n = new_node(AST_DECL);
     strcpy(n->name, cur_tok.name);
     expect(TK_IDENT, "預期變數名稱");
@@ -881,20 +866,10 @@ static ASTNode* parse_func() {
     sym_reset();
     ASTNode *param_head = NULL, *param_tail = NULL;
     CType param_types[16]; int param_struct_ids[16]; int param_cnt = 0; int is_vararg = 0;
-    int is_void_param_list = 0;
-    if (cur_tok.type == TK_VOID) {
-        char *saved_p = p; Token saved_tok = cur_tok; int saved_line = cur_line; int saved_col = cur_col;
-        next_token();
-        if (cur_tok.type == TK_RPAREN) {
-            is_void_param_list = 1;
-        } else {
-            p = saved_p; cur_tok = saved_tok; cur_line = saved_line; cur_col = saved_col;
-        }
-    }
-    if (!is_void_param_list && cur_tok.type != TK_RPAREN) {
+    if (cur_tok.type != TK_RPAREN && cur_tok.type != TK_VOID) {
         while (1) {
             if (cur_tok.type == TK_ELLIPSIS) { is_vararg = 1; next_token(); break; }
-            CType pty = parse_type_allow_void(1); ASTNode *param = new_node(AST_DECL);
+            CType pty = parse_type(); ASTNode *param = new_node(AST_DECL);
             if (cur_tok.type == TK_IDENT) { strcpy(param->name, cur_tok.name); next_token(); }
             else sprintf(param->name, ".unnamed%d", param_cnt);
             param->ty = pty; param->array_len = 0; param->struct_id = last_struct_id;
@@ -904,7 +879,7 @@ static ASTNode* parse_func() {
             if (cur_tok.type == TK_COMMA) { next_token(); continue; }
             break;
         }
-    }
+    } else if (cur_tok.type == TK_VOID) next_token();
     expect(TK_RPAREN, "預期 ')'");
     func_add(func->name, ret_ty, ret_struct_id, param_types, param_struct_ids, param_cnt, is_vararg);
     func->val = is_vararg;
@@ -916,7 +891,7 @@ ASTNode* parse_program(void) {
     ASTNode *head = NULL, *tail = NULL;
     while (cur_tok.type != TK_EOF) {
         int is_extern = 0;
-        while (cur_tok.type == TK_EXTERN || cur_tok.type == TK_STATIC) { if (cur_tok.type == TK_EXTERN) is_extern = 1; next_token(); }
+        if (cur_tok.type == TK_EXTERN) { is_extern = 1; next_token(); }
         if (cur_tok.type == TK_STRUCT && is_struct_def_ahead()) { parse_struct_decl_or_def(); continue; }
         if (cur_tok.type == TK_TYPEDEF) { parse_typedef_stmt(); continue; }
         if (cur_tok.type == TK_ENUM) {

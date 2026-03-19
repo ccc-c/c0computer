@@ -232,21 +232,11 @@ static char *emit_lvalue_addr(Codegen *cg, Node *n) {
 }
 
 static Type *default_int_type(void) {
-    static Type t_int;
-    t_int.kind = TY_INT;
-    t_int.is_const = 0;
-    t_int.is_volatile = 0;
-    t_int.base = 0;
-    t_int.array_size = -1;
+    static Type t_int = { TY_INT, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
     return &t_int;
 }
 static Type *default_ptr_type(void) {
-    static Type t_ptr;
-    t_ptr.kind = TY_PTR;
-    t_ptr.is_const = 0;
-    t_ptr.is_volatile = 0;
-    t_ptr.base = 0;
-    t_ptr.array_size = -1;
+    static Type t_ptr  = { TY_PTR, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
     return &t_ptr;
 }
 
@@ -268,16 +258,14 @@ static Val emit_expr(Codegen *cg, Node *n) {
         int r = new_reg(cg);
         emit(cg, "  %%%d = fadd double 0.0, %g\n", r, n->fval);
         char buf[32]; snprintf(buf, sizeof buf, "%%%d", r);
-        static Type t_double;
-        t_double.kind = TY_DOUBLE;
+        static Type t_double = { TY_DOUBLE, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
         return make_val(buf, &t_double);
     }
 
     case ND_CHAR_LIT: {
         char buf[32];
         snprintf(buf, sizeof buf, "%lld", n->ival);
-        static Type t_char;
-        t_char.kind = TY_CHAR;
+        static Type t_char = { TY_CHAR, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
         return make_val(buf, &t_char);
     }
 
@@ -330,8 +318,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
         }
 
         /* get callee */
-        char callee_buf[128];
-        callee_buf[0] = '\0';
+        char callee_buf[128] = {0};
         if (callee->kind == ND_IDENT) {
             snprintf(callee_buf, sizeof callee_buf, "@%s", callee->sval);
             Global *g = find_global(cg, callee->sval);
@@ -354,12 +341,11 @@ static Val emit_expr(Codegen *cg, Node *n) {
             emit(cg, "%s %s",
                  arg_types[i] ? llvm_type(arg_types[i]) : "i64",
                  arg_regs[i]);
+            free(arg_regs[i]);
         }
         emit(cg, ")\n");
 
-        for (int i = 1; i < n->n_children; i++) {
-            free(arg_regs[i]);
-        }
+        for (int i = 1; i < n->n_children; i++) free(arg_regs[i]);
         free(arg_regs); free(arg_types);
 
         if (is_void) return make_val("0", ret_type);

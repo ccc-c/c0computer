@@ -141,7 +141,7 @@ static void expand_func_macro(Macro *m, const char **src_ptr, Buf *out, int dept
     p++; /* skip '(' */
 
     /* collect arguments */
-    char *args[MAX_PARAMS];
+    char *args[MAX_PARAMS] = {NULL};
     int   n_args = 0;
     int   paren_depth = 0;
     Buf   arg_buf; buf_init(&arg_buf);
@@ -197,7 +197,7 @@ static void expand_text(const char *src, Buf *out, int depth) {
     if (depth > 64) { buf_append(out, src, strlen(src)); return; }
     const char *p = src;
     while (*p) {
-        /* string literal – pass through and concatenate adjacent strings */
+        /* string literal – pass through without expansion */
         if (*p == '"') {
             buf_putc(out, *p++);
             while (*p && *p != '"') {
@@ -205,17 +205,6 @@ static void expand_text(const char *src, Buf *out, int depth) {
                 if (*p) buf_putc(out, *p++);
             }
             if (*p) buf_putc(out, *p++);
-            /* concatenate adjacent string literals (skip whitespace between) */
-            while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
-            while (*p == '"') {
-                p++;
-                while (*p && *p != '"') {
-                    if (*p == '\\') buf_putc(out, *p++);
-                    if (*p) buf_putc(out, *p++);
-                }
-                if (*p) buf_putc(out, *p++);
-                while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
-            }
             continue;
         }
         /* char literal */
@@ -272,10 +261,12 @@ static char *read_file(const char *path) {
 }
 
 /* search paths for includes */
-/* Note: c0c doesn't support array initializers, so we use separate variables */
-#define INCLUDE_PATH_0 "/usr/include"
-#define INCLUDE_PATH_1 "/usr/local/include"
-#define INCLUDE_PATH_2 "."
+static const char *INCLUDE_PATHS[] = {
+    "/usr/include",
+    "/usr/local/include",
+    ".",
+    NULL
+};
 
 static char *find_include(const char *name, int is_system) {
     if (!is_system) {
@@ -283,13 +274,9 @@ static char *find_include(const char *name, int is_system) {
         char *content = read_file(name);
         if (content) return content;
     }
-    char *paths[3];
-    paths[0] = INCLUDE_PATH_0;
-    paths[1] = INCLUDE_PATH_1;
-    paths[2] = INCLUDE_PATH_2;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; INCLUDE_PATHS[i]; i++) {
         char path[1024];
-        snprintf(path, sizeof path, "%s/%s", paths[i], name);
+        snprintf(path, sizeof path, "%s/%s", INCLUDE_PATHS[i], name);
         char *content = read_file(path);
         if (content) return content;
     }
@@ -371,7 +358,7 @@ static void process_directive(const char *line, const char *filename,
         /* function-like? */
         if (*p == '(') {
             p++;
-            char *params[MAX_PARAMS];
+            char *params[MAX_PARAMS] = {NULL};
             int n_params = 0;
             while (*p && *p != ')') {
                 p = skip_ws(p);
@@ -506,16 +493,14 @@ static void preprocess_into(const char *src, const char *filename,
 
 char *macro_preprocess(const char *src, const char *filename, int include_depth) {
     Buf out; buf_init(&out);
-    int if_stack[64];
-    int i;
-    for (i = 0; i < 64; i++) if_stack[i] = 0;
+    int if_stack[64] = {0};
     int if_depth = 0;
 
     /* predefine common macros */
     if (include_depth == 0) {
         macro_define("__C0C__",   "1",    NULL, 0, 0);
         macro_define("__STDC__",  "1",    NULL, 0, 0);
-        macro_define("NULL",      "0",    NULL, 0, 0);
+        macro_define("NULL",      "((void*)0)", NULL, 0, 0);
         macro_define("__LP64__",  "1",    NULL, 0, 0);
     }
 

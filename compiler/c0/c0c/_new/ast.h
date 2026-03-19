@@ -49,7 +49,6 @@ typedef struct {
     CType ty;
     int offset;
     int struct_id;
-    int array_len;
 } StructField;
 
 typedef struct {
