@@ -1,0 +1,7 @@
+LABEL           foo        _    _
+LOAD_CONST      1          _    t0
+STORE           t0         _    x
+LOAD_NAME       x          _    t1
+RETURN          t1         _    _
+RETURN          _          _    _
+HALT            _          _    _

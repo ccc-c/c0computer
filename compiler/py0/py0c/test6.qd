@@ -1,0 +1,6 @@
+LOAD_CONST      1          _    t0
+ARG_PUSH        t0         0    _
+LOAD_NAME       print      _    t1
+CALL            t1         1    t2
+POP_TOP         t2         _    _
+HALT            _          _    _
