@@ -139,3 +139,40 @@ def gd(model, optimizer, tokens, step, num_steps):
     optimizer.step(lr_override=lr_t)
 
     return loss.data
+
+def cross_entropy_simple(logits, target_idx):
+    """
+    直觀版本的 Cross-Entropy，依賴現有的 softmax 函式。
+    """
+    probs = softmax(logits)
+    # 提取目標類別的機率，並取負對數
+    return -probs[target_idx].log()
+
+"""
+真實的深度學習框架（如 PyTorch 的 F.cross_entropy）中，通常不會「先算 Softmax 機率，再算 Log」，
+因為機率值如果逼近 0，再取 .log() 時非常容易引發數值錯誤（例如出現 -inf 或 NaN）。
+
+框架會利用數學對數律展開公式：
+
+$$-\log\left(\frac{e^{x_t}}{\sum e^{x_i}}\right) = \log\left(\sum e^{x_i}\right) - x_t$$
+
+結合 softmax 原本避免溢位的 max_val 減法技巧（即 Log-Sum-Exp trick），
+我們可以寫出更穩定、計算圖也更短的版本：
+"""
+def cross_entropy(logits, target_idx):
+    """
+    融合 Log-Softmax 與 NLLLoss 的數值穩定版本。
+    計算公式： log(sum(exp(x_i - max))) - (x_target - max)
+    """
+    # 1. 找出最大值以確保數值穩定 (純量)
+    max_val = max(val.data for val in logits)
+    
+    # 2. 計算所有元素的 exp(x_i - max)
+    exps = [(val - max_val).exp() for val in logits]
+    
+    # 3. 計算分母的總和，並建立 log 節點
+    log_sum_exp = sum(exps).log()
+    
+    # 4. 計算最終 Loss，直接避開了除法運算與極小機率的 log 運算
+    target_logit_shifted = logits[target_idx] - max_val
+    return log_sum_exp - target_logit_shifted
