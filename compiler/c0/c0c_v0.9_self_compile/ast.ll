@@ -26,12 +26,7 @@ declare i32 @fprintf(ptr, ptr, ...)
 declare i32 @sprintf(ptr, ptr, ...)
 declare i32 @snprintf(ptr, i64, ptr, ...)
 declare i32 @vfprintf(ptr, ptr, ptr)
-declare void @llvm.va_start(ptr)
-declare void @llvm.va_end(ptr)
-declare void @llvm.va_copy(ptr, ptr)
-declare i32 @va_start(...)
-declare i32 @va_end(...)
-declare i32 @va_copy(...)
+declare i32 @vsnprintf(ptr, i64, ptr, ptr)
 declare ptr @fopen(ptr, ptr)
 declare i32 @fclose(ptr)
 declare i64 @fread(ptr, i64, i64, ptr)
@@ -56,9 +51,10 @@ declare i32 @islower(i32)
 declare i32 @toupper(i32)
 declare i32 @tolower(i32)
 declare i32 @assert(i32)
-@stderr = external global ptr
-@stdout = external global ptr
-@stdin  = external global ptr
+declare ptr @__c0c_stderr()
+declare ptr @__c0c_stdout()
+declare ptr @__c0c_stdin()
+declare void @__c0c_emit(ptr, ptr, ...)
 
 
 define dso_local ptr @node_new(ptr %t0, i64 %t1) {
@@ -74,18 +70,16 @@ entry:
   br i1 %t8, label %L0, label %L2
 L0:
   %t9 = getelementptr [7 x i8], ptr @.str0, i64 0, i64 0
-  %t10 = call i32 @perror(ptr %t9)
-  %t11 = sext i32 %t10 to i64
-  %t12 = call i32 @exit(i64 1)
-  %t13 = sext i32 %t12 to i64
+  call void @perror(ptr %t9)
+  call void @exit(i64 1)
   br label %L2
 L2:
+  %t12 = load ptr, ptr %t2
+  store ptr %t0, ptr %t12
+  %t13 = load ptr, ptr %t2
+  store i64 %t1, ptr %t13
   %t14 = load ptr, ptr %t2
-  store ptr %t0, ptr %t14
-  %t15 = load ptr, ptr %t2
-  store i64 %t1, ptr %t15
-  %t16 = load ptr, ptr %t2
-  ret ptr %t16
+  ret ptr %t14
 L3:
   ret ptr null
 }
@@ -111,20 +105,18 @@ entry:
   br i1 %t16, label %L0, label %L2
 L0:
   %t17 = getelementptr [8 x i8], ptr @.str1, i64 0, i64 0
-  %t18 = call i32 @perror(ptr %t17)
-  %t19 = sext i32 %t18 to i64
-  %t20 = call i32 @exit(i64 1)
-  %t21 = sext i32 %t20 to i64
+  call void @perror(ptr %t17)
+  call void @exit(i64 1)
   br label %L2
 L2:
-  %t22 = load ptr, ptr %t0
-  %t23 = load ptr, ptr %t0
-  %t25 = ptrtoint ptr %t23 to i64
-  %t24 = add i64 %t25, 1
-  store i64 %t24, ptr %t0
-  %t27 = ptrtoint ptr %t23 to i64
-  %t26 = getelementptr i8, ptr %t22, i64 %t27
-  store ptr %t1, ptr %t26
+  %t20 = load ptr, ptr %t0
+  %t21 = load ptr, ptr %t0
+  %t23 = ptrtoint ptr %t21 to i64
+  %t22 = add i64 %t23, 1
+  store i64 %t22, ptr %t0
+  %t25 = ptrtoint ptr %t21 to i64
+  %t24 = getelementptr i8, ptr %t20, i64 %t25
+  store ptr %t1, ptr %t24
   ret void
 }
 
@@ -166,22 +158,16 @@ L6:
   br label %L4
 L7:
   %t20 = load ptr, ptr %t0
-  %t21 = call i32 @free(ptr %t20)
-  %t22 = sext i32 %t21 to i64
-  %t23 = load ptr, ptr %t0
-  %t24 = call i32 @free(ptr %t23)
-  %t25 = sext i32 %t24 to i64
+  call void @free(ptr %t20)
+  %t22 = load ptr, ptr %t0
+  call void @free(ptr %t22)
+  %t24 = load ptr, ptr %t0
+  call void @free(ptr %t24)
   %t26 = load ptr, ptr %t0
-  %t27 = call i32 @free(ptr %t26)
-  %t28 = sext i32 %t27 to i64
-  %t29 = load ptr, ptr %t0
-  %t30 = call i32 @free(ptr %t29)
-  %t31 = sext i32 %t30 to i64
-  %t32 = load ptr, ptr %t0
-  %t33 = call i32 @free(ptr %t32)
-  %t34 = sext i32 %t33 to i64
-  %t35 = call i32 @free(ptr %t0)
-  %t36 = sext i32 %t35 to i64
+  call void @free(ptr %t26)
+  %t28 = load ptr, ptr %t0
+  call void @free(ptr %t28)
+  call void @free(ptr %t0)
   ret void
 }
 
@@ -198,20 +184,18 @@ entry:
   br i1 %t7, label %L0, label %L2
 L0:
   %t8 = getelementptr [7 x i8], ptr @.str2, i64 0, i64 0
-  %t9 = call i32 @perror(ptr %t8)
-  %t10 = sext i32 %t9 to i64
-  %t11 = call i32 @exit(i64 1)
-  %t12 = sext i32 %t11 to i64
+  call void @perror(ptr %t8)
+  call void @exit(i64 1)
   br label %L2
 L2:
-  %t13 = load ptr, ptr %t1
-  store ptr %t0, ptr %t13
-  %t15 = sext i32 1 to i64
-  %t14 = sub i64 0, %t15
-  %t16 = load ptr, ptr %t1
-  store i64 %t14, ptr %t16
-  %t17 = load ptr, ptr %t1
-  ret ptr %t17
+  %t11 = load ptr, ptr %t1
+  store ptr %t0, ptr %t11
+  %t13 = sext i32 1 to i64
+  %t12 = sub i64 0, %t13
+  %t14 = load ptr, ptr %t1
+  store i64 %t12, ptr %t14
+  %t15 = load ptr, ptr %t1
+  ret ptr %t15
 L3:
   ret ptr null
 }
@@ -257,48 +241,43 @@ L3:
   br label %L2
 L2:
   %t5 = load ptr, ptr %t0
-  %t6 = call i32 @free(ptr %t5)
-  %t7 = sext i32 %t6 to i64
-  %t8 = load ptr, ptr %t0
-  %t9 = call i32 @free(ptr %t8)
-  %t10 = sext i32 %t9 to i64
-  %t11 = load ptr, ptr %t0
-  %t12 = icmp ne ptr %t11, null
-  br i1 %t12, label %L4, label %L6
+  call void @free(ptr %t5)
+  %t7 = load ptr, ptr %t0
+  call void @free(ptr %t7)
+  %t9 = load ptr, ptr %t0
+  %t10 = icmp ne ptr %t9, null
+  br i1 %t10, label %L4, label %L6
 L4:
-  %t13 = alloca i64
-  %t14 = sext i32 0 to i64
-  store i64 %t14, ptr %t13
+  %t11 = alloca i64
+  %t12 = sext i32 0 to i64
+  store i64 %t12, ptr %t11
   br label %L7
 L7:
-  %t15 = load i64, ptr %t13
-  %t16 = load ptr, ptr %t0
-  %t18 = ptrtoint ptr %t16 to i64
-  %t17 = icmp slt i64 %t15, %t18
-  %t19 = zext i1 %t17 to i64
-  %t20 = icmp ne i64 %t19, 0
-  br i1 %t20, label %L8, label %L10
+  %t13 = load i64, ptr %t11
+  %t14 = load ptr, ptr %t0
+  %t16 = ptrtoint ptr %t14 to i64
+  %t15 = icmp slt i64 %t13, %t16
+  %t17 = zext i1 %t15 to i64
+  %t18 = icmp ne i64 %t17, 0
+  br i1 %t18, label %L8, label %L10
 L8:
-  %t21 = load ptr, ptr %t0
-  %t22 = load i64, ptr %t13
-  %t23 = getelementptr i8, ptr %t21, i64 %t22
-  %t24 = load ptr, ptr %t23
-  %t25 = call i32 @free(ptr %t24)
-  %t26 = sext i32 %t25 to i64
+  %t19 = load ptr, ptr %t0
+  %t20 = load i64, ptr %t11
+  %t21 = getelementptr i8, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  call void @free(ptr %t22)
   br label %L9
 L9:
-  %t27 = load i64, ptr %t13
-  %t28 = add i64 %t27, 1
-  store i64 %t28, ptr %t13
+  %t24 = load i64, ptr %t11
+  %t25 = add i64 %t24, 1
+  store i64 %t25, ptr %t11
   br label %L7
 L10:
-  %t29 = load ptr, ptr %t0
-  %t30 = call i32 @free(ptr %t29)
-  %t31 = sext i32 %t30 to i64
+  %t26 = load ptr, ptr %t0
+  call void @free(ptr %t26)
   br label %L6
 L6:
-  %t32 = call i32 @free(ptr %t0)
-  %t33 = sext i32 %t32 to i64
+  call void @free(ptr %t0)
   ret void
 }
 

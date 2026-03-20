@@ -614,17 +614,15 @@ char *macro_preprocess(const char *src, const char *filename, int include_depth)
         macro_define("EOF",       "(-1)", NULL, 0, 0);
         macro_define("EXIT_SUCCESS", "0", NULL, 0, 0);
         macro_define("EXIT_FAILURE", "1", NULL, 0, 0);
-        /* assert — expand to nothing (our simplified compiler) */
+        /* assert — already handled by replacing calls with if/exit */
         macro_define("assert",    "((void)0)", NULL, 0, 0);
-        /* va_list macros: function-like macros that pass address of ap to wrapper */
-        {
-            char *va_start_params[] = { "ap", "last" };
-            macro_define("va_start", "__c0c_va_start((&ap))", va_start_params, 2, 1);
-            char *va_end_params[] = { "ap" };
-            macro_define("va_end",   "__c0c_va_end((&ap))",   va_end_params,   1, 1);
-            char *va_copy_params[] = { "dst", "src" };
-            macro_define("va_copy",  "__c0c_va_copy((&dst),(&src))", va_copy_params, 2, 1);
-        }
+        /* va_list macros — simple object-like replacements.
+           va_start(ap,last) becomes __c0c_va_start(ap,last)
+           We do this by making va_start expand to the wrapper name token only,
+           relying on the call site to provide the parenthesized args. */
+        macro_define("va_start",  "__c0c_va_start", NULL, 0, 0);
+        macro_define("va_end",    "__c0c_va_end",   NULL, 0, 0);
+        macro_define("va_copy",   "__c0c_va_copy",  NULL, 0, 0);
         /* stdio FILE* handles — use getter functions for portability */
         macro_define("stderr",    "__c0c_stderr()", NULL, 0, 0);
         macro_define("stdout",    "__c0c_stdout()", NULL, 0, 0);

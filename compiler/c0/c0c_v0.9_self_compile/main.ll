@@ -26,12 +26,7 @@ declare i32 @fprintf(ptr, ptr, ...)
 declare i32 @sprintf(ptr, ptr, ...)
 declare i32 @snprintf(ptr, i64, ptr, ...)
 declare i32 @vfprintf(ptr, ptr, ptr)
-declare void @llvm.va_start(ptr)
-declare void @llvm.va_end(ptr)
-declare void @llvm.va_copy(ptr, ptr)
-declare i32 @va_start(...)
-declare i32 @va_end(...)
-declare i32 @va_copy(...)
+declare i32 @vsnprintf(ptr, i64, ptr, ptr)
 declare ptr @fopen(ptr, ptr)
 declare i32 @fclose(ptr)
 declare i64 @fread(ptr, i64, i64, ptr)
@@ -56,9 +51,10 @@ declare i32 @islower(i32)
 declare i32 @toupper(i32)
 declare i32 @tolower(i32)
 declare i32 @assert(i32)
-@stderr = external global ptr
-@stdout = external global ptr
-@stdin  = external global ptr
+declare ptr @__c0c_stderr()
+declare ptr @__c0c_stdout()
+declare ptr @__c0c_stdin()
+declare void @__c0c_emit(ptr, ptr, ...)
 
 declare ptr @macro_preprocess(ptr, ptr, i64)
 declare ptr @lexer_new(ptr, ptr)
@@ -98,11 +94,11 @@ entry:
   %t8 = icmp ne i64 %t5, 0
   br i1 %t8, label %L0, label %L2
 L0:
-  %t9 = getelementptr [23 x i8], ptr @.str1, i64 0, i64 0
-  %t10 = call i32 @fprintf(ptr @stderr, ptr %t9, ptr %t0)
-  %t11 = sext i32 %t10 to i64
-  %t12 = call i32 @exit(i64 1)
-  %t13 = sext i32 %t12 to i64
+  %t9 = call ptr @__c0c_stderr()
+  %t10 = getelementptr [23 x i8], ptr @.str1, i64 0, i64 0
+  %t11 = call i32 @fprintf(ptr %t9, ptr %t10, ptr %t0)
+  %t12 = sext i32 %t11 to i64
+  call void @exit(i64 1)
   br label %L2
 L2:
   %t14 = load ptr, ptr %t1
@@ -127,37 +123,36 @@ L2:
   br i1 %t30, label %L3, label %L5
 L3:
   %t31 = getelementptr [7 x i8], ptr @.str2, i64 0, i64 0
-  %t32 = call i32 @perror(ptr %t31)
-  %t33 = sext i32 %t32 to i64
-  %t34 = call i32 @exit(i64 1)
-  %t35 = sext i32 %t34 to i64
+  call void @perror(ptr %t31)
+  call void @exit(i64 1)
   br label %L5
 L5:
-  %t36 = alloca i64
-  %t37 = load ptr, ptr %t21
-  %t38 = load i64, ptr %t16
-  %t39 = load ptr, ptr %t1
-  %t40 = call i64 @fread(ptr %t37, i64 1, i64 %t38, ptr %t39)
-  store i64 %t40, ptr %t36
-  %t41 = load ptr, ptr %t21
-  %t42 = load i64, ptr %t36
-  %t43 = getelementptr i8, ptr %t41, i64 %t42
-  %t44 = sext i32 0 to i64
-  store i64 %t44, ptr %t43
-  %t45 = load ptr, ptr %t1
-  %t46 = call i32 @fclose(ptr %t45)
-  %t47 = sext i32 %t46 to i64
-  %t48 = load ptr, ptr %t21
-  ret ptr %t48
+  %t34 = alloca i64
+  %t35 = load ptr, ptr %t21
+  %t36 = load i64, ptr %t16
+  %t37 = load ptr, ptr %t1
+  %t38 = call i64 @fread(ptr %t35, i64 1, i64 %t36, ptr %t37)
+  store i64 %t38, ptr %t34
+  %t39 = load ptr, ptr %t21
+  %t40 = load i64, ptr %t34
+  %t41 = getelementptr i8, ptr %t39, i64 %t40
+  %t42 = sext i32 0 to i64
+  store i64 %t42, ptr %t41
+  %t43 = load ptr, ptr %t1
+  %t44 = call i32 @fclose(ptr %t43)
+  %t45 = sext i32 %t44 to i64
+  %t46 = load ptr, ptr %t21
+  ret ptr %t46
 L6:
   ret ptr null
 }
 
 define internal void @usage(ptr %t0) {
 entry:
-  %t1 = getelementptr [45 x i8], ptr @.str3, i64 0, i64 0
-  %t2 = call i32 @fprintf(ptr @stderr, ptr %t1, ptr %t0, ptr %t0)
-  %t3 = sext i32 %t2 to i64
+  %t1 = call ptr @__c0c_stderr()
+  %t2 = getelementptr [45 x i8], ptr @.str3, i64 0, i64 0
+  %t3 = call i32 @fprintf(ptr %t1, ptr %t2, ptr %t0, ptr %t0)
+  %t4 = sext i32 %t3 to i64
   ret void
 }
 
@@ -171,37 +166,35 @@ entry:
   %t6 = call ptr @macro_preprocess(ptr %t5, ptr %t0, i64 0)
   store ptr %t6, ptr %t4
   %t7 = load ptr, ptr %t2
-  %t8 = call i32 @free(ptr %t7)
-  %t9 = sext i32 %t8 to i64
-  %t10 = alloca ptr
-  %t11 = load ptr, ptr %t4
-  %t12 = call ptr @lexer_new(ptr %t11, ptr %t0)
-  store ptr %t12, ptr %t10
-  %t13 = alloca ptr
-  %t14 = load ptr, ptr %t10
-  %t15 = call ptr @parser_new(ptr %t14)
-  store ptr %t15, ptr %t13
-  %t16 = alloca ptr
-  %t17 = load ptr, ptr %t13
-  %t18 = call ptr @parser_parse(ptr %t17)
-  store ptr %t18, ptr %t16
-  %t19 = alloca ptr
-  %t20 = call ptr @codegen_new(ptr %t1, ptr %t0)
-  store ptr %t20, ptr %t19
-  %t21 = load ptr, ptr %t19
-  %t22 = load ptr, ptr %t16
-  call void @codegen_emit(ptr %t21, ptr %t22)
-  %t24 = load ptr, ptr %t19
-  call void @codegen_free(ptr %t24)
-  %t26 = load ptr, ptr %t16
-  call void @node_free(ptr %t26)
-  %t28 = load ptr, ptr %t13
-  call void @parser_free(ptr %t28)
-  %t30 = load ptr, ptr %t10
-  call void @lexer_free(ptr %t30)
-  %t32 = load ptr, ptr %t4
-  %t33 = call i32 @free(ptr %t32)
-  %t34 = sext i32 %t33 to i64
+  call void @free(ptr %t7)
+  %t9 = alloca ptr
+  %t10 = load ptr, ptr %t4
+  %t11 = call ptr @lexer_new(ptr %t10, ptr %t0)
+  store ptr %t11, ptr %t9
+  %t12 = alloca ptr
+  %t13 = load ptr, ptr %t9
+  %t14 = call ptr @parser_new(ptr %t13)
+  store ptr %t14, ptr %t12
+  %t15 = alloca ptr
+  %t16 = load ptr, ptr %t12
+  %t17 = call ptr @parser_parse(ptr %t16)
+  store ptr %t17, ptr %t15
+  %t18 = alloca ptr
+  %t19 = call ptr @codegen_new(ptr %t1, ptr %t0)
+  store ptr %t19, ptr %t18
+  %t20 = load ptr, ptr %t18
+  %t21 = load ptr, ptr %t15
+  call void @codegen_emit(ptr %t20, ptr %t21)
+  %t23 = load ptr, ptr %t18
+  call void @codegen_free(ptr %t23)
+  %t25 = load ptr, ptr %t15
+  call void @node_free(ptr %t25)
+  %t27 = load ptr, ptr %t12
+  call void @parser_free(ptr %t27)
+  %t29 = load ptr, ptr %t9
+  call void @lexer_free(ptr %t29)
+  %t31 = load ptr, ptr %t4
+  call void @free(ptr %t31)
   ret void
 }
 
@@ -315,160 +308,166 @@ L12:
   %t87 = icmp ne i64 %t86, 0
   br i1 %t87, label %L15, label %L17
 L15:
-  %t88 = getelementptr [30 x i8], ptr @.str10, i64 0, i64 0
-  %t89 = call i32 @fprintf(ptr @stderr, ptr %t88)
-  %t90 = sext i32 %t89 to i64
-  %t91 = sext i32 1 to i64
-  %t92 = trunc i64 %t91 to i32
-  ret i32 %t92
+  %t88 = call ptr @__c0c_stderr()
+  %t89 = getelementptr [30 x i8], ptr @.str10, i64 0, i64 0
+  %t90 = call i32 @fprintf(ptr %t88, ptr %t89)
+  %t91 = sext i32 %t90 to i64
+  %t92 = sext i32 1 to i64
+  %t93 = trunc i64 %t92 to i32
+  ret i32 %t93
 L18:
   br label %L17
 L17:
-  %t93 = load i64, ptr %t8
-  %t94 = getelementptr i32, ptr %t1, i64 %t93
-  %t95 = load i64, ptr %t94
-  store i64 %t95, ptr %t2
+  %t94 = load i64, ptr %t8
+  %t95 = getelementptr i32, ptr %t1, i64 %t94
+  %t96 = load i64, ptr %t95
+  store i64 %t96, ptr %t2
   br label %L2
 L19:
   br label %L14
 L14:
-  %t96 = load i64, ptr %t8
-  %t97 = getelementptr i32, ptr %t1, i64 %t96
-  %t98 = load i64, ptr %t97
-  %t99 = getelementptr [3 x i8], ptr @.str11, i64 0, i64 0
-  %t100 = call i32 @strcmp(i64 %t98, ptr %t99)
-  %t101 = sext i32 %t100 to i64
-  %t103 = sext i32 0 to i64
-  %t102 = icmp eq i64 %t101, %t103
-  %t104 = zext i1 %t102 to i64
-  %t105 = icmp ne i64 %t104, 0
-  br i1 %t105, label %L20, label %L22
+  %t97 = load i64, ptr %t8
+  %t98 = getelementptr i32, ptr %t1, i64 %t97
+  %t99 = load i64, ptr %t98
+  %t100 = getelementptr [3 x i8], ptr @.str11, i64 0, i64 0
+  %t101 = call i32 @strcmp(i64 %t99, ptr %t100)
+  %t102 = sext i32 %t101 to i64
+  %t104 = sext i32 0 to i64
+  %t103 = icmp eq i64 %t102, %t104
+  %t105 = zext i1 %t103 to i64
+  %t106 = icmp ne i64 %t105, 0
+  br i1 %t106, label %L20, label %L22
 L20:
-  %t106 = load i64, ptr %t8
-  %t107 = add i64 %t106, 1
-  store i64 %t107, ptr %t8
-  %t108 = icmp sge i64 %t107, %t0
-  %t109 = zext i1 %t108 to i64
-  %t110 = icmp ne i64 %t109, 0
-  br i1 %t110, label %L23, label %L25
+  %t107 = load i64, ptr %t8
+  %t108 = add i64 %t107, 1
+  store i64 %t108, ptr %t8
+  %t109 = icmp sge i64 %t108, %t0
+  %t110 = zext i1 %t109 to i64
+  %t111 = icmp ne i64 %t110, 0
+  br i1 %t111, label %L23, label %L25
 L23:
-  %t111 = getelementptr [30 x i8], ptr @.str12, i64 0, i64 0
-  %t112 = call i32 @fprintf(ptr @stderr, ptr %t111)
-  %t113 = sext i32 %t112 to i64
-  %t114 = sext i32 1 to i64
-  %t115 = trunc i64 %t114 to i32
-  ret i32 %t115
+  %t112 = call ptr @__c0c_stderr()
+  %t113 = getelementptr [30 x i8], ptr @.str12, i64 0, i64 0
+  %t114 = call i32 @fprintf(ptr %t112, ptr %t113)
+  %t115 = sext i32 %t114 to i64
+  %t116 = sext i32 1 to i64
+  %t117 = trunc i64 %t116 to i32
+  ret i32 %t117
 L26:
   br label %L25
 L25:
-  %t116 = load i64, ptr %t8
-  %t117 = getelementptr i32, ptr %t1, i64 %t116
-  %t118 = load i64, ptr %t117
-  store i64 %t118, ptr %t5
+  %t118 = load i64, ptr %t8
+  %t119 = getelementptr i32, ptr %t1, i64 %t118
+  %t120 = load i64, ptr %t119
+  store i64 %t120, ptr %t5
   br label %L2
 L27:
   br label %L22
 L22:
-  %t119 = load ptr, ptr %t2
-  %t121 = ptrtoint ptr %t119 to i64
-  %t122 = icmp eq i64 %t121, 0
-  %t120 = zext i1 %t122 to i64
-  %t123 = icmp ne i64 %t120, 0
-  br i1 %t123, label %L28, label %L29
+  %t121 = load ptr, ptr %t2
+  %t123 = ptrtoint ptr %t121 to i64
+  %t124 = icmp eq i64 %t123, 0
+  %t122 = zext i1 %t124 to i64
+  %t125 = icmp ne i64 %t122, 0
+  br i1 %t125, label %L28, label %L29
 L28:
-  %t124 = load i64, ptr %t8
-  %t125 = getelementptr i32, ptr %t1, i64 %t124
-  %t126 = load i64, ptr %t125
-  store i64 %t126, ptr %t2
+  %t126 = load i64, ptr %t8
+  %t127 = getelementptr i32, ptr %t1, i64 %t126
+  %t128 = load i64, ptr %t127
+  store i64 %t128, ptr %t2
   br label %L30
 L29:
-  %t127 = getelementptr [31 x i8], ptr @.str13, i64 0, i64 0
-  %t128 = load i64, ptr %t8
-  %t129 = getelementptr i32, ptr %t1, i64 %t128
-  %t130 = load i64, ptr %t129
-  %t131 = call i32 @fprintf(ptr @stderr, ptr %t127, i64 %t130)
-  %t132 = sext i32 %t131 to i64
-  %t133 = sext i32 0 to i64
-  %t134 = getelementptr i32, ptr %t1, i64 %t133
-  %t135 = load i64, ptr %t134
-  call void @usage(i64 %t135)
-  %t137 = sext i32 1 to i64
-  %t138 = trunc i64 %t137 to i32
-  ret i32 %t138
+  %t129 = call ptr @__c0c_stderr()
+  %t130 = getelementptr [31 x i8], ptr @.str13, i64 0, i64 0
+  %t131 = load i64, ptr %t8
+  %t132 = getelementptr i32, ptr %t1, i64 %t131
+  %t133 = load i64, ptr %t132
+  %t134 = call i32 @fprintf(ptr %t129, ptr %t130, i64 %t133)
+  %t135 = sext i32 %t134 to i64
+  %t136 = sext i32 0 to i64
+  %t137 = getelementptr i32, ptr %t1, i64 %t136
+  %t138 = load i64, ptr %t137
+  call void @usage(i64 %t138)
+  %t140 = sext i32 1 to i64
+  %t141 = trunc i64 %t140 to i32
+  ret i32 %t141
 L31:
   br label %L30
 L30:
   br label %L2
 L2:
-  %t139 = load i64, ptr %t8
-  %t140 = add i64 %t139, 1
-  store i64 %t140, ptr %t8
+  %t142 = load i64, ptr %t8
+  %t143 = add i64 %t142, 1
+  store i64 %t143, ptr %t8
   br label %L0
 L3:
-  %t141 = load ptr, ptr %t2
-  %t143 = ptrtoint ptr %t141 to i64
-  %t144 = icmp eq i64 %t143, 0
-  %t142 = zext i1 %t144 to i64
-  %t145 = icmp ne i64 %t142, 0
-  br i1 %t145, label %L32, label %L34
+  %t144 = load ptr, ptr %t2
+  %t146 = ptrtoint ptr %t144 to i64
+  %t147 = icmp eq i64 %t146, 0
+  %t145 = zext i1 %t147 to i64
+  %t148 = icmp ne i64 %t145, 0
+  br i1 %t148, label %L32, label %L34
 L32:
-  %t146 = getelementptr [20 x i8], ptr @.str14, i64 0, i64 0
-  %t147 = call i32 @fprintf(ptr @stderr, ptr %t146)
-  %t148 = sext i32 %t147 to i64
-  %t149 = sext i32 0 to i64
-  %t150 = getelementptr i32, ptr %t1, i64 %t149
-  %t151 = load i64, ptr %t150
-  call void @usage(i64 %t151)
-  %t153 = sext i32 1 to i64
-  %t154 = trunc i64 %t153 to i32
-  ret i32 %t154
+  %t149 = call ptr @__c0c_stderr()
+  %t150 = getelementptr [20 x i8], ptr @.str14, i64 0, i64 0
+  %t151 = call i32 @fprintf(ptr %t149, ptr %t150)
+  %t152 = sext i32 %t151 to i64
+  %t153 = sext i32 0 to i64
+  %t154 = getelementptr i32, ptr %t1, i64 %t153
+  %t155 = load i64, ptr %t154
+  call void @usage(i64 %t155)
+  %t157 = sext i32 1 to i64
+  %t158 = trunc i64 %t157 to i32
+  ret i32 %t158
 L35:
   br label %L34
 L34:
-  %t155 = alloca ptr
-  store ptr @stdout, ptr %t155
-  %t156 = load ptr, ptr %t5
-  %t157 = icmp ne ptr %t156, null
-  br i1 %t157, label %L36, label %L38
+  %t159 = alloca ptr
+  %t160 = call ptr @__c0c_stdout()
+  store ptr %t160, ptr %t159
+  %t161 = load ptr, ptr %t5
+  %t162 = icmp ne ptr %t161, null
+  br i1 %t162, label %L36, label %L38
 L36:
-  %t158 = load ptr, ptr %t5
-  %t159 = getelementptr [2 x i8], ptr @.str15, i64 0, i64 0
-  %t160 = call ptr @fopen(ptr %t158, ptr %t159)
-  store ptr %t160, ptr %t155
-  %t161 = load ptr, ptr %t155
-  %t163 = ptrtoint ptr %t161 to i64
-  %t164 = icmp eq i64 %t163, 0
-  %t162 = zext i1 %t164 to i64
-  %t165 = icmp ne i64 %t162, 0
-  br i1 %t165, label %L39, label %L41
+  %t163 = load ptr, ptr %t5
+  %t164 = getelementptr [2 x i8], ptr @.str15, i64 0, i64 0
+  %t165 = call ptr @fopen(ptr %t163, ptr %t164)
+  store ptr %t165, ptr %t159
+  %t166 = load ptr, ptr %t159
+  %t168 = ptrtoint ptr %t166 to i64
+  %t169 = icmp eq i64 %t168, 0
+  %t167 = zext i1 %t169 to i64
+  %t170 = icmp ne i64 %t167, 0
+  br i1 %t170, label %L39, label %L41
 L39:
-  %t166 = getelementptr [35 x i8], ptr @.str16, i64 0, i64 0
-  %t167 = load ptr, ptr %t5
-  %t168 = call i32 @fprintf(ptr @stderr, ptr %t166, ptr %t167)
-  %t169 = sext i32 %t168 to i64
-  %t170 = sext i32 1 to i64
-  %t171 = trunc i64 %t170 to i32
-  ret i32 %t171
+  %t171 = call ptr @__c0c_stderr()
+  %t172 = getelementptr [35 x i8], ptr @.str16, i64 0, i64 0
+  %t173 = load ptr, ptr %t5
+  %t174 = call i32 @fprintf(ptr %t171, ptr %t172, ptr %t173)
+  %t175 = sext i32 %t174 to i64
+  %t176 = sext i32 1 to i64
+  %t177 = trunc i64 %t176 to i32
+  ret i32 %t177
 L42:
   br label %L41
 L41:
   br label %L38
 L38:
-  %t172 = load ptr, ptr %t2
-  %t173 = load ptr, ptr %t155
-  call void @compile(ptr %t172, ptr %t173)
-  %t175 = load ptr, ptr %t5
-  %t176 = icmp ne ptr %t175, null
-  br i1 %t176, label %L43, label %L45
+  %t178 = load ptr, ptr %t2
+  %t179 = load ptr, ptr %t159
+  call void @compile(ptr %t178, ptr %t179)
+  %t181 = load ptr, ptr %t5
+  %t182 = icmp ne ptr %t181, null
+  br i1 %t182, label %L43, label %L45
 L43:
-  %t177 = load ptr, ptr %t155
-  %t178 = call i32 @fclose(ptr %t177)
-  %t179 = sext i32 %t178 to i64
+  %t183 = load ptr, ptr %t159
+  %t184 = call i32 @fclose(ptr %t183)
+  %t185 = sext i32 %t184 to i64
   br label %L45
 L45:
-  %t180 = sext i32 0 to i64
-  %t181 = trunc i64 %t180 to i32
-  ret i32 %t181
+  %t186 = sext i32 0 to i64
+  %t187 = trunc i64 %t186 to i32
+  ret i32 %t187
 L46:
   ret i32 0
 }

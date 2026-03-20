@@ -6,13 +6,13 @@ OBJS = $(SRCS:.c=.o)
 
 all: c0c
 
-c0c: $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS)
+c0c: $(OBJS) c0c_compat.o
+	$(CC) $(CFLAGS) -o $@ $(OBJS) c0c_compat.o
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) c0c
+	rm -f $(OBJS) c0c c0c_compat.o
 
 .PHONY: all clean

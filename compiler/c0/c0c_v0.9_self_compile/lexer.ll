@@ -26,12 +26,7 @@ declare i32 @fprintf(ptr, ptr, ...)
 declare i32 @sprintf(ptr, ptr, ...)
 declare i32 @snprintf(ptr, i64, ptr, ...)
 declare i32 @vfprintf(ptr, ptr, ptr)
-declare void @llvm.va_start(ptr)
-declare void @llvm.va_end(ptr)
-declare void @llvm.va_copy(ptr, ptr)
-declare i32 @va_start(...)
-declare i32 @va_end(...)
-declare i32 @va_copy(...)
+declare i32 @vsnprintf(ptr, i64, ptr, ptr)
 declare ptr @fopen(ptr, ptr)
 declare i32 @fclose(ptr)
 declare i64 @fread(ptr, i64, i64, ptr)
@@ -56,9 +51,10 @@ declare i32 @islower(i32)
 declare i32 @toupper(i32)
 declare i32 @tolower(i32)
 declare i32 @assert(i32)
-@stderr = external global ptr
-@stdout = external global ptr
-@stdin  = external global ptr
+declare ptr @__c0c_stderr()
+declare ptr @__c0c_stdout()
+declare ptr @__c0c_stdin()
+declare void @__c0c_emit(ptr, ptr, ...)
 
 @KEYWORDS = internal global ptr zeroinitializer
 
@@ -149,21 +145,19 @@ entry:
   br i1 %t12, label %L0, label %L2
 L0:
   %t13 = getelementptr [7 x i8], ptr @.str0, i64 0, i64 0
-  %t14 = call i32 @perror(ptr %t13)
-  %t15 = sext i32 %t14 to i64
-  %t16 = call i32 @exit(i64 1)
-  %t17 = sext i32 %t16 to i64
+  call void @perror(ptr %t13)
+  call void @exit(i64 1)
   br label %L2
 L2:
+  %t16 = load ptr, ptr %t2
+  %t17 = call ptr @memcpy(ptr %t16, ptr %t0, ptr %t1)
   %t18 = load ptr, ptr %t2
-  %t19 = call ptr @memcpy(ptr %t18, ptr %t0, ptr %t1)
-  %t20 = load ptr, ptr %t2
-  %t22 = ptrtoint ptr %t1 to i64
-  %t21 = getelementptr i8, ptr %t20, i64 %t22
-  %t23 = sext i32 0 to i64
-  store i64 %t23, ptr %t21
-  %t24 = load ptr, ptr %t2
-  ret ptr %t24
+  %t20 = ptrtoint ptr %t1 to i64
+  %t19 = getelementptr i8, ptr %t18, i64 %t20
+  %t21 = sext i32 0 to i64
+  store i64 %t21, ptr %t19
+  %t22 = load ptr, ptr %t2
+  ret ptr %t22
 L3:
   ret ptr null
 }
@@ -229,24 +223,22 @@ entry:
   br i1 %t8, label %L0, label %L2
 L0:
   %t9 = getelementptr [7 x i8], ptr @.str1, i64 0, i64 0
-  %t10 = call i32 @perror(ptr %t9)
-  %t11 = sext i32 %t10 to i64
-  %t12 = call i32 @exit(i64 1)
-  %t13 = sext i32 %t12 to i64
+  call void @perror(ptr %t9)
+  call void @exit(i64 1)
   br label %L2
 L2:
+  %t12 = load ptr, ptr %t2
+  store ptr %t0, ptr %t12
+  %t13 = load ptr, ptr %t2
+  store ptr %t1, ptr %t13
   %t14 = load ptr, ptr %t2
-  store ptr %t0, ptr %t14
-  %t15 = load ptr, ptr %t2
-  store ptr %t1, ptr %t15
+  %t15 = sext i32 1 to i64
+  store i64 %t15, ptr %t14
   %t16 = load ptr, ptr %t2
   %t17 = sext i32 1 to i64
   store i64 %t17, ptr %t16
   %t18 = load ptr, ptr %t2
-  %t19 = sext i32 1 to i64
-  store i64 %t19, ptr %t18
-  %t20 = load ptr, ptr %t2
-  ret ptr %t20
+  ret ptr %t18
 L3:
   ret ptr null
 }
@@ -261,16 +253,14 @@ L0:
   call void @token_free(ptr %t3)
   br label %L2
 L2:
-  %t5 = call i32 @free(ptr %t0)
-  %t6 = sext i32 %t5 to i64
+  call void @free(ptr %t0)
   ret void
 }
 
 define dso_local void @token_free(ptr %t0) {
 entry:
   %t1 = load ptr, ptr %t0
-  %t2 = call i32 @free(ptr %t1)
-  %t3 = sext i32 %t2 to i64
+  call void @free(ptr %t1)
   ret void
 }
 

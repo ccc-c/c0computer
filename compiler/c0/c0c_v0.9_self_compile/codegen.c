@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
-#include <assert.h>
 
 /* ================================================================
    LLVM IR Code Generator
@@ -78,12 +76,13 @@ static const char *reg_name(int r, char *buf, size_t sz) {
 }
 #define REGBUF(r) (reg_name((r), (char[32]){0}, 32))
 
-static void emit(Codegen *cg, const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(cg->out, fmt, ap);
-    va_end(ap);
-}
+/* __c0c_emit: provided by c0c_compat.c.
+   Only declare for the host C compiler — c0c uses the IR header declare. */
+#ifndef __C0C__
+extern void __c0c_emit(FILE *out, const char *fmt, ...);
+#endif
+
+#define EMIT_BUF_SIZE 8192  /* kept for reference */
 
 /* Convert our Type to LLVM IR type string (static buffer rotation) */
 #define N_TBUFS 8
@@ -161,7 +160,7 @@ static Global *find_global(Codegen *cg, const char *name) {
 }
 
 static Local *add_local(Codegen *cg, const char *name, Type *type, int is_param) {
-    assert(cg->n_locals < MAX_LOCALS);
+    if (cg->n_locals >= MAX_LOCALS) { fprintf(stderr, "c0c: too many locals\n"); exit(1); }
     Local *l  = &cg->locals[cg->n_locals++];
     l->name   = strdup(name);
     int rid   = new_reg(cg);
@@ -203,21 +202,21 @@ static void emit_str_content(Codegen *cg, const char *raw) {
         if (*p == '\\' && *(p+1)) {
             p++;
             switch (*p) {
-            case 'n': emit(cg, "\\0A"); break;
-            case 't': emit(cg, "\\09"); break;
-            case 'r': emit(cg, "\\0D"); break;
-            case '0': emit(cg, "\\00"); break;
-            case '"': emit(cg, "\\22"); break;
-            case '\\': emit(cg, "\\5C"); break;
-            default:  emit(cg, "\\%02X", (unsigned char)*p); break;
+            case 'n': __c0c_emit(cg->out, "\\0A"); break;
+            case 't': __c0c_emit(cg->out, "\\09"); break;
+            case 'r': __c0c_emit(cg->out, "\\0D"); break;
+            case '0': __c0c_emit(cg->out, "\\00"); break;
+            case '"': __c0c_emit(cg->out, "\\22"); break;
+            case '\\': __c0c_emit(cg->out, "\\5C"); break;
+            default:  __c0c_emit(cg->out, "\\%02X", (unsigned char)*p); break;
             }
             p++;
         } else {
             if (*p == '"') break;
-            emit(cg, "%c", *p++);
+            __c0c_emit(cg->out, "%c", *p++);
         }
     }
-    emit(cg, "\\00"); /* NUL terminator */
+    __c0c_emit(cg->out, "\\00"); /* NUL terminator */
 }
 
 /* ---------------------------------------------------------------- forward decl */
@@ -268,7 +267,7 @@ static char *emit_lvalue_addr(Codegen *cg, Node *n) {
         if (val_is_ptr(v)) return strdup(v.reg);
         /* convert i64 to ptr */
         int rp = new_reg(cg);
-        emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", rp, v.reg);
+        __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rp, v.reg);
         char *buf = malloc(32); snprintf(buf, 32, "%%t%d", rp);
         return buf;
     }
@@ -282,10 +281,10 @@ static char *emit_lvalue_addr(Codegen *cg, Node *n) {
         /* ensure base is ptr */
         char base_r[64];
         if (val_is_ptr(base_v)) { strncpy(base_r, base_v.reg, 63); base_r[63] = '\0'; }
-        else { int rp = new_reg(cg); emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", rp, base_v.reg); snprintf(base_r, 64, "%%t%d", rp); }
+        else { int rp = new_reg(cg); __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rp, base_v.reg); snprintf(base_r, 64, "%%t%d", rp); }
         /* ensure idx is i64 */
         char idx_r[64]; promote_to_i64(cg, idx_v, idx_r, 64);
-        emit(cg, "  %%t%d = getelementptr %s, ptr %s, i64 %s\n", r, et, base_r, idx_r);
+        __c0c_emit(cg->out, "  %%t%d = getelementptr %s, ptr %s, i64 %s\n", r, et, base_r, idx_r);
         char *buf = malloc(32);
         snprintf(buf, 32, "%%t%d", r);
         return buf;
@@ -338,7 +337,7 @@ static int val_is_ptr(Val v) {
 static int promote_to_i64(Codegen *cg, Val v, char *out_reg, size_t out_sz) {
     if (val_is_ptr(v)) {
         int r = new_reg(cg);
-        emit(cg, "  %%t%d = ptrtoint ptr %s to i64\n", r, v.reg);
+        __c0c_emit(cg->out, "  %%t%d = ptrtoint ptr %s to i64\n", r, v.reg);
         snprintf(out_reg, out_sz, "%%t%d", r);
         return r;
     } else if (val_is_64bit(v)) {
@@ -346,7 +345,7 @@ static int promote_to_i64(Codegen *cg, Val v, char *out_reg, size_t out_sz) {
         return -1;
     } else {
         int r = new_reg(cg);
-        emit(cg, "  %%t%d = sext i32 %s to i64\n", r, v.reg);
+        __c0c_emit(cg->out, "  %%t%d = sext i32 %s to i64\n", r, v.reg);
         snprintf(out_reg, out_sz, "%%t%d", r);
         return r;
     }
@@ -356,11 +355,11 @@ static int promote_to_i64(Codegen *cg, Val v, char *out_reg, size_t out_sz) {
 static int emit_cond(Codegen *cg, Val cv) {
     int r = new_reg(cg);
     if (val_is_ptr(cv)) {
-        emit(cg, "  %%t%d = icmp ne ptr %s, null\n", r, cv.reg);
+        __c0c_emit(cg->out, "  %%t%d = icmp ne ptr %s, null\n", r, cv.reg);
     } else {
         char promoted[64];
         promote_to_i64(cg, cv, promoted, 64);
-        emit(cg, "  %%t%d = icmp ne i64 %s, 0\n", r, promoted);
+        __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", r, promoted);
     }
     return r;
 }
@@ -381,7 +380,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
     case ND_FLOAT_LIT: {
         /* LLVM needs hex float for precise representation */
         int r = new_reg(cg);
-        emit(cg, "  %%t%d = fadd double 0.0, %g\n", r, n->fval);
+        __c0c_emit(cg->out, "  %%t%d = fadd double 0.0, %g\n", r, n->fval);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
         static Type t_double = { TY_DOUBLE, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
         return make_val(buf, &t_double);
@@ -398,7 +397,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
         int sid = intern_string(cg, n->sval);
         int r   = new_reg(cg);
         int slen = str_literal_len(n->sval);
-        emit(cg, "  %%t%d = getelementptr [%d x i8], ptr @.str%d, i64 0, i64 0\n",
+        __c0c_emit(cg->out, "  %%t%d = getelementptr [%d x i8], ptr @.str%d, i64 0, i64 0\n",
              r, slen, sid);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
         return make_val(buf, default_ptr_type());
@@ -419,7 +418,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
             } else {
                 load_t = "i64"; ret_t = default_i64_type();
             }
-            emit(cg, "  %%t%d = load %s, ptr %s\n", r, load_t, l->llvm_name);
+            __c0c_emit(cg->out, "  %%t%d = load %s, ptr %s\n", r, load_t, l->llvm_name);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
             return make_val(buf, ret_t);
         }
@@ -435,7 +434,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
             } else {
                 load_t = "i64"; ret_t = default_i64_type();
             }
-            emit(cg, "  %%t%d = load %s, ptr @%s\n", r, load_t, n->sval);
+            __c0c_emit(cg->out, "  %%t%d = load %s, ptr @%s\n", r, load_t, n->sval);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
             return make_val(buf, ret_t);
         }
@@ -477,6 +476,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
                     "node_new","type_new","type_ptr","type_array",
                     "parser_new","lexer_new","codegen_new",
                     "macro_preprocess","read_file",
+                    "__c0c_stderr","__c0c_stdout","__c0c_stdin",
                     NULL
                 };
                 for (int pi = 0; ptr_funcs[pi]; pi++) {
@@ -497,6 +497,20 @@ static Val emit_expr(Codegen *cg, Node *n) {
                         break;
                     }
                 }
+                /* functions returning void */
+                static Type t_void = { TY_VOID, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+                const char *void_funcs[] = {
+                    "__c0c_va_start","__c0c_va_end","__c0c_va_copy",
+                    "__c0c_emit",
+                    "free","exit","perror","assert",
+                    NULL
+                };
+                for (int pi = 0; void_funcs[pi]; pi++) {
+                    if (strcmp(callee->sval, void_funcs[pi]) == 0) {
+                        ret_type = &t_void;
+                        break;
+                    }
+                }
             }
         } else {
             Val cv = emit_expr(cg, callee);
@@ -507,11 +521,11 @@ static Val emit_expr(Codegen *cg, Node *n) {
         const char *rt = llvm_type(ret_type);
         int is_void = (ret_type->kind == TY_VOID);
 
-        if (is_void) emit(cg, "  call void %s(", callee_buf);
-        else         emit(cg, "  %%t%d = call %s %s(", r, rt, callee_buf);
+        if (is_void) __c0c_emit(cg->out, "  call void %s(", callee_buf);
+        else         __c0c_emit(cg->out, "  %%t%d = call %s %s(", r, rt, callee_buf);
 
         for (int i = 1; i < n->n_children; i++) {
-            if (i > 1) emit(cg, ", ");
+            if (i > 1) __c0c_emit(cg->out, ", ");
             /* Use actual LLVM type: ptr for pointers, i64 for integers */
             const char *at;
             if (arg_types[i] && (arg_types[i]->kind == TY_PTR || arg_types[i]->kind == TY_ARRAY))
@@ -520,9 +534,9 @@ static Val emit_expr(Codegen *cg, Node *n) {
                 at = llvm_type(arg_types[i]);
             else
                 at = "i64";
-            emit(cg, "%s %s", at, arg_regs[i]);
+            __c0c_emit(cg->out, "%s %s", at, arg_regs[i]);
         }
-        emit(cg, ")\n");
+        __c0c_emit(cg->out, ")\n");
 
         for (int i = 1; i < n->n_children; i++) free(arg_regs[i]);
         free(arg_regs); free(arg_types);
@@ -540,7 +554,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
                (ret_sz == 0 means struct/unknown -> already emitted as i64) */
             if (ret_sz > 0 && ret_sz < 8 && strcmp(rt, "i64") != 0) {
                 int rs = new_reg(cg);
-                emit(cg, "  %%t%d = sext %s %%t%d to i64\n", rs, rt, r);
+                __c0c_emit(cg->out, "  %%t%d = sext %s %%t%d to i64\n", rs, rt, r);
                 snprintf(buf, sizeof buf, "%%t%d", rs);
             }
             val_ret = default_i64_type();
@@ -592,11 +606,11 @@ static Val emit_expr(Codegen *cg, Node *n) {
             /* use promote_to_i64 then icmp, handles ptr correctly */
             char la[64], lb[64];
             promote_to_i64(cg, lv, la, 64); promote_to_i64(cg, rv, lb, 64);
-            emit(cg, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
-            emit(cg, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
-            emit(cg, "  %%t%d = and i1 %%t%d, %%t%d\n", rC, rA, rB);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
+            __c0c_emit(cg->out, "  %%t%d = and i1 %%t%d, %%t%d\n", rC, rA, rB);
             int rZ = new_reg(cg);
-            emit(cg, "  %%t%d = zext i1 %%t%d to i64\n", rZ, rC);
+            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rZ, rC);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
             return make_val(buf, default_i64_type());
         }
@@ -604,11 +618,11 @@ static Val emit_expr(Codegen *cg, Node *n) {
             int rA = new_reg(cg), rB = new_reg(cg), rC = new_reg(cg);
             char la[64], lb[64];
             promote_to_i64(cg, lv, la, 64); promote_to_i64(cg, rv, lb, 64);
-            emit(cg, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
-            emit(cg, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
-            emit(cg, "  %%t%d = or i1 %%t%d, %%t%d\n", rC, rA, rB);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
+            __c0c_emit(cg->out, "  %%t%d = or i1 %%t%d, %%t%d\n", rC, rA, rB);
             int rZ = new_reg(cg);
-            emit(cg, "  %%t%d = zext i1 %%t%d to i64\n", rZ, rC);
+            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rZ, rC);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
             return make_val(buf, default_i64_type());
         }
@@ -619,16 +633,16 @@ static Val emit_expr(Codegen *cg, Node *n) {
         if (n->op == TOK_PLUS && is_ptr) {
             /* ptr + int: convert i64 back to ptr for GEP */
             int rptr = new_reg(cg);
-            emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", rptr, lreg);
-            emit(cg, "  %%t%d = getelementptr i8, ptr %%t%d, i64 %s\n", r, rptr, rreg);
+            __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rptr, lreg);
+            __c0c_emit(cg->out, "  %%t%d = getelementptr i8, ptr %%t%d, i64 %s\n", r, rptr, rreg);
         } else if (is_cmp) {
-            emit(cg, "  %%t%d = %s %s %s, %s\n", r, op, lt, lreg, rreg);
+            __c0c_emit(cg->out, "  %%t%d = %s %s %s, %s\n", r, op, lt, lreg, rreg);
             int rZ = new_reg(cg);
-            emit(cg, "  %%t%d = zext i1 %%t%d to i64\n", rZ, r);
+            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rZ, r);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
             return make_val(buf, default_i64_type());
         } else {
-            emit(cg, "  %%t%d = %s %s %s, %s\n", r, op, lt, lreg, rreg);
+            __c0c_emit(cg->out, "  %%t%d = %s %s %s, %s\n", r, op, lt, lreg, rreg);
         }
 
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
@@ -648,22 +662,22 @@ static Val emit_expr(Codegen *cg, Node *n) {
         if (!fp) promote_to_i64(cg, v, vp, 64);
         switch (n->op) {
         case TOK_MINUS:
-            if (fp) emit(cg, "  %%t%d = fneg double %s\n", r, v.reg);
-            else    emit(cg, "  %%t%d = sub i64 0, %s\n", r, vp);
+            if (fp) __c0c_emit(cg->out, "  %%t%d = fneg double %s\n", r, v.reg);
+            else    __c0c_emit(cg->out, "  %%t%d = sub i64 0, %s\n", r, vp);
             break;
         case TOK_BANG: {
             int rc = new_reg(cg);
-            emit(cg, "  %%t%d = icmp eq i64 %s, 0\n", rc, vp);
-            emit(cg, "  %%t%d = zext i1 %%t%d to i64\n", r, rc);
+            __c0c_emit(cg->out, "  %%t%d = icmp eq i64 %s, 0\n", rc, vp);
+            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", r, rc);
             break;
         }
         case TOK_TILDE:
-            emit(cg, "  %%t%d = xor i64 %s, -1\n", r, vp);
+            __c0c_emit(cg->out, "  %%t%d = xor i64 %s, -1\n", r, vp);
             break;
         case TOK_PLUS:
             return v;
         default:
-            emit(cg, "  %%t%d = add i64 %s, 0\n", r, vp);
+            __c0c_emit(cg->out, "  %%t%d = add i64 %s, 0\n", r, vp);
         }
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
         return make_val(buf, fp ? v.type : default_i64_type());
@@ -682,12 +696,12 @@ static Val emit_expr(Codegen *cg, Node *n) {
             char stored[64];
             if (!val_is_ptr(rv_val) && !val_is_64bit(rv_val) && !type_is_fp(rv_val.type)) {
                 int rp = new_reg(cg);
-                emit(cg, "  %%t%d = sext i32 %s to i64\n", rp, rv_val.reg);
+                __c0c_emit(cg->out, "  %%t%d = sext i32 %s to i64\n", rp, rv_val.reg);
                 snprintf(stored, 64, "%%t%d", rp);
             } else {
                 strncpy(stored, rv_val.reg, 63); stored[63] = '\0';
             }
-            emit(cg, "  store %s %s, ptr %s\n", st, stored, addr);
+            __c0c_emit(cg->out, "  store %s %s, ptr %s\n", st, stored, addr);
             free(addr);
         }
         return rv_val;
@@ -722,11 +736,11 @@ static Val emit_expr(Codegen *cg, Node *n) {
         case TOK_RSHIFT_ASSIGN: op2 = "ashr"; break;
         default: op2 = "add";
         }
-        emit(cg, "  %%t%d = %s %s %s, %s\n", r, op2, it, lr, rr);
+        __c0c_emit(cg->out, "  %%t%d = %s %s %s, %s\n", r, op2, it, lr, rr);
 
         char *addr = emit_lvalue_addr(cg, n->children[0]);
         if (addr) {
-            emit(cg, "  store %s %%t%d, ptr %s\n", it, r, addr);
+            __c0c_emit(cg->out, "  store %s %%t%d, ptr %s\n", it, r, addr);
             free(addr);
         }
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
@@ -740,9 +754,9 @@ static Val emit_expr(Codegen *cg, Node *n) {
         const char *op3 = (n->kind == ND_PRE_INC) ? "add" : "sub";
         char vr[64];
         promote_to_i64(cg, v, vr, 64);
-        emit(cg, "  %%t%d = %s i64 %s, 1\n", r, op3, vr);
+        __c0c_emit(cg->out, "  %%t%d = %s i64 %s, 1\n", r, op3, vr);
         char *addr = emit_lvalue_addr(cg, n->children[0]);
-        if (addr) { emit(cg, "  store i64 %%t%d, ptr %s\n", r, addr); free(addr); }
+        if (addr) { __c0c_emit(cg->out, "  store i64 %%t%d, ptr %s\n", r, addr); free(addr); }
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
         return make_val(buf, default_i64_type());
     }
@@ -754,9 +768,9 @@ static Val emit_expr(Codegen *cg, Node *n) {
         const char *op4 = (n->kind == ND_POST_INC) ? "add" : "sub";
         char vr[64];
         promote_to_i64(cg, v, vr, 64);
-        emit(cg, "  %%t%d = %s i64 %s, 1\n", r, op4, vr);
+        __c0c_emit(cg->out, "  %%t%d = %s i64 %s, 1\n", r, op4, vr);
         char *addr = emit_lvalue_addr(cg, n->children[0]);
-        if (addr) { emit(cg, "  store i64 %%t%d, ptr %s\n", r, addr); free(addr); }
+        if (addr) { __c0c_emit(cg->out, "  store i64 %%t%d, ptr %s\n", r, addr); free(addr); }
         return v; /* return old value */
     }
 
@@ -777,7 +791,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
             strncpy(ptr_r, pv.reg, 63); ptr_r[63] = '\0';
         } else {
             int rp = new_reg(cg);
-            emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", rp, pv.reg);
+            __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rp, pv.reg);
             snprintf(ptr_r, 64, "%%t%d", rp);
         }
         /* Load: use ptr type for pointer targets, i64 for everything else */
@@ -785,7 +799,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
         int base_is_ptr = (base->kind == TY_PTR || base->kind == TY_ARRAY);
         const char *load_t = base_is_ptr ? "ptr" : "i64";
         Type *ret_t = base_is_ptr ? default_ptr_type() : default_i64_type();
-        emit(cg, "  %%t%d = load %s, ptr %s\n", r, load_t, ptr_r);
+        __c0c_emit(cg->out, "  %%t%d = load %s, ptr %s\n", r, load_t, ptr_r);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
         return make_val(buf, ret_t);
     }
@@ -797,11 +811,11 @@ static Val emit_expr(Codegen *cg, Node *n) {
         /* Ensure base is ptr and index is i64 */
         char base_r[64], idx_r[64];
         if (val_is_ptr(base_v)) strncpy(base_r, base_v.reg, 63);
-        else { int rb = new_reg(cg); emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", rb, base_v.reg); snprintf(base_r, 64, "%%t%d", rb); }
+        else { int rb = new_reg(cg); __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rb, base_v.reg); snprintf(base_r, 64, "%%t%d", rb); }
         promote_to_i64(cg, idx_v, idx_r, 64);
         base_r[63] = '\0';
         int rG = new_reg(cg);
-        emit(cg, "  %%t%d = getelementptr %s, ptr %s, i64 %s\n",
+        __c0c_emit(cg->out, "  %%t%d = getelementptr %s, ptr %s, i64 %s\n",
              rG, llvm_type(elem), base_r, idx_r);
         int rL = new_reg(cg);
         /* Load as ptr if elem is pointer type, else as i64 — never i32 */
@@ -816,7 +830,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
         } else {
             load_t = "i64"; ret_elem = default_i64_type();
         }
-        emit(cg, "  %%t%d = load %s, ptr %%t%d\n", rL, load_t, rG);
+        __c0c_emit(cg->out, "  %%t%d = load %s, ptr %%t%d\n", rL, load_t, rG);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rL);
         return make_val(buf, ret_elem);
     }
@@ -832,27 +846,27 @@ static Val emit_expr(Codegen *cg, Node *n) {
         int is_src_ptr = val_is_ptr(v);
         if (fp_src && fp_dst) {
             int sz_src = type_size(v.type); int sz_dst = type_size(dst);
-            if (sz_dst > sz_src) emit(cg, "  %%t%d = fpext float %s to double\n", r, v.reg);
-            else emit(cg, "  %%t%d = fptrunc double %s to float\n", r, v.reg);
+            if (sz_dst > sz_src) __c0c_emit(cg->out, "  %%t%d = fpext float %s to double\n", r, v.reg);
+            else __c0c_emit(cg->out, "  %%t%d = fptrunc double %s to float\n", r, v.reg);
         } else if (fp_src && !fp_dst) {
-            emit(cg, "  %%t%d = fptosi double %s to i64\n", r, v.reg);
+            __c0c_emit(cg->out, "  %%t%d = fptosi double %s to i64\n", r, v.reg);
         } else if (!fp_src && fp_dst) {
             char promoted[64]; promote_to_i64(cg, v, promoted, 64);
-            emit(cg, "  %%t%d = sitofp i64 %s to %s\n", r, promoted, llvm_type(dst));
+            __c0c_emit(cg->out, "  %%t%d = sitofp i64 %s to %s\n", r, promoted, llvm_type(dst));
         } else if (is_dst_ptr && !is_src_ptr) {
             /* int -> ptr */
             char promoted[64]; promote_to_i64(cg, v, promoted, 64);
-            emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", r, promoted);
+            __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", r, promoted);
         } else if (!is_dst_ptr && is_src_ptr) {
             /* ptr -> int */
-            emit(cg, "  %%t%d = ptrtoint ptr %s to i64\n", r, v.reg);
+            __c0c_emit(cg->out, "  %%t%d = ptrtoint ptr %s to i64\n", r, v.reg);
         } else if (is_dst_ptr && is_src_ptr) {
             /* ptr -> ptr: no-op */
-            emit(cg, "  %%t%d = bitcast ptr %s to ptr\n", r, v.reg);
+            __c0c_emit(cg->out, "  %%t%d = bitcast ptr %s to ptr\n", r, v.reg);
         } else {
             /* int -> int: use i64 throughout */
             char promoted[64]; promote_to_i64(cg, v, promoted, 64);
-            emit(cg, "  %%t%d = add i64 %s, 0\n", r, promoted);  /* no-op promote */
+            __c0c_emit(cg->out, "  %%t%d = add i64 %s, 0\n", r, promoted);  /* no-op promote */
         }
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
         if (is_dst_ptr) return make_val(buf, default_ptr_type());
@@ -866,18 +880,18 @@ static Val emit_expr(Codegen *cg, Node *n) {
         int lF     = new_label(cg);
         int lEnd   = new_label(cg);
         int rcond = emit_cond(cg, cv);
-        emit(cg, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lT, lF);
-        emit(cg, "L%d:\n", lT);
+        __c0c_emit(cg->out, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lT, lF);
+        __c0c_emit(cg->out, "L%d:\n", lT);
         Val tv = emit_expr(cg, n->children[0]);
         char tv_r[64]; promote_to_i64(cg, tv, tv_r, 64);
-        emit(cg, "  br label %%L%d\n", lEnd);
-        emit(cg, "L%d:\n", lF);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
+        __c0c_emit(cg->out, "L%d:\n", lF);
         Val fv = emit_expr(cg, n->children[1]);
         char fv_r[64]; promote_to_i64(cg, fv, fv_r, 64);
-        emit(cg, "  br label %%L%d\n", lEnd);
-        emit(cg, "L%d:\n", lEnd);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
+        __c0c_emit(cg->out, "L%d:\n", lEnd);
         int rp = new_reg(cg);
-        emit(cg, "  %%t%d = phi i64 [ %s, %%L%d ], [ %s, %%L%d ]\n",
+        __c0c_emit(cg->out, "  %%t%d = phi i64 [ %s, %%L%d ], [ %s, %%L%d ]\n",
              rp, tv_r, lT, fv_r, lF);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rp);
         return make_val(buf, default_i64_type());
@@ -921,17 +935,17 @@ static Val emit_expr(Codegen *cg, Node *n) {
         } else {
             int rp = new_reg(cg);
             char promoted[64]; promote_to_i64(cg, bv, promoted, 64);
-            emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", rp, promoted);
+            __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rp, promoted);
             snprintf(base_ptr, 64, "%%t%d", rp);
         }
         int r = new_reg(cg);
-        emit(cg, "  %%t%d = load ptr, ptr %s\n", r, base_ptr);
+        __c0c_emit(cg->out, "  %%t%d = load ptr, ptr %s\n", r, base_ptr);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
         return make_val(buf, default_ptr_type());
     }
 
     default:
-        emit(cg, "  ; unhandled expr node %d\n", n->kind);
+        __c0c_emit(cg->out, "  ; unhandled expr node %d\n", n->kind);
         return make_val("0", default_int_type());
     }
 }
@@ -962,8 +976,8 @@ static void emit_stmt(Codegen *cg, Node *n) {
             lt = "i64"; stored_vt = default_i64_type();
         }
         int r = new_reg(cg);
-        emit(cg, "  %%t%d = alloca %s\n", r, lt);
-        assert(cg->n_locals < MAX_LOCALS);
+        __c0c_emit(cg->out, "  %%t%d = alloca %s\n", r, lt);
+        if (cg->n_locals >= MAX_LOCALS) { fprintf(stderr, "c0c: too many locals\n"); exit(1); }
         Local *l = &cg->locals[cg->n_locals++];
         l->name      = strdup(n->var_name ? n->var_name : "__anon");
         l->llvm_name = malloc(32);
@@ -980,12 +994,12 @@ static void emit_stmt(Codegen *cg, Node *n) {
             char stored[64];
             if (!val_is_ptr(iv) && !val_is_64bit(iv) && !type_is_fp(iv.type)) {
                 int rp = new_reg(cg);
-                emit(cg, "  %%t%d = sext i32 %s to i64\n", rp, iv.reg);
+                __c0c_emit(cg->out, "  %%t%d = sext i32 %s to i64\n", rp, iv.reg);
                 snprintf(stored, 64, "%%t%d", rp);
             } else {
                 strncpy(stored, iv.reg, 63); stored[63] = '\0';
             }
-            emit(cg, "  store %s %s, ptr %%t%d\n", st, stored, r);
+            __c0c_emit(cg->out, "  store %s %s, ptr %%t%d\n", st, stored, r);
         }
         /* handle chained decls */
         for (int i = 1; i < n->n_children; i++)
@@ -1007,44 +1021,44 @@ static void emit_stmt(Codegen *cg, Node *n) {
             const char *ret_type_str = llvm_type(rt);
 
             if (rt_is_void) {
-                emit(cg, "  ret void\n");
+                __c0c_emit(cg->out, "  ret void\n");
             } else if (rt_is_fp) {
-                emit(cg, "  ret %s %s\n", ret_type_str, rv.reg);
+                __c0c_emit(cg->out, "  ret %s %s\n", ret_type_str, rv.reg);
             } else if (rt_is_ptr) {
                 /* Return ptr: coerce if needed */
                 if (val_is_ptr(rv)) {
-                    emit(cg, "  ret ptr %s\n", rv.reg);
+                    __c0c_emit(cg->out, "  ret ptr %s\n", rv.reg);
                 } else {
                     int rc = new_reg(cg);
                     char pr[64]; promote_to_i64(cg, rv, pr, 64);
-                    emit(cg, "  %%t%d = inttoptr i64 %s to ptr\n", rc, pr);
-                    emit(cg, "  ret ptr %%t%d\n", rc);
+                    __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rc, pr);
+                    __c0c_emit(cg->out, "  ret ptr %%t%d\n", rc);
                 }
             } else {
                 /* Return integer: use the declared LLVM return type */
                 char pr[64]; promote_to_i64(cg, rv, pr, 64);
                 if (strcmp(ret_type_str, "i8") == 0) {
                     int rc = new_reg(cg);
-                    emit(cg, "  %%t%d = trunc i64 %s to i8\n", rc, pr);
-                    emit(cg, "  ret i8 %%t%d\n", rc);
+                    __c0c_emit(cg->out, "  %%t%d = trunc i64 %s to i8\n", rc, pr);
+                    __c0c_emit(cg->out, "  ret i8 %%t%d\n", rc);
                 } else if (strcmp(ret_type_str, "i16") == 0) {
                     int rc = new_reg(cg);
-                    emit(cg, "  %%t%d = trunc i64 %s to i16\n", rc, pr);
-                    emit(cg, "  ret i16 %%t%d\n", rc);
+                    __c0c_emit(cg->out, "  %%t%d = trunc i64 %s to i16\n", rc, pr);
+                    __c0c_emit(cg->out, "  ret i16 %%t%d\n", rc);
                 } else if (strcmp(ret_type_str, "i32") == 0) {
                     int rc = new_reg(cg);
-                    emit(cg, "  %%t%d = trunc i64 %s to i32\n", rc, pr);
-                    emit(cg, "  ret i32 %%t%d\n", rc);
+                    __c0c_emit(cg->out, "  %%t%d = trunc i64 %s to i32\n", rc, pr);
+                    __c0c_emit(cg->out, "  ret i32 %%t%d\n", rc);
                 } else {
                     /* i64 or typedef_ref (mapped to i64) */
-                    emit(cg, "  ret i64 %s\n", pr);
+                    __c0c_emit(cg->out, "  ret i64 %s\n", pr);
                 }
             }
         } else {
-            emit(cg, "  ret void\n");
+            __c0c_emit(cg->out, "  ret void\n");
         }
         int dead = new_label(cg);
-        emit(cg, "L%d:\n", dead);
+        __c0c_emit(cg->out, "L%d:\n", dead);
         break;
     }
 
@@ -1054,17 +1068,17 @@ static void emit_stmt(Codegen *cg, Node *n) {
         int lT   = new_label(cg);
         int lF   = new_label(cg);
         int lEnd = new_label(cg);
-        emit(cg, "  br i1 %%t%d, label %%L%d, label %%L%d\n",
+        __c0c_emit(cg->out, "  br i1 %%t%d, label %%L%d, label %%L%d\n",
              rcond, lT, n->else_branch ? lF : lEnd);
-        emit(cg, "L%d:\n", lT);
+        __c0c_emit(cg->out, "L%d:\n", lT);
         emit_stmt(cg, n->then_branch);
-        emit(cg, "  br label %%L%d\n", lEnd);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
         if (n->else_branch) {
-            emit(cg, "L%d:\n", lF);
+            __c0c_emit(cg->out, "L%d:\n", lF);
             emit_stmt(cg, n->else_branch);
-            emit(cg, "  br label %%L%d\n", lEnd);
+            __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
         }
-        emit(cg, "L%d:\n", lEnd);
+        __c0c_emit(cg->out, "L%d:\n", lEnd);
         break;
     }
 
@@ -1078,15 +1092,15 @@ static void emit_stmt(Codegen *cg, Node *n) {
         snprintf(cg->break_label, 64, "L%d", lEnd);
         snprintf(cg->cont_label,  64, "L%d", lCond);
 
-        emit(cg, "  br label %%L%d\n", lCond);
-        emit(cg, "L%d:\n", lCond);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lCond);
+        __c0c_emit(cg->out, "L%d:\n", lCond);
         Val cv    = emit_expr(cg, n->loop_cond);
         int rcond = emit_cond(cg, cv);
-        emit(cg, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lBody, lEnd);
-        emit(cg, "L%d:\n", lBody);
+        __c0c_emit(cg->out, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lBody, lEnd);
+        __c0c_emit(cg->out, "L%d:\n", lBody);
         emit_stmt(cg, n->loop_body);
-        emit(cg, "  br label %%L%d\n", lCond);
-        emit(cg, "L%d:\n", lEnd);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lCond);
+        __c0c_emit(cg->out, "L%d:\n", lEnd);
 
         strcpy(cg->break_label, old_break);
         strcpy(cg->cont_label,  old_cont);
@@ -1103,15 +1117,15 @@ static void emit_stmt(Codegen *cg, Node *n) {
         snprintf(cg->break_label, 64, "L%d", lEnd);
         snprintf(cg->cont_label,  64, "L%d", lCond);
 
-        emit(cg, "  br label %%L%d\n", lBody);
-        emit(cg, "L%d:\n", lBody);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lBody);
+        __c0c_emit(cg->out, "L%d:\n", lBody);
         emit_stmt(cg, n->loop_body);
-        emit(cg, "  br label %%L%d\n", lCond);
-        emit(cg, "L%d:\n", lCond);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lCond);
+        __c0c_emit(cg->out, "L%d:\n", lCond);
         Val cv    = emit_expr(cg, n->loop_cond);
         int rcond = emit_cond(cg, cv);
-        emit(cg, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lBody, lEnd);
-        emit(cg, "L%d:\n", lEnd);
+        __c0c_emit(cg->out, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lBody, lEnd);
+        __c0c_emit(cg->out, "L%d:\n", lEnd);
 
         strcpy(cg->break_label, old_break);
         strcpy(cg->cont_label,  old_cont);
@@ -1131,22 +1145,22 @@ static void emit_stmt(Codegen *cg, Node *n) {
 
         scope_push(cg);
         if (n->for_init) emit_stmt(cg, n->for_init);
-        emit(cg, "  br label %%L%d\n", lCond);
-        emit(cg, "L%d:\n", lCond);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lCond);
+        __c0c_emit(cg->out, "L%d:\n", lCond);
         if (n->for_cond) {
             Val cv    = emit_expr(cg, n->for_cond);
             int rcond = emit_cond(cg, cv);
-            emit(cg, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lBody, lEnd);
+            __c0c_emit(cg->out, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rcond, lBody, lEnd);
         } else {
-            emit(cg, "  br label %%L%d\n", lBody);
+            __c0c_emit(cg->out, "  br label %%L%d\n", lBody);
         }
-        emit(cg, "L%d:\n", lBody);
+        __c0c_emit(cg->out, "L%d:\n", lBody);
         emit_stmt(cg, n->for_body);
-        emit(cg, "  br label %%L%d\n", lPost);
-        emit(cg, "L%d:\n", lPost);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lPost);
+        __c0c_emit(cg->out, "L%d:\n", lPost);
         if (n->for_post) emit_expr(cg, n->for_post);
-        emit(cg, "  br label %%L%d\n", lCond);
-        emit(cg, "L%d:\n", lEnd);
+        __c0c_emit(cg->out, "  br label %%L%d\n", lCond);
+        __c0c_emit(cg->out, "L%d:\n", lEnd);
         scope_pop(cg);
 
         strcpy(cg->break_label, old_break);
@@ -1155,13 +1169,13 @@ static void emit_stmt(Codegen *cg, Node *n) {
     }
 
     case ND_BREAK:
-        emit(cg, "  br label %%%s\n", cg->break_label);
-        { int dead = new_label(cg); emit(cg, "L%d:\n", dead); }
+        __c0c_emit(cg->out, "  br label %%%s\n", cg->break_label);
+        { int dead = new_label(cg); __c0c_emit(cg->out, "L%d:\n", dead); }
         break;
 
     case ND_CONTINUE:
-        emit(cg, "  br label %%%s\n", cg->cont_label);
-        { int dead = new_label(cg); emit(cg, "L%d:\n", dead); }
+        __c0c_emit(cg->out, "  br label %%%s\n", cg->cont_label);
+        { int dead = new_label(cg); __c0c_emit(cg->out, "L%d:\n", dead); }
         break;
 
     case ND_SWITCH: {
@@ -1197,17 +1211,17 @@ static void emit_stmt(Codegen *cg, Node *n) {
         char sv_promoted[64];
         promote_to_i64(cg, sv, sv_promoted, 64);
         int rs = new_reg(cg);
-        emit(cg, "  %%t%d = add i64 %s, 0\n", rs, sv_promoted);
-        emit(cg, "  switch i64 %%t%d, label %%L%d [\n", rs, default_label);
+        __c0c_emit(cg->out, "  %%t%d = add i64 %s, 0\n", rs, sv_promoted);
+        __c0c_emit(cg->out, "  switch i64 %%t%d, label %%L%d [\n", rs, default_label);
         int ci = 0;
         for (int i = 0; i < body->n_children; i++) {
             Node *ch = body->children[i];
             if (ch->kind == ND_CASE && ci < n_cases) {
-                emit(cg, "    i64 %lld, label %%L%d\n", case_vals[ci], case_labels[ci]);
+                __c0c_emit(cg->out, "    i64 %lld, label %%L%d\n", case_vals[ci], case_labels[ci]);
                 ci++;
             }
         }
-        emit(cg, "  ]\n");
+        __c0c_emit(cg->out, "  ]\n");
 
         /* emit case bodies */
         ci = 0;
@@ -1215,21 +1229,21 @@ static void emit_stmt(Codegen *cg, Node *n) {
         for (int i = 0; i < body->n_children; i++) {
             Node *ch = body->children[i];
             if (ch->kind == ND_CASE && ci < n_cases) {
-                emit(cg, "L%d:\n", case_labels[ci++]);
+                __c0c_emit(cg->out, "L%d:\n", case_labels[ci++]);
                 if (ch->n_children > 0) emit_stmt(cg, ch->children[0]);
                 /* fallthrough: jump to next label or end */
                 int next = (ci < n_cases) ? case_labels[ci] : lEnd;
-                emit(cg, "  br label %%L%d\n", next);
+                __c0c_emit(cg->out, "  br label %%L%d\n", next);
             } else if (ch->kind == ND_DEFAULT) {
-                emit(cg, "L%d:\n", default_label);
+                __c0c_emit(cg->out, "L%d:\n", default_label);
                 if (ch->n_children > 0) emit_stmt(cg, ch->children[0]);
-                emit(cg, "  br label %%L%d\n", lEnd);
+                __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
                 def_ci++;
             } else {
                 emit_stmt(cg, ch);
             }
         }
-        emit(cg, "L%d:\n", lEnd);
+        __c0c_emit(cg->out, "L%d:\n", lEnd);
         strcpy(cg->break_label, old_break);
         break;
     }
@@ -1246,15 +1260,15 @@ static void emit_stmt(Codegen *cg, Node *n) {
     case ND_LABEL: {
         /* Named label for goto — emit a branch to it first so any preceding
            dead block (from break/goto) has a proper terminator */
-        emit(cg, "  br label %%%s\n", n->sval);
-        emit(cg, "%s:\n", n->sval);
+        __c0c_emit(cg->out, "  br label %%%s\n", n->sval);
+        __c0c_emit(cg->out, "%s:\n", n->sval);
         if (n->n_children > 0) emit_stmt(cg, n->children[0]);
         break;
     }
 
     case ND_GOTO:
-        emit(cg, "  br label %%%s\n", n->sval);
-        { int dead = new_label(cg); emit(cg, "L%d:\n", dead); }
+        __c0c_emit(cg->out, "  br label %%%s\n", n->sval);
+        { int dead = new_label(cg); __c0c_emit(cg->out, "L%d:\n", dead); }
         break;
 
     case ND_TYPEDEF:
@@ -1283,7 +1297,7 @@ static void emit_func_def(Codegen *cg, Node *n) {
     /* linkage */
     const char *linkage = n->is_static ? "internal" : "dso_local";
 
-    emit(cg, "define %s %s @%s(",
+    __c0c_emit(cg->out, "define %s %s @%s(",
          linkage, llvm_ret_type(ft),
          n->func_name ? n->func_name : "anon");
 
@@ -1294,7 +1308,7 @@ static void emit_func_def(Codegen *cg, Node *n) {
         Type *pt_type = ft->params[i].type;
         /* skip void-only parameter list like f(void) */
         if (pt_type && pt_type->kind == TY_VOID && ft->param_count == 1) break;
-        if (emitted_params) emit(cg, ", ");
+        if (emitted_params) __c0c_emit(cg->out, ", ");
         /* Use i64 for all integer params, ptr for pointers and structs */
         const char *pt;
         Type *stored_type;
@@ -1311,10 +1325,10 @@ static void emit_func_def(Codegen *cg, Node *n) {
             pt = "i64"; stored_type = default_i64_type();
         }
         int pr = new_reg(cg);
-        emit(cg, "%s %%t%d", pt, pr);
+        __c0c_emit(cg->out, "%s %%t%d", pt, pr);
         emitted_params++;
         if (n->param_names && n->param_names[i]) {
-            assert(cg->n_locals < MAX_LOCALS);
+            if (cg->n_locals >= MAX_LOCALS) { fprintf(stderr, "c0c: too many locals\n"); exit(1); }
             Local *l = &cg->locals[cg->n_locals++];
             l->name      = strdup(n->param_names[i]);
             l->llvm_name = malloc(32);
@@ -1323,30 +1337,30 @@ static void emit_func_def(Codegen *cg, Node *n) {
             l->is_param  = 1;
         }
     }
-    if (ft->variadic) { if (emitted_params) emit(cg, ", "); emit(cg, "..."); }
-    emit(cg, ") {\n");
-    emit(cg, "entry:\n");
+    if (ft->variadic) { if (emitted_params) __c0c_emit(cg->out, ", "); __c0c_emit(cg->out, "..."); }
+    __c0c_emit(cg->out, ") {\n");
+    __c0c_emit(cg->out, "entry:\n");
 
     /* body */
     emit_stmt(cg, n->loop_body);
 
     /* implicit return — always needed since last block may have fallen through */
     if (!ft->ret || ft->ret->kind == TY_VOID) {
-        emit(cg, "  ret void\n");
+        __c0c_emit(cg->out, "  ret void\n");
     } else if (ft->ret->kind == TY_PTR || ft->ret->kind == TY_ARRAY) {
-        emit(cg, "  ret ptr null\n");
+        __c0c_emit(cg->out, "  ret ptr null\n");
     } else if (type_is_fp(ft->ret)) {
-        emit(cg, "  ret %s 0.0\n", llvm_type(ft->ret));
+        __c0c_emit(cg->out, "  ret %s 0.0\n", llvm_type(ft->ret));
     } else {
         /* Integer return: match the declared LLVM return type */
         const char *rts = llvm_type(ft->ret);
-        if      (strcmp(rts,"i8")  == 0) emit(cg, "  ret i8 0\n");
-        else if (strcmp(rts,"i16") == 0) emit(cg, "  ret i16 0\n");
-        else if (strcmp(rts,"i32") == 0) emit(cg, "  ret i32 0\n");
-        else                             emit(cg, "  ret i64 0\n");
+        if      (strcmp(rts,"i8")  == 0) __c0c_emit(cg->out, "  ret i8 0\n");
+        else if (strcmp(rts,"i16") == 0) __c0c_emit(cg->out, "  ret i16 0\n");
+        else if (strcmp(rts,"i32") == 0) __c0c_emit(cg->out, "  ret i32 0\n");
+        else                             __c0c_emit(cg->out, "  ret i64 0\n");
     }
 
-    emit(cg, "}\n\n");
+    __c0c_emit(cg->out, "}\n\n");
     scope_pop(cg);
 }
 
@@ -1396,7 +1410,7 @@ static void emit_global_var(Codegen *cg, Node *n) {
             if (vt->param_count) pos += snprintf(params_buf + pos, 512 - pos, ", ");
             pos += snprintf(params_buf + pos, 512 - pos, "...");
         }
-        emit(cg, "declare %s @%s(%s)\n", llvm_ret_type(vt), n->var_name, params_buf);
+        __c0c_emit(cg->out, "declare %s @%s(%s)\n", llvm_ret_type(vt), n->var_name, params_buf);
         return;
     }
 
@@ -1412,14 +1426,14 @@ static void emit_global_var(Codegen *cg, Node *n) {
     }
 
     if (n->is_extern) {
-        emit(cg, "@%s = external global %s\n",
+        __c0c_emit(cg->out, "@%s = external global %s\n",
              n->var_name, llvm_type(vt));
         return;
     }
 
     const char *linkage = n->is_static ? "internal" : "dso_local";
     const char *lt = llvm_type(vt);
-    emit(cg, "@%s = %s global %s zeroinitializer\n", n->var_name, linkage, lt);
+    __c0c_emit(cg->out, "@%s = %s global %s zeroinitializer\n", n->var_name, linkage, lt);
 }
 
 /* ================================================================ Public API */
@@ -1442,81 +1456,79 @@ void codegen_emit(Codegen *cg, Node *tu) {
     if (!tu) return;
 
     /* ---- module header ---- */
-    emit(cg, "; ModuleID = '%s'\n", cg->source_filename);
-    emit(cg, "source_filename = \"%s\"\n", cg->source_filename);
-    emit(cg, "target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128\"\n");
-    emit(cg, "target triple = \"x86_64-unknown-linux-gnu\"\n\n");
+    __c0c_emit(cg->out, "; ModuleID = '%s'\n", cg->source_filename);
+    __c0c_emit(cg->out, "source_filename = \"%s\"\n", cg->source_filename);
+    __c0c_emit(cg->out, "target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128\"\n");
+    __c0c_emit(cg->out, "target triple = \"x86_64-unknown-linux-gnu\"\n\n");
 
     /* ---- standard library declarations ---- */
-    emit(cg, "; stdlib declarations\n");
-    emit(cg, "declare ptr @malloc(i64)\n");
-    emit(cg, "declare ptr @calloc(i64, i64)\n");
-    emit(cg, "declare ptr @realloc(ptr, i64)\n");
-    emit(cg, "declare void @free(ptr)\n");
-    emit(cg, "declare i64 @strlen(ptr)\n");
-    emit(cg, "declare ptr @strdup(ptr)\n");
-    emit(cg, "declare ptr @strndup(ptr, i64)\n");
-    emit(cg, "declare ptr @strcpy(ptr, ptr)\n");
-    emit(cg, "declare ptr @strncpy(ptr, ptr, i64)\n");
-    emit(cg, "declare ptr @strcat(ptr, ptr)\n");
-    emit(cg, "declare ptr @strchr(ptr, i64)\n");
-    emit(cg, "declare ptr @strstr(ptr, ptr)\n");
-    emit(cg, "declare i32 @strcmp(ptr, ptr)\n");
-    emit(cg, "declare i32 @strncmp(ptr, ptr, i64)\n");
-    emit(cg, "declare ptr @memcpy(ptr, ptr, i64)\n");
-    emit(cg, "declare ptr @memset(ptr, i32, i64)\n");
-    emit(cg, "declare i32 @memcmp(ptr, ptr, i64)\n");
-    emit(cg, "declare i32 @printf(ptr, ...)\n");
-    emit(cg, "declare i32 @fprintf(ptr, ptr, ...)\n");
-    emit(cg, "declare i32 @sprintf(ptr, ptr, ...)\n");
-    emit(cg, "declare i32 @snprintf(ptr, i64, ptr, ...)\n");
-    emit(cg, "declare i32 @vfprintf(ptr, ptr, ptr)\n");
-    /* va_list intrinsics */
-    emit(cg, "declare void @llvm.va_start(ptr)\n");
-    emit(cg, "declare void @llvm.va_end(ptr)\n");
-    emit(cg, "declare void @llvm.va_copy(ptr, ptr)\n");
-    emit(cg, "declare i32 @va_start(...)\n");
-    emit(cg, "declare i32 @va_end(...)\n");
-    emit(cg, "declare i32 @va_copy(...)\n");
-    emit(cg, "declare ptr @fopen(ptr, ptr)\n");
-    emit(cg, "declare i32 @fclose(ptr)\n");
-    emit(cg, "declare i64 @fread(ptr, i64, i64, ptr)\n");
-    emit(cg, "declare i64 @fwrite(ptr, i64, i64, ptr)\n");
-    emit(cg, "declare i32 @fseek(ptr, i64, i32)\n");
-    emit(cg, "declare i64 @ftell(ptr)\n");
-    emit(cg, "declare void @perror(ptr)\n");
-    emit(cg, "declare void @exit(i32)\n");
-    emit(cg, "declare ptr @getenv(ptr)\n");
-    emit(cg, "declare i32 @atoi(ptr)\n");
-    emit(cg, "declare i64 @atol(ptr)\n");
-    emit(cg, "declare i64 @strtol(ptr, ptr, i32)\n");
-    emit(cg, "declare i64 @strtoll(ptr, ptr, i32)\n");
-    emit(cg, "declare double @atof(ptr)\n");
-    emit(cg, "declare i32 @isspace(i32)\n");
-    emit(cg, "declare i32 @isdigit(i32)\n");
-    emit(cg, "declare i32 @isalpha(i32)\n");
-    emit(cg, "declare i32 @isalnum(i32)\n");
-    emit(cg, "declare i32 @isxdigit(i32)\n");
-    emit(cg, "declare i32 @isupper(i32)\n");
-    emit(cg, "declare i32 @islower(i32)\n");
-    emit(cg, "declare i32 @toupper(i32)\n");
-    emit(cg, "declare i32 @tolower(i32)\n");
-    emit(cg, "declare i32 @assert(i32)\n");
-    emit(cg, "@stderr = external global ptr\n");
-    emit(cg, "@stdout = external global ptr\n");
-    emit(cg, "@stdin  = external global ptr\n");
-    emit(cg, "\n");
+    __c0c_emit(cg->out, "; stdlib declarations\n");
+    __c0c_emit(cg->out, "declare ptr @malloc(i64)\n");
+    __c0c_emit(cg->out, "declare ptr @calloc(i64, i64)\n");
+    __c0c_emit(cg->out, "declare ptr @realloc(ptr, i64)\n");
+    __c0c_emit(cg->out, "declare void @free(ptr)\n");
+    __c0c_emit(cg->out, "declare i64 @strlen(ptr)\n");
+    __c0c_emit(cg->out, "declare ptr @strdup(ptr)\n");
+    __c0c_emit(cg->out, "declare ptr @strndup(ptr, i64)\n");
+    __c0c_emit(cg->out, "declare ptr @strcpy(ptr, ptr)\n");
+    __c0c_emit(cg->out, "declare ptr @strncpy(ptr, ptr, i64)\n");
+    __c0c_emit(cg->out, "declare ptr @strcat(ptr, ptr)\n");
+    __c0c_emit(cg->out, "declare ptr @strchr(ptr, i64)\n");
+    __c0c_emit(cg->out, "declare ptr @strstr(ptr, ptr)\n");
+    __c0c_emit(cg->out, "declare i32 @strcmp(ptr, ptr)\n");
+    __c0c_emit(cg->out, "declare i32 @strncmp(ptr, ptr, i64)\n");
+    __c0c_emit(cg->out, "declare ptr @memcpy(ptr, ptr, i64)\n");
+    __c0c_emit(cg->out, "declare ptr @memset(ptr, i32, i64)\n");
+    __c0c_emit(cg->out, "declare i32 @memcmp(ptr, ptr, i64)\n");
+    __c0c_emit(cg->out, "declare i32 @printf(ptr, ...)\n");
+    __c0c_emit(cg->out, "declare i32 @fprintf(ptr, ptr, ...)\n");
+    __c0c_emit(cg->out, "declare i32 @sprintf(ptr, ptr, ...)\n");
+    __c0c_emit(cg->out, "declare i32 @snprintf(ptr, i64, ptr, ...)\n");
+    __c0c_emit(cg->out, "declare i32 @vfprintf(ptr, ptr, ptr)\n");
+    __c0c_emit(cg->out, "declare i32 @vsnprintf(ptr, i64, ptr, ptr)\n");
+    __c0c_emit(cg->out, "declare ptr @fopen(ptr, ptr)\n");
+    __c0c_emit(cg->out, "declare i32 @fclose(ptr)\n");
+    __c0c_emit(cg->out, "declare i64 @fread(ptr, i64, i64, ptr)\n");
+    __c0c_emit(cg->out, "declare i64 @fwrite(ptr, i64, i64, ptr)\n");
+    __c0c_emit(cg->out, "declare i32 @fseek(ptr, i64, i32)\n");
+    __c0c_emit(cg->out, "declare i64 @ftell(ptr)\n");
+    __c0c_emit(cg->out, "declare void @perror(ptr)\n");
+    __c0c_emit(cg->out, "declare void @exit(i32)\n");
+    __c0c_emit(cg->out, "declare ptr @getenv(ptr)\n");
+    __c0c_emit(cg->out, "declare i32 @atoi(ptr)\n");
+    __c0c_emit(cg->out, "declare i64 @atol(ptr)\n");
+    __c0c_emit(cg->out, "declare i64 @strtol(ptr, ptr, i32)\n");
+    __c0c_emit(cg->out, "declare i64 @strtoll(ptr, ptr, i32)\n");
+    __c0c_emit(cg->out, "declare double @atof(ptr)\n");
+    __c0c_emit(cg->out, "declare i32 @isspace(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @isdigit(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @isalpha(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @isalnum(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @isxdigit(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @isupper(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @islower(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @toupper(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @tolower(i32)\n");
+    __c0c_emit(cg->out, "declare i32 @assert(i32)\n");
+    /* c0c_compat.c provides these real functions. Declare them in the IR. */
+    __c0c_emit(cg->out, "declare ptr @__c0c_stderr()\n");
+    __c0c_emit(cg->out, "declare ptr @__c0c_stdout()\n");
+    __c0c_emit(cg->out, "declare ptr @__c0c_stdin()\n");
+    __c0c_emit(cg->out, "declare void @__c0c_emit(ptr, ptr, ...)\n");
+    __c0c_emit(cg->out, "\n");
 
     /* Register stdlib in globals table so calls don't re-declare */
     const char *stdlib_names[] = {
         "malloc","calloc","realloc","free","strlen","strdup","strndup",
         "strcpy","strncpy","strcat","strchr","strstr","strcmp","strncmp",
-        "memcpy","memset","memcmp","printf","fprintf","sprintf","snprintf","vfprintf",
+        "memcpy","memset","memcmp","printf","fprintf","sprintf","snprintf","vfprintf","vsnprintf",
         "fopen","fclose","fread","fwrite","fseek","ftell","perror","exit",
         "getenv","atoi","atol","strtol","strtoll","atof",
         "isspace","isdigit","isalpha","isalnum","isxdigit","isupper","islower",
         "toupper","tolower","assert",
         "va_start","va_end","va_copy",
+        "__c0c_va_start","__c0c_va_end","__c0c_va_copy",
+        "__c0c_stderr","__c0c_stdout","__c0c_stdin",
         "stderr","stdout","stdin",
         NULL
     };
@@ -1558,7 +1570,7 @@ void codegen_emit(Codegen *cg, Node *tu) {
         if (child->kind == ND_VAR_DECL)
             emit_global_var(cg, child);
     }
-    emit(cg, "\n");
+    __c0c_emit(cg->out, "\n");
 
     /* ---- pass 3: emit function definitions ---- */
     for (int i = 0; i < tu->n_children; i++) {
@@ -1571,9 +1583,9 @@ void codegen_emit(Codegen *cg, Node *tu) {
     /* ---- pass 4: emit string literals ---- */
     for (int i = 0; i < cg->n_strings; i++) {
         int slen = str_literal_len(cg->str_literals[i]);
-        emit(cg, "@.str%d = private unnamed_addr constant [%d x i8] c\"",
+        __c0c_emit(cg->out, "@.str%d = private unnamed_addr constant [%d x i8] c\"",
              cg->str_ids[i], slen);
         emit_str_content(cg, cg->str_literals[i]);
-        emit(cg, "\"\n");
+        __c0c_emit(cg->out, "\"\n");
     }
 }
