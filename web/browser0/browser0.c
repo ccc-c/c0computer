@@ -87,6 +87,14 @@ int main(int argc, char* argv[]) {
             if (e.type == SDL_QUIT) {
                 running = 0;
             }
+            else if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_LEFT) {
+                    history_back(&app);
+                }
+                else if (e.key.keysym.sym == SDLK_RIGHT) {
+                    history_forward(&app);
+                }
+            }
             else if (e.type == SDL_MOUSEWHEEL) {
                 app.scroll_y -= e.wheel.y * 30;
                 if (app.scroll_y < 0) app.scroll_y = 0;
@@ -98,11 +106,18 @@ int main(int argc, char* argv[]) {
             else if (e.type == SDL_MOUSEBUTTONDOWN) {
                 int mx = e.button.x;
                 int my = e.button.y;
-                for (int i = 0; i < app.link_count; i++) {
-                    SDL_Rect r = app.links[i].rect;
-                    if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-                        load_file(&app, app.links[i].url);
-                        break;
+                int nav = is_nav_button_click(&app, mx, my);
+                if (nav == 1) {
+                    history_back(&app);
+                } else if (nav == 2) {
+                    history_forward(&app);
+                } else {
+                    for (int i = 0; i < app.link_count; i++) {
+                        SDL_Rect r = app.links[i].rect;
+                        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+                            load_file(&app, app.links[i].url);
+                            break;
+                        }
                     }
                 }
             }

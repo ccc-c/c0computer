@@ -142,8 +142,10 @@ void rerender(App* app) {
     SDL_SetRenderDrawColor(app->ren, 255, 255, 255, 255);
     SDL_RenderClear(app->ren);
     
+    draw_nav_bar(app);
+    
     int x = app->margin;
-    int y = app->margin;
+    int y = NAV_BAR_HEIGHT + 10;
     int i = 0;
     int len = strlen(app->content);
     int line_height = TTF_FontHeight(app->font);
@@ -236,5 +238,100 @@ void load_file(App* app, const char* filepath) {
         app->current_file[MAX_PATH - 1] = '\0';
     }
     
+    history_push(app, app->current_file, app->is_url);
     rerender(app);
+}
+
+void history_push(App* app, const char* path, int is_url) {
+    if (app->history_pos < app->history_count - 1) {
+        app->history_count = app->history_pos + 1;
+    }
+    
+    if (app->history_count >= MAX_HISTORY) {
+        for (int i = 0; i < MAX_HISTORY - 1; i++) {
+            app->history[i] = app->history[i + 1];
+        }
+        app->history_count = MAX_HISTORY - 1;
+        app->history_pos = app->history_count - 1;
+    }
+    
+    strncpy(app->history[app->history_count].path, path, MAX_PATH - 1);
+    app->history[app->history_count].path[MAX_PATH - 1] = '\0';
+    app->history[app->history_count].is_url = is_url;
+    app->history_count++;
+    app->history_pos = app->history_count - 1;
+}
+
+void history_back(App* app) {
+    if (app->history_pos > 0) {
+        app->history_pos--;
+        const char* path = app->history[app->history_pos].path;
+        app->is_url = app->history[app->history_pos].is_url;
+        strncpy(app->current_file, path, MAX_PATH - 1);
+        app->current_file[MAX_PATH - 1] = '\0';
+        app->scroll_y = 0;
+        rerender(app);
+    }
+}
+
+void history_forward(App* app) {
+    if (app->history_pos < app->history_count - 1) {
+        app->history_pos++;
+        const char* path = app->history[app->history_pos].path;
+        app->is_url = app->history[app->history_pos].is_url;
+        strncpy(app->current_file, path, MAX_PATH - 1);
+        app->current_file[MAX_PATH - 1] = '\0';
+        app->scroll_y = 0;
+        rerender(app);
+    }
+}
+
+int history_can_back(App* app) {
+    return app->history_pos > 0;
+}
+
+int history_can_forward(App* app) {
+    return app->history_pos < app->history_count - 1;
+}
+
+static SDL_Rect back_btn = {5, 5, 30, 20};
+static SDL_Rect forward_btn = {40, 5, 30, 20};
+
+void draw_nav_bar(App* app) {
+    SDL_SetRenderDrawColor(app->ren, 220, 220, 220, 255);
+    SDL_Rect nav_bg = {0, 0, WINDOW_WIDTH, NAV_BAR_HEIGHT};
+    SDL_RenderFillRect(app->ren, &nav_bg);
+    
+    SDL_SetRenderDrawColor(app->ren, 180, 180, 180, 255);
+    SDL_RenderDrawRect(app->ren, &back_btn);
+    SDL_RenderDrawRect(app->ren, &forward_btn);
+    
+    SDL_Color gray = {100, 100, 100, 255};
+    SDL_Color blue = {0, 0, 255, 255};
+    
+    SDL_Surface* back_surf = TTF_RenderUTF8_Blended(app->font, "←", gray);
+    SDL_Texture* back_tex = SDL_CreateTextureFromSurface(app->ren, back_surf);
+    SDL_Rect back_dst = {back_btn.x + 7, back_btn.y + 2, back_surf->w, back_surf->h};
+    SDL_RenderCopy(app->ren, back_tex, NULL, &back_dst);
+    SDL_FreeSurface(back_surf);
+    SDL_DestroyTexture(back_tex);
+    
+    SDL_Surface* fwd_surf = TTF_RenderUTF8_Blended(app->font, "→", gray);
+    SDL_Texture* fwd_tex = SDL_CreateTextureFromSurface(app->ren, fwd_surf);
+    SDL_Rect fwd_dst = {forward_btn.x + 7, forward_btn.y + 2, fwd_surf->w, fwd_surf->h};
+    SDL_RenderCopy(app->ren, fwd_tex, NULL, &fwd_dst);
+    SDL_FreeSurface(fwd_surf);
+    SDL_DestroyTexture(fwd_tex);
+}
+
+int is_nav_button_click(App* app, int x, int y) {
+    if (x >= back_btn.x && x <= back_btn.x + back_btn.w &&
+        y >= back_btn.y && y <= back_btn.y + back_btn.h) {
+        return 1;
+    }
+    if (x >= forward_btn.x && x <= forward_btn.x + forward_btn.w &&
+        y >= forward_btn.y && y <= forward_btn.y + forward_btn.h) {
+        return 2;
+    }
+    return 0;
 }
