@@ -2,7 +2,7 @@
  * gpt.js — GPT 模型與訓練 / 推理函式 (Node.js 版)
  */
 
-const { Value, Adam, linear, softmax, rmsnorm, gd } = require('./nn0.js');
+const { Value, Adam, linear, softmax, rmsnorm, gd } = require('../nn0/nn0.js');
 
 // 輔助函式：產生常態分佈的隨機數 (Box-Muller transform)
 function randomGauss(mu = 0, std = 1) {

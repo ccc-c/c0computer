@@ -5,7 +5,7 @@
  */
 
 const fs = require('fs');
-const { Adam } = require('./nn0.js');
+const { Adam } = require('../nn0/nn0.js');
 const { Gpt, train, inference } = require('./gpt.js'); // 如果上一步的檔案叫 gpt0.js，請改為 './gpt0.js'
 
 // --- 設定亂數種子 (模擬 Python 的 random.seed(42)) ---

@@ -7,17 +7,13 @@ main.py — 載入資料、建立模型、訓練、推理
 import os
 import sys
 import random
-
-# 讓 import 能找到 nn.py（位於 ../nn/）
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'nn0'))
-
 from nn0 import Adam
 from gpt0 import Gpt, train, inference
 
 random.seed(42)
 
 # --- 載入資料集 ---
-data_file = 'input.txt'
+data_file = sys.argv[1] # 'input.txt'
 docs = [line.strip() for line in open(data_file) if line.strip()]
 random.shuffle(docs)
 print(f"num docs: {len(docs)}")

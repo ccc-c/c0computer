@@ -13,7 +13,7 @@ import sys
 import random
 
 # 讓 import 能找到 nn.py（位於 ../nn/）
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'nn'))
+# sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'nn'))
 from nn0 import Value, Adam, linear, softmax, rmsnorm, gd
 
 
