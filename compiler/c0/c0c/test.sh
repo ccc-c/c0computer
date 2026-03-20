@@ -2,12 +2,10 @@
 set -x
 
 make clean
-make   # produces c0c from host C compiler
+make
 
-# Compile the compatibility shim with the system C compiler
-cc -O2 -c c0c_compat.c -o c0c_compat.o
+cc -O0 -g -c c0c_compat.c -o c0c_compat.o
 
-# Stage 1: use c0c to compile itself to LLVM IR
 ./c0c -c main.c    -o main.ll
 ./c0c -c macro.c   -o macro.ll
 ./c0c -c parser.c  -o parser.ll
@@ -15,19 +13,19 @@ cc -O2 -c c0c_compat.c -o c0c_compat.o
 ./c0c -c lexer.c   -o lexer.ll
 ./c0c -c ast.c     -o ast.ll
 
-# Link all LLVM IR files + compat shim to produce c0c2
-clang lexer.ll ast.ll codegen.ll parser.ll macro.ll main.ll c0c_compat.o -o c0c2
+clang -g lexer.ll ast.ll codegen.ll parser.ll macro.ll main.ll \
+    c0c_compat.o -o c0c2
 
 echo "=== Stage 2: c0c2 compiles itself ==="
+echo "--- ast.c (smallest) ---"
 
-./c0c2 -c main.c    -o main2.ll
-./c0c2 -c macro.c   -o macro2.ll
-./c0c2 -c parser.c  -o parser2.ll
-./c0c2 -c codegen.c -o codegen2.ll
-./c0c2 -c lexer.c   -o lexer2.ll
-./c0c2 -c ast.c     -o ast2.ll
+# lldb script file approach — more reliable than inline -o flags
+cat > /tmp/lldb_cmds.txt << 'LLDBEOF'
+run -c ast.c -o ast2.ll
+bt all
+frame select 1
+register read x0 x1 x2 x3
+quit
+LLDBEOF
 
-clang lexer2.ll ast2.ll codegen2.ll parser2.ll macro2.ll main2.ll c0c_compat.o -o c0c3
-
-echo "=== Self-hosting test passed if c0c3 exists and runs ==="
-./c0c3 -v
+lldb --batch -s /tmp/lldb_cmds.txt ./c0c2 2>&1

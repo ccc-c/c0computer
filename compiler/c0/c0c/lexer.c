@@ -38,37 +38,45 @@ static char *strndup_local(const char *s, size_t n) {
 
 /* ---------------------------------------------------------------- keywords */
 
-typedef struct { const char *kw; TokenType tt; } KwEntry;
-static const KwEntry KEYWORDS[] = {
-    {"int",      TOK_INT},     {"char",     TOK_CHAR},
-    {"float",    TOK_FLOAT},   {"double",   TOK_DOUBLE},
-    {"void",     TOK_VOID},    {"long",     TOK_LONG},
-    {"short",    TOK_SHORT},   {"unsigned", TOK_UNSIGNED},
-    {"signed",   TOK_SIGNED},  {"if",       TOK_IF},
-    {"else",     TOK_ELSE},    {"while",    TOK_WHILE},
-    {"for",      TOK_FOR},     {"do",       TOK_DO},
-    {"return",   TOK_RETURN},  {"break",    TOK_BREAK},
-    {"continue", TOK_CONTINUE},{"switch",   TOK_SWITCH},
-    {"case",     TOK_CASE},    {"default",  TOK_DEFAULT},
-    {"goto",     TOK_GOTO},    {"struct",   TOK_STRUCT},
-    {"union",    TOK_UNION},   {"enum",     TOK_ENUM},
-    {"typedef",  TOK_TYPEDEF}, {"static",   TOK_STATIC},
-    {"extern",   TOK_EXTERN},  {"const",    TOK_CONST},
-    {"volatile", TOK_VOLATILE},{"sizeof",   TOK_SIZEOF},
-    {NULL, TOK_UNKNOWN}
-};
-
 static TokenType keyword_lookup(const char *s) {
-    for (int i = 0; KEYWORDS[i].kw; i++)
-        if (strcmp(KEYWORDS[i].kw, s) == 0)
-            return KEYWORDS[i].tt;
+    /* Direct strcmp chain — avoids global struct array initialization issues */
+    if (strcmp(s, "int")      == 0) return TOK_INT;
+    if (strcmp(s, "char")     == 0) return TOK_CHAR;
+    if (strcmp(s, "float")    == 0) return TOK_FLOAT;
+    if (strcmp(s, "double")   == 0) return TOK_DOUBLE;
+    if (strcmp(s, "void")     == 0) return TOK_VOID;
+    if (strcmp(s, "long")     == 0) return TOK_LONG;
+    if (strcmp(s, "short")    == 0) return TOK_SHORT;
+    if (strcmp(s, "unsigned") == 0) return TOK_UNSIGNED;
+    if (strcmp(s, "signed")   == 0) return TOK_SIGNED;
+    if (strcmp(s, "if")       == 0) return TOK_IF;
+    if (strcmp(s, "else")     == 0) return TOK_ELSE;
+    if (strcmp(s, "while")    == 0) return TOK_WHILE;
+    if (strcmp(s, "for")      == 0) return TOK_FOR;
+    if (strcmp(s, "do")       == 0) return TOK_DO;
+    if (strcmp(s, "return")   == 0) return TOK_RETURN;
+    if (strcmp(s, "break")    == 0) return TOK_BREAK;
+    if (strcmp(s, "continue") == 0) return TOK_CONTINUE;
+    if (strcmp(s, "switch")   == 0) return TOK_SWITCH;
+    if (strcmp(s, "case")     == 0) return TOK_CASE;
+    if (strcmp(s, "default")  == 0) return TOK_DEFAULT;
+    if (strcmp(s, "goto")     == 0) return TOK_GOTO;
+    if (strcmp(s, "struct")   == 0) return TOK_STRUCT;
+    if (strcmp(s, "union")    == 0) return TOK_UNION;
+    if (strcmp(s, "enum")     == 0) return TOK_ENUM;
+    if (strcmp(s, "typedef")  == 0) return TOK_TYPEDEF;
+    if (strcmp(s, "static")   == 0) return TOK_STATIC;
+    if (strcmp(s, "extern")   == 0) return TOK_EXTERN;
+    if (strcmp(s, "const")    == 0) return TOK_CONST;
+    if (strcmp(s, "volatile") == 0) return TOK_VOLATILE;
+    if (strcmp(s, "sizeof")   == 0) return TOK_SIZEOF;
     return TOK_IDENT;
 }
 
 /* ------------------------------------------------------------------ public */
 
 Lexer *lexer_new(const char *src, const char *filename) {
-    Lexer *l = calloc(1, sizeof *l);
+    Lexer *l = calloc(1, sizeof(Lexer));
     if (!l) { perror("calloc"); exit(1); }
     l->src      = src;
     l->filename = filename;

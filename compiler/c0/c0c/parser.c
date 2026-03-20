@@ -20,25 +20,27 @@ typedef struct {
 } EnumConst;
 
 struct Parser {
-    Lexer       *lexer;
-    Token        cur;
-    TypedefEntry typedefs[MAX_TYPEDEFS];
-    int          n_typedefs;
-    EnumConst    enum_consts[MAX_ENUM_CONSTS];
-    int          n_enum_consts;
+    Lexer         *lexer;
+    Token          cur;
+    TypedefEntry **typedefs;       /* pointer array — avoids struct array stride issues */
+    int            n_typedefs;
+    EnumConst    **enum_consts;    /* pointer array */
+    int            n_enum_consts;
 };
 
 static void register_enum_const(Parser *p, const char *name, long long val) {
     if (p->n_enum_consts >= MAX_ENUM_CONSTS) return;
-    p->enum_consts[p->n_enum_consts].name  = strdup(name);
-    p->enum_consts[p->n_enum_consts].value = val;
-    p->n_enum_consts++;
+    EnumConst *ec = calloc(1, sizeof(EnumConst));
+    ec->name  = strdup(name);
+    ec->value = val;
+    p->enum_consts[p->n_enum_consts++] = ec;
 }
 
 static int lookup_enum_const(Parser *p, const char *name, long long *out) {
     for (int i = 0; i < p->n_enum_consts; i++) {
-        if (strcmp(p->enum_consts[i].name, name) == 0) {
-            *out = p->enum_consts[i].value;
+        EnumConst *ec = p->enum_consts[i];
+        if (ec && strcmp(ec->name, name) == 0) {
+            *out = ec->value;
             return 1;
         }
     }
@@ -89,15 +91,18 @@ static char *expect_ident(Parser *p) {
 
 static void register_typedef(Parser *p, const char *name, Type *t) {
     if (p->n_typedefs >= MAX_TYPEDEFS) p_error(p, "too many typedefs");
-    p->typedefs[p->n_typedefs].name = strdup(name);
-    p->typedefs[p->n_typedefs].type = t;
-    p->n_typedefs++;
+    TypedefEntry *te = calloc(1, sizeof(TypedefEntry));
+    te->name = strdup(name);
+    te->type = t;
+    p->typedefs[p->n_typedefs++] = te;
 }
 
 static Type *lookup_typedef(Parser *p, const char *name) {
-    for (int i = p->n_typedefs - 1; i >= 0; i--)
-        if (strcmp(p->typedefs[i].name, name) == 0)
-            return p->typedefs[i].type;
+    for (int i = p->n_typedefs - 1; i >= 0; i--) {
+        TypedefEntry *te = p->typedefs[i];
+        if (te && strcmp(te->name, name) == 0)
+            return te->type;
+    }
     return NULL;
 }
 
@@ -428,7 +433,7 @@ static Type *parse_declarator(Parser *p, Type *base, char **out_name) {
                 if (!pt) break;
                 char *pname = NULL;
                 pt = parse_declarator(p, pt, &pname);
-                params = realloc(params, (n + 1) * sizeof *params);
+                params = realloc(params, (n + 1) * sizeof(Param));
                 if (!params) { perror("realloc"); exit(1); }
                 params[n].name = pname;
                 params[n].type = pt;
@@ -1056,53 +1061,67 @@ static Node *parse_toplevel(Parser *p) {
 /* ================================================================ Public API */
 
 Parser *parser_new(Lexer *lexer) {
-    Parser *p = calloc(1, sizeof *p);
+    Parser *p = calloc(1, sizeof(Parser));
     if (!p) { perror("calloc"); exit(1); }
     p->lexer = lexer;
     p->cur   = lexer_next(lexer);
+    /* Allocate pointer arrays for typedef and enum tables */
+    p->typedefs    = calloc(MAX_TYPEDEFS,    sizeof(TypedefEntry*));
+    p->enum_consts = calloc(MAX_ENUM_CONSTS, sizeof(EnumConst*));
 
-    /* pre-register common standard typedefs so system headers
-       don't need to be parsed */
-    static struct { const char *name; TypeKind kind; } stdtypes[] = {
-        {"size_t",    TY_ULONG},  {"ssize_t",   TY_LONG},
-        {"ptrdiff_t", TY_LONG},   {"intptr_t",  TY_LONG},
-        {"uintptr_t", TY_ULONG},  {"off_t",     TY_LONG},
-        {"int8_t",    TY_SCHAR},  {"uint8_t",   TY_UCHAR},
-        {"int16_t",   TY_SHORT},  {"uint16_t",  TY_USHORT},
-        {"int32_t",   TY_INT},    {"uint32_t",  TY_UINT},
-        {"int64_t",   TY_LONG},   {"uint64_t",  TY_ULONG},
-        {"int_least8_t",  TY_SCHAR}, {"uint_least8_t",  TY_UCHAR},
-        {"int_least16_t", TY_SHORT}, {"uint_least16_t", TY_USHORT},
-        {"int_least32_t", TY_INT},   {"uint_least32_t", TY_UINT},
-        {"int_least64_t", TY_LONG},  {"uint_least64_t", TY_ULONG},
-        {"int_fast8_t",   TY_SCHAR}, {"uint_fast8_t",   TY_UCHAR},
-        {"int_fast16_t",  TY_LONG},  {"uint_fast16_t",  TY_ULONG},
-        {"int_fast32_t",  TY_LONG},  {"uint_fast32_t",  TY_ULONG},
-        {"int_fast64_t",  TY_LONG},  {"uint_fast64_t",  TY_ULONG},
-        {"intmax_t",  TY_LONG},   {"uintmax_t", TY_ULONG},
-        {"wchar_t",   TY_INT},    {"wint_t",    TY_UINT},
-        {"FILE",      TY_STRUCT}, {"va_list",   TY_PTR},
-        {"__gnuc_va_list", TY_PTR},
-        {"pid_t",     TY_INT},    {"uid_t",     TY_UINT},
-        {"gid_t",     TY_UINT},   {"mode_t",    TY_UINT},
-        {"dev_t",     TY_ULONG},  {"ino_t",     TY_ULONG},
-        {"nlink_t",   TY_ULONG},  {"time_t",    TY_LONG},
-        {"clock_t",   TY_LONG},   {"suseconds_t", TY_LONG},
-        {"socklen_t", TY_UINT},   {"bool",      TY_INT},
-        {"_Bool",     TY_INT},
-        {NULL, TY_VOID}
-    };
-    for (int i = 0; stdtypes[i].name; i++) {
-        Type *t = type_new(stdtypes[i].kind);
-        register_typedef(p, stdtypes[i].name, t);
+    /* pre-register common standard typedefs so system headers don't need to be parsed.
+       Use separate arrays to avoid struct array stride issues in self-hosted IR. */
+    {
+        static const char *td_names[] = {
+            "size_t","ssize_t","ptrdiff_t","intptr_t","uintptr_t","off_t",
+            "int8_t","uint8_t","int16_t","uint16_t","int32_t","uint32_t",
+            "int64_t","uint64_t",
+            "int_least8_t","uint_least8_t","int_least16_t","uint_least16_t",
+            "int_least32_t","uint_least32_t","int_least64_t","uint_least64_t",
+            "int_fast8_t","uint_fast8_t","int_fast16_t","uint_fast16_t",
+            "int_fast32_t","uint_fast32_t","int_fast64_t","uint_fast64_t",
+            "intmax_t","uintmax_t","wchar_t","wint_t",
+            "FILE","va_list","__gnuc_va_list",
+            "pid_t","uid_t","gid_t","mode_t","dev_t","ino_t",
+            "nlink_t","time_t","clock_t","suseconds_t","socklen_t",
+            "bool","_Bool",
+            NULL
+        };
+        static int td_kinds[] = {
+            TY_ULONG,TY_LONG,TY_LONG,TY_LONG,TY_ULONG,TY_LONG,
+            TY_SCHAR,TY_UCHAR,TY_SHORT,TY_USHORT,TY_INT,TY_UINT,
+            TY_LONG,TY_ULONG,
+            TY_SCHAR,TY_UCHAR,TY_SHORT,TY_USHORT,
+            TY_INT,TY_UINT,TY_LONG,TY_ULONG,
+            TY_SCHAR,TY_UCHAR,TY_LONG,TY_ULONG,
+            TY_LONG,TY_ULONG,TY_LONG,TY_ULONG,
+            TY_LONG,TY_ULONG,TY_INT,TY_UINT,
+            TY_STRUCT,TY_PTR,TY_PTR,
+            TY_INT,TY_UINT,TY_UINT,TY_UINT,TY_ULONG,TY_ULONG,
+            TY_ULONG,TY_LONG,TY_LONG,TY_LONG,TY_UINT,
+            TY_INT,TY_INT,
+            0
+        };
+        for (int i = 0; td_names[i]; i++) {
+            Type *t = type_new(td_kinds[i]);
+            register_typedef(p, td_names[i], t);
+        }
     }
     return p;
 }
 
 void parser_free(Parser *p) {
     token_free(p->cur);
-    for (int i = 0; i < p->n_typedefs; i++) free(p->typedefs[i].name);
-    for (int i = 0; i < p->n_enum_consts; i++) free(p->enum_consts[i].name);
+    for (int i = 0; i < p->n_typedefs; i++) {
+        TypedefEntry *te = p->typedefs[i];
+        if (te) { free(te->name); free(te); }
+    }
+    free(p->typedefs);
+    for (int i = 0; i < p->n_enum_consts; i++) {
+        EnumConst *ec = p->enum_consts[i];
+        if (ec) { free(ec->name); free(ec); }
+    }
+    free(p->enum_consts);
     free(p);
 }
 

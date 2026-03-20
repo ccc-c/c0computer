@@ -54,6 +54,7 @@ declare i32 @assert(i32)
 declare ptr @__c0c_stderr()
 declare ptr @__c0c_stdout()
 declare ptr @__c0c_stdin()
+declare ptr @__c0c_get_tbuf(i32)
 declare void @__c0c_emit(ptr, ptr, ...)
 
 declare ptr @lexer_new(ptr, ptr)
@@ -88,21 +89,23 @@ L0:
 L3:
   br label %L2
 L2:
-  %t9 = call ptr @strdup(ptr %t1)
-  %t10 = load ptr, ptr %t0
-  %t11 = load ptr, ptr %t0
-  %t13 = ptrtoint ptr %t11 to i64
-  %t12 = getelementptr i8, ptr %t10, i64 %t13
-  store ptr %t9, ptr %t12
-  %t14 = load ptr, ptr %t0
+  %t9 = alloca ptr
+  %t10 = call ptr @calloc(i64 1, i64 0)
+  store ptr %t10, ptr %t9
+  %t11 = call ptr @strdup(ptr %t1)
+  %t12 = load ptr, ptr %t9
+  store ptr %t11, ptr %t12
+  %t13 = load ptr, ptr %t9
+  store i64 %t2, ptr %t13
+  %t14 = load ptr, ptr %t9
   %t15 = load ptr, ptr %t0
-  %t17 = ptrtoint ptr %t15 to i64
-  %t16 = getelementptr i8, ptr %t14, i64 %t17
-  store i64 %t2, ptr %t16
-  %t18 = load ptr, ptr %t0
-  %t20 = ptrtoint ptr %t18 to i64
-  %t19 = add i64 %t20, 1
-  store i64 %t19, ptr %t0
+  %t16 = load ptr, ptr %t0
+  %t18 = ptrtoint ptr %t16 to i64
+  %t17 = add i64 %t18, 1
+  store i64 %t17, ptr %t0
+  %t20 = ptrtoint ptr %t16 to i64
+  %t19 = getelementptr ptr, ptr %t15, i64 %t20
+  store ptr %t14, ptr %t19
   ret void
 }
 
@@ -121,40 +124,54 @@ L0:
   %t10 = icmp ne i64 %t9, 0
   br i1 %t10, label %L1, label %L3
 L1:
-  %t11 = load ptr, ptr %t0
-  %t12 = load i64, ptr %t3
-  %t13 = getelementptr i8, ptr %t11, i64 %t12
-  %t14 = load ptr, ptr %t13
-  %t15 = call i32 @strcmp(ptr %t14, ptr %t1)
-  %t16 = sext i32 %t15 to i64
-  %t18 = sext i32 0 to i64
-  %t17 = icmp eq i64 %t16, %t18
-  %t19 = zext i1 %t17 to i64
-  %t20 = icmp ne i64 %t19, 0
-  br i1 %t20, label %L4, label %L6
+  %t11 = alloca ptr
+  %t12 = load ptr, ptr %t0
+  %t13 = load i64, ptr %t3
+  %t14 = getelementptr ptr, ptr %t12, i64 %t13
+  %t15 = load ptr, ptr %t14
+  store ptr %t15, ptr %t11
+  %t16 = load ptr, ptr %t11
+  %t17 = ptrtoint ptr %t16 to i64
+  %t18 = icmp ne i64 %t17, 0
+  br i1 %t18, label %L4, label %L5
 L4:
-  %t21 = load ptr, ptr %t0
-  %t22 = load i64, ptr %t3
-  %t23 = getelementptr i8, ptr %t21, i64 %t22
-  %t24 = load ptr, ptr %t23
-  store ptr %t24, ptr %t2
-  %t25 = sext i32 1 to i64
-  %t26 = trunc i64 %t25 to i32
-  ret i32 %t26
-L7:
+  %t19 = load ptr, ptr %t11
+  %t20 = load ptr, ptr %t19
+  %t21 = call i32 @strcmp(ptr %t20, ptr %t1)
+  %t22 = sext i32 %t21 to i64
+  %t24 = sext i32 0 to i64
+  %t23 = icmp eq i64 %t22, %t24
+  %t25 = zext i1 %t23 to i64
+  %t26 = icmp ne i64 %t25, 0
+  %t27 = zext i1 %t26 to i64
+  br label %L6
+L5:
   br label %L6
 L6:
+  %t28 = phi i64 [ %t27, %L4 ], [ 0, %L5 ]
+  %t29 = icmp ne i64 %t28, 0
+  br i1 %t29, label %L7, label %L9
+L7:
+  %t30 = load ptr, ptr %t11
+  %t31 = load ptr, ptr %t30
+  store ptr %t31, ptr %t2
+  %t32 = sext i32 1 to i64
+  %t33 = trunc i64 %t32 to i32
+  ret i32 %t33
+L10:
+  br label %L9
+L9:
   br label %L2
 L2:
-  %t27 = load i64, ptr %t3
-  %t28 = add i64 %t27, 1
-  store i64 %t28, ptr %t3
+  %t34 = load i64, ptr %t3
+  %t35 = add i64 %t34, 1
+  store i64 %t35, ptr %t3
   br label %L0
 L3:
-  %t29 = sext i32 0 to i64
-  %t30 = trunc i64 %t29 to i32
-  ret i32 %t30
-L8:
+  %t36 = sext i32 0 to i64
+  %t37 = trunc i64 %t36 to i32
+  ret i32 %t37
+L11:
   ret i32 0
 }
 
@@ -296,21 +313,23 @@ L0:
   call void @p_error(ptr %t0, ptr %t9)
   br label %L2
 L2:
-  %t11 = call ptr @strdup(ptr %t1)
-  %t12 = load ptr, ptr %t0
-  %t13 = load ptr, ptr %t0
-  %t15 = ptrtoint ptr %t13 to i64
-  %t14 = getelementptr i8, ptr %t12, i64 %t15
-  store ptr %t11, ptr %t14
-  %t16 = load ptr, ptr %t0
+  %t11 = alloca ptr
+  %t12 = call ptr @calloc(i64 1, i64 0)
+  store ptr %t12, ptr %t11
+  %t13 = call ptr @strdup(ptr %t1)
+  %t14 = load ptr, ptr %t11
+  store ptr %t13, ptr %t14
+  %t15 = load ptr, ptr %t11
+  store ptr %t2, ptr %t15
+  %t16 = load ptr, ptr %t11
   %t17 = load ptr, ptr %t0
-  %t19 = ptrtoint ptr %t17 to i64
-  %t18 = getelementptr i8, ptr %t16, i64 %t19
-  store ptr %t2, ptr %t18
-  %t20 = load ptr, ptr %t0
-  %t22 = ptrtoint ptr %t20 to i64
-  %t21 = add i64 %t22, 1
-  store i64 %t21, ptr %t0
+  %t18 = load ptr, ptr %t0
+  %t20 = ptrtoint ptr %t18 to i64
+  %t19 = add i64 %t20, 1
+  store i64 %t19, ptr %t0
+  %t22 = ptrtoint ptr %t18 to i64
+  %t21 = getelementptr ptr, ptr %t17, i64 %t22
+  store ptr %t16, ptr %t21
   ret void
 }
 
@@ -331,37 +350,51 @@ L0:
   %t11 = icmp ne i64 %t10, 0
   br i1 %t11, label %L1, label %L3
 L1:
-  %t12 = load ptr, ptr %t0
-  %t13 = load i64, ptr %t2
-  %t14 = getelementptr i8, ptr %t12, i64 %t13
-  %t15 = load ptr, ptr %t14
-  %t16 = call i32 @strcmp(ptr %t15, ptr %t1)
-  %t17 = sext i32 %t16 to i64
-  %t19 = sext i32 0 to i64
-  %t18 = icmp eq i64 %t17, %t19
-  %t20 = zext i1 %t18 to i64
-  %t21 = icmp ne i64 %t20, 0
-  br i1 %t21, label %L4, label %L6
+  %t12 = alloca ptr
+  %t13 = load ptr, ptr %t0
+  %t14 = load i64, ptr %t2
+  %t15 = getelementptr ptr, ptr %t13, i64 %t14
+  %t16 = load ptr, ptr %t15
+  store ptr %t16, ptr %t12
+  %t17 = load ptr, ptr %t12
+  %t18 = ptrtoint ptr %t17 to i64
+  %t19 = icmp ne i64 %t18, 0
+  br i1 %t19, label %L4, label %L5
 L4:
-  %t22 = load ptr, ptr %t0
-  %t23 = load i64, ptr %t2
-  %t24 = getelementptr i8, ptr %t22, i64 %t23
-  %t25 = load ptr, ptr %t24
-  ret ptr %t25
-L7:
+  %t20 = load ptr, ptr %t12
+  %t21 = load ptr, ptr %t20
+  %t22 = call i32 @strcmp(ptr %t21, ptr %t1)
+  %t23 = sext i32 %t22 to i64
+  %t25 = sext i32 0 to i64
+  %t24 = icmp eq i64 %t23, %t25
+  %t26 = zext i1 %t24 to i64
+  %t27 = icmp ne i64 %t26, 0
+  %t28 = zext i1 %t27 to i64
+  br label %L6
+L5:
   br label %L6
 L6:
+  %t29 = phi i64 [ %t28, %L4 ], [ 0, %L5 ]
+  %t30 = icmp ne i64 %t29, 0
+  br i1 %t30, label %L7, label %L9
+L7:
+  %t31 = load ptr, ptr %t12
+  %t32 = load ptr, ptr %t31
+  ret ptr %t32
+L10:
+  br label %L9
+L9:
   br label %L2
 L2:
-  %t26 = load i64, ptr %t2
-  %t27 = sub i64 %t26, 1
-  store i64 %t27, ptr %t2
+  %t33 = load i64, ptr %t2
+  %t34 = sub i64 %t33, 1
+  store i64 %t34, ptr %t2
   br label %L0
 L3:
-  %t29 = sext i32 0 to i64
-  %t28 = inttoptr i64 %t29 to ptr
-  ret ptr %t28
-L8:
+  %t36 = sext i32 0 to i64
+  %t35 = inttoptr i64 %t36 to ptr
+  ret ptr %t35
+L11:
   ret ptr null
 }
 
@@ -373,199 +406,313 @@ entry:
   %t5 = sext i32 0 to i64
   %t4 = icmp eq i64 %t3, %t5
   %t6 = zext i1 %t4 to i64
-  %t7 = getelementptr [14 x i8], ptr @.str6, i64 0, i64 0
-  %t8 = call i32 @strcmp(ptr %t0, ptr %t7)
-  %t9 = sext i32 %t8 to i64
-  %t11 = sext i32 0 to i64
-  %t10 = icmp eq i64 %t9, %t11
-  %t12 = zext i1 %t10 to i64
-  %t14 = icmp ne i64 %t6, 0
-  %t15 = icmp ne i64 %t12, 0
-  %t16 = or i1 %t14, %t15
-  %t17 = zext i1 %t16 to i64
+  %t7 = icmp ne i64 %t6, 0
+  br i1 %t7, label %L0, label %L1
+L0:
+  br label %L2
+L1:
+  %t8 = getelementptr [14 x i8], ptr @.str6, i64 0, i64 0
+  %t9 = call i32 @strcmp(ptr %t0, ptr %t8)
+  %t10 = sext i32 %t9 to i64
+  %t12 = sext i32 0 to i64
+  %t11 = icmp eq i64 %t10, %t12
+  %t13 = zext i1 %t11 to i64
+  %t14 = icmp ne i64 %t13, 0
+  %t15 = zext i1 %t14 to i64
+  br label %L2
+L2:
+  %t16 = phi i64 [ 1, %L0 ], [ %t15, %L1 ]
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L3, label %L4
+L3:
+  br label %L5
+L4:
   %t18 = getelementptr [8 x i8], ptr @.str7, i64 0, i64 0
   %t19 = call i32 @strcmp(ptr %t0, ptr %t18)
   %t20 = sext i32 %t19 to i64
   %t22 = sext i32 0 to i64
   %t21 = icmp eq i64 %t20, %t22
   %t23 = zext i1 %t21 to i64
-  %t25 = icmp ne i64 %t17, 0
-  %t26 = icmp ne i64 %t23, 0
-  %t27 = or i1 %t25, %t26
-  %t28 = zext i1 %t27 to i64
-  %t29 = getelementptr [6 x i8], ptr @.str8, i64 0, i64 0
-  %t30 = call i32 @strcmp(ptr %t0, ptr %t29)
-  %t31 = sext i32 %t30 to i64
-  %t33 = sext i32 0 to i64
-  %t32 = icmp eq i64 %t31, %t33
-  %t34 = zext i1 %t32 to i64
-  %t36 = icmp ne i64 %t28, 0
-  %t37 = icmp ne i64 %t34, 0
-  %t38 = or i1 %t36, %t37
-  %t39 = zext i1 %t38 to i64
-  %t40 = getelementptr [11 x i8], ptr @.str9, i64 0, i64 0
-  %t41 = call i32 @strcmp(ptr %t0, ptr %t40)
-  %t42 = sext i32 %t41 to i64
-  %t44 = sext i32 0 to i64
-  %t43 = icmp eq i64 %t42, %t44
-  %t45 = zext i1 %t43 to i64
-  %t47 = icmp ne i64 %t39, 0
-  %t48 = icmp ne i64 %t45, 0
-  %t49 = or i1 %t47, %t48
-  %t50 = zext i1 %t49 to i64
-  %t51 = getelementptr [9 x i8], ptr @.str10, i64 0, i64 0
-  %t52 = call i32 @strcmp(ptr %t0, ptr %t51)
-  %t53 = sext i32 %t52 to i64
-  %t55 = sext i32 0 to i64
-  %t54 = icmp eq i64 %t53, %t55
-  %t56 = zext i1 %t54 to i64
-  %t58 = icmp ne i64 %t50, 0
-  %t59 = icmp ne i64 %t56, 0
-  %t60 = or i1 %t58, %t59
-  %t61 = zext i1 %t60 to i64
-  %t62 = getelementptr [13 x i8], ptr @.str11, i64 0, i64 0
-  %t63 = call i32 @strcmp(ptr %t0, ptr %t62)
-  %t64 = sext i32 %t63 to i64
-  %t66 = sext i32 0 to i64
-  %t65 = icmp eq i64 %t64, %t66
-  %t67 = zext i1 %t65 to i64
-  %t69 = icmp ne i64 %t61, 0
-  %t70 = icmp ne i64 %t67, 0
-  %t71 = or i1 %t69, %t70
-  %t72 = zext i1 %t71 to i64
-  %t73 = getelementptr [11 x i8], ptr @.str12, i64 0, i64 0
-  %t74 = call i32 @strcmp(ptr %t0, ptr %t73)
-  %t75 = sext i32 %t74 to i64
-  %t77 = sext i32 0 to i64
-  %t76 = icmp eq i64 %t75, %t77
-  %t78 = zext i1 %t76 to i64
-  %t80 = icmp ne i64 %t72, 0
-  %t81 = icmp ne i64 %t78, 0
-  %t82 = or i1 %t80, %t81
-  %t83 = zext i1 %t82 to i64
-  %t84 = getelementptr [11 x i8], ptr @.str13, i64 0, i64 0
-  %t85 = call i32 @strcmp(ptr %t0, ptr %t84)
-  %t86 = sext i32 %t85 to i64
-  %t88 = sext i32 0 to i64
-  %t87 = icmp eq i64 %t86, %t88
-  %t89 = zext i1 %t87 to i64
-  %t91 = icmp ne i64 %t83, 0
-  %t92 = icmp ne i64 %t89, 0
-  %t93 = or i1 %t91, %t92
-  %t94 = zext i1 %t93 to i64
-  %t95 = getelementptr [13 x i8], ptr @.str14, i64 0, i64 0
-  %t96 = call i32 @strcmp(ptr %t0, ptr %t95)
-  %t97 = sext i32 %t96 to i64
-  %t99 = sext i32 0 to i64
-  %t98 = icmp eq i64 %t97, %t99
-  %t100 = zext i1 %t98 to i64
-  %t102 = icmp ne i64 %t94, 0
-  %t103 = icmp ne i64 %t100, 0
-  %t104 = or i1 %t102, %t103
+  %t24 = icmp ne i64 %t23, 0
+  %t25 = zext i1 %t24 to i64
+  br label %L5
+L5:
+  %t26 = phi i64 [ 1, %L3 ], [ %t25, %L4 ]
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L6, label %L7
+L6:
+  br label %L8
+L7:
+  %t28 = getelementptr [6 x i8], ptr @.str8, i64 0, i64 0
+  %t29 = call i32 @strcmp(ptr %t0, ptr %t28)
+  %t30 = sext i32 %t29 to i64
+  %t32 = sext i32 0 to i64
+  %t31 = icmp eq i64 %t30, %t32
+  %t33 = zext i1 %t31 to i64
+  %t34 = icmp ne i64 %t33, 0
+  %t35 = zext i1 %t34 to i64
+  br label %L8
+L8:
+  %t36 = phi i64 [ 1, %L6 ], [ %t35, %L7 ]
+  %t37 = icmp ne i64 %t36, 0
+  br i1 %t37, label %L9, label %L10
+L9:
+  br label %L11
+L10:
+  %t38 = getelementptr [11 x i8], ptr @.str9, i64 0, i64 0
+  %t39 = call i32 @strcmp(ptr %t0, ptr %t38)
+  %t40 = sext i32 %t39 to i64
+  %t42 = sext i32 0 to i64
+  %t41 = icmp eq i64 %t40, %t42
+  %t43 = zext i1 %t41 to i64
+  %t44 = icmp ne i64 %t43, 0
+  %t45 = zext i1 %t44 to i64
+  br label %L11
+L11:
+  %t46 = phi i64 [ 1, %L9 ], [ %t45, %L10 ]
+  %t47 = icmp ne i64 %t46, 0
+  br i1 %t47, label %L12, label %L13
+L12:
+  br label %L14
+L13:
+  %t48 = getelementptr [9 x i8], ptr @.str10, i64 0, i64 0
+  %t49 = call i32 @strcmp(ptr %t0, ptr %t48)
+  %t50 = sext i32 %t49 to i64
+  %t52 = sext i32 0 to i64
+  %t51 = icmp eq i64 %t50, %t52
+  %t53 = zext i1 %t51 to i64
+  %t54 = icmp ne i64 %t53, 0
+  %t55 = zext i1 %t54 to i64
+  br label %L14
+L14:
+  %t56 = phi i64 [ 1, %L12 ], [ %t55, %L13 ]
+  %t57 = icmp ne i64 %t56, 0
+  br i1 %t57, label %L15, label %L16
+L15:
+  br label %L17
+L16:
+  %t58 = getelementptr [13 x i8], ptr @.str11, i64 0, i64 0
+  %t59 = call i32 @strcmp(ptr %t0, ptr %t58)
+  %t60 = sext i32 %t59 to i64
+  %t62 = sext i32 0 to i64
+  %t61 = icmp eq i64 %t60, %t62
+  %t63 = zext i1 %t61 to i64
+  %t64 = icmp ne i64 %t63, 0
+  %t65 = zext i1 %t64 to i64
+  br label %L17
+L17:
+  %t66 = phi i64 [ 1, %L15 ], [ %t65, %L16 ]
+  %t67 = icmp ne i64 %t66, 0
+  br i1 %t67, label %L18, label %L19
+L18:
+  br label %L20
+L19:
+  %t68 = getelementptr [11 x i8], ptr @.str12, i64 0, i64 0
+  %t69 = call i32 @strcmp(ptr %t0, ptr %t68)
+  %t70 = sext i32 %t69 to i64
+  %t72 = sext i32 0 to i64
+  %t71 = icmp eq i64 %t70, %t72
+  %t73 = zext i1 %t71 to i64
+  %t74 = icmp ne i64 %t73, 0
+  %t75 = zext i1 %t74 to i64
+  br label %L20
+L20:
+  %t76 = phi i64 [ 1, %L18 ], [ %t75, %L19 ]
+  %t77 = icmp ne i64 %t76, 0
+  br i1 %t77, label %L21, label %L22
+L21:
+  br label %L23
+L22:
+  %t78 = getelementptr [11 x i8], ptr @.str13, i64 0, i64 0
+  %t79 = call i32 @strcmp(ptr %t0, ptr %t78)
+  %t80 = sext i32 %t79 to i64
+  %t82 = sext i32 0 to i64
+  %t81 = icmp eq i64 %t80, %t82
+  %t83 = zext i1 %t81 to i64
+  %t84 = icmp ne i64 %t83, 0
+  %t85 = zext i1 %t84 to i64
+  br label %L23
+L23:
+  %t86 = phi i64 [ 1, %L21 ], [ %t85, %L22 ]
+  %t87 = icmp ne i64 %t86, 0
+  br i1 %t87, label %L24, label %L25
+L24:
+  br label %L26
+L25:
+  %t88 = getelementptr [13 x i8], ptr @.str14, i64 0, i64 0
+  %t89 = call i32 @strcmp(ptr %t0, ptr %t88)
+  %t90 = sext i32 %t89 to i64
+  %t92 = sext i32 0 to i64
+  %t91 = icmp eq i64 %t90, %t92
+  %t93 = zext i1 %t91 to i64
+  %t94 = icmp ne i64 %t93, 0
+  %t95 = zext i1 %t94 to i64
+  br label %L26
+L26:
+  %t96 = phi i64 [ 1, %L24 ], [ %t95, %L25 ]
+  %t97 = icmp ne i64 %t96, 0
+  br i1 %t97, label %L27, label %L28
+L27:
+  br label %L29
+L28:
+  %t98 = getelementptr [8 x i8], ptr @.str15, i64 0, i64 0
+  %t99 = call i32 @strcmp(ptr %t0, ptr %t98)
+  %t100 = sext i32 %t99 to i64
+  %t102 = sext i32 0 to i64
+  %t101 = icmp eq i64 %t100, %t102
+  %t103 = zext i1 %t101 to i64
+  %t104 = icmp ne i64 %t103, 0
   %t105 = zext i1 %t104 to i64
-  %t106 = getelementptr [8 x i8], ptr @.str15, i64 0, i64 0
-  %t107 = call i32 @strcmp(ptr %t0, ptr %t106)
-  %t108 = sext i32 %t107 to i64
-  %t110 = sext i32 0 to i64
-  %t109 = icmp eq i64 %t108, %t110
-  %t111 = zext i1 %t109 to i64
-  %t113 = icmp ne i64 %t105, 0
-  %t114 = icmp ne i64 %t111, 0
-  %t115 = or i1 %t113, %t114
-  %t116 = zext i1 %t115 to i64
-  %t117 = getelementptr [10 x i8], ptr @.str16, i64 0, i64 0
-  %t118 = call i32 @strcmp(ptr %t0, ptr %t117)
-  %t119 = sext i32 %t118 to i64
-  %t121 = sext i32 0 to i64
-  %t120 = icmp eq i64 %t119, %t121
-  %t122 = zext i1 %t120 to i64
-  %t124 = icmp ne i64 %t116, 0
-  %t125 = icmp ne i64 %t122, 0
-  %t126 = or i1 %t124, %t125
-  %t127 = zext i1 %t126 to i64
-  %t128 = getelementptr [11 x i8], ptr @.str17, i64 0, i64 0
+  br label %L29
+L29:
+  %t106 = phi i64 [ 1, %L27 ], [ %t105, %L28 ]
+  %t107 = icmp ne i64 %t106, 0
+  br i1 %t107, label %L30, label %L31
+L30:
+  br label %L32
+L31:
+  %t108 = getelementptr [10 x i8], ptr @.str16, i64 0, i64 0
+  %t109 = call i32 @strcmp(ptr %t0, ptr %t108)
+  %t110 = sext i32 %t109 to i64
+  %t112 = sext i32 0 to i64
+  %t111 = icmp eq i64 %t110, %t112
+  %t113 = zext i1 %t111 to i64
+  %t114 = icmp ne i64 %t113, 0
+  %t115 = zext i1 %t114 to i64
+  br label %L32
+L32:
+  %t116 = phi i64 [ 1, %L30 ], [ %t115, %L31 ]
+  %t117 = icmp ne i64 %t116, 0
+  br i1 %t117, label %L33, label %L34
+L33:
+  br label %L35
+L34:
+  %t118 = getelementptr [11 x i8], ptr @.str17, i64 0, i64 0
+  %t119 = call i32 @strcmp(ptr %t0, ptr %t118)
+  %t120 = sext i32 %t119 to i64
+  %t122 = sext i32 0 to i64
+  %t121 = icmp eq i64 %t120, %t122
+  %t123 = zext i1 %t121 to i64
+  %t124 = icmp ne i64 %t123, 0
+  %t125 = zext i1 %t124 to i64
+  br label %L35
+L35:
+  %t126 = phi i64 [ 1, %L33 ], [ %t125, %L34 ]
+  %t127 = icmp ne i64 %t126, 0
+  br i1 %t127, label %L36, label %L37
+L36:
+  br label %L38
+L37:
+  %t128 = getelementptr [9 x i8], ptr @.str18, i64 0, i64 0
   %t129 = call i32 @strcmp(ptr %t0, ptr %t128)
   %t130 = sext i32 %t129 to i64
   %t132 = sext i32 0 to i64
   %t131 = icmp eq i64 %t130, %t132
   %t133 = zext i1 %t131 to i64
-  %t135 = icmp ne i64 %t127, 0
-  %t136 = icmp ne i64 %t133, 0
-  %t137 = or i1 %t135, %t136
-  %t138 = zext i1 %t137 to i64
-  %t139 = getelementptr [9 x i8], ptr @.str18, i64 0, i64 0
-  %t140 = call i32 @strcmp(ptr %t0, ptr %t139)
-  %t141 = sext i32 %t140 to i64
-  %t143 = sext i32 0 to i64
-  %t142 = icmp eq i64 %t141, %t143
-  %t144 = zext i1 %t142 to i64
-  %t146 = icmp ne i64 %t138, 0
-  %t147 = icmp ne i64 %t144, 0
-  %t148 = or i1 %t146, %t147
-  %t149 = zext i1 %t148 to i64
-  %t150 = getelementptr [11 x i8], ptr @.str19, i64 0, i64 0
-  %t151 = call i32 @strcmp(ptr %t0, ptr %t150)
-  %t152 = sext i32 %t151 to i64
-  %t154 = sext i32 0 to i64
-  %t153 = icmp eq i64 %t152, %t154
-  %t155 = zext i1 %t153 to i64
-  %t157 = icmp ne i64 %t149, 0
-  %t158 = icmp ne i64 %t155, 0
-  %t159 = or i1 %t157, %t158
-  %t160 = zext i1 %t159 to i64
-  %t161 = getelementptr [9 x i8], ptr @.str20, i64 0, i64 0
-  %t162 = call i32 @strcmp(ptr %t0, ptr %t161)
-  %t163 = sext i32 %t162 to i64
-  %t165 = sext i32 0 to i64
-  %t164 = icmp eq i64 %t163, %t165
-  %t166 = zext i1 %t164 to i64
-  %t168 = icmp ne i64 %t160, 0
-  %t169 = icmp ne i64 %t166, 0
-  %t170 = or i1 %t168, %t169
-  %t171 = zext i1 %t170 to i64
-  %t172 = getelementptr [8 x i8], ptr @.str21, i64 0, i64 0
-  %t173 = call i32 @strcmp(ptr %t0, ptr %t172)
-  %t174 = sext i32 %t173 to i64
-  %t176 = sext i32 0 to i64
-  %t175 = icmp eq i64 %t174, %t176
-  %t177 = zext i1 %t175 to i64
-  %t179 = icmp ne i64 %t171, 0
-  %t180 = icmp ne i64 %t177, 0
-  %t181 = or i1 %t179, %t180
-  %t182 = zext i1 %t181 to i64
-  %t183 = getelementptr [11 x i8], ptr @.str22, i64 0, i64 0
-  %t184 = call i32 @strcmp(ptr %t0, ptr %t183)
-  %t185 = sext i32 %t184 to i64
-  %t187 = sext i32 0 to i64
-  %t186 = icmp eq i64 %t185, %t187
-  %t188 = zext i1 %t186 to i64
-  %t190 = icmp ne i64 %t182, 0
-  %t191 = icmp ne i64 %t188, 0
-  %t192 = or i1 %t190, %t191
-  %t193 = zext i1 %t192 to i64
-  %t194 = getelementptr [14 x i8], ptr @.str23, i64 0, i64 0
-  %t195 = call i32 @strcmp(ptr %t0, ptr %t194)
-  %t196 = sext i32 %t195 to i64
-  %t198 = sext i32 0 to i64
-  %t197 = icmp eq i64 %t196, %t198
-  %t199 = zext i1 %t197 to i64
-  %t201 = icmp ne i64 %t193, 0
-  %t202 = icmp ne i64 %t199, 0
-  %t203 = or i1 %t201, %t202
-  %t204 = zext i1 %t203 to i64
-  %t205 = getelementptr [10 x i8], ptr @.str24, i64 0, i64 0
-  %t206 = call i32 @strcmp(ptr %t0, ptr %t205)
-  %t207 = sext i32 %t206 to i64
-  %t209 = sext i32 0 to i64
-  %t208 = icmp eq i64 %t207, %t209
-  %t210 = zext i1 %t208 to i64
-  %t212 = icmp ne i64 %t204, 0
-  %t213 = icmp ne i64 %t210, 0
-  %t214 = or i1 %t212, %t213
-  %t215 = zext i1 %t214 to i64
-  %t216 = trunc i64 %t215 to i32
-  ret i32 %t216
-L0:
+  %t134 = icmp ne i64 %t133, 0
+  %t135 = zext i1 %t134 to i64
+  br label %L38
+L38:
+  %t136 = phi i64 [ 1, %L36 ], [ %t135, %L37 ]
+  %t137 = icmp ne i64 %t136, 0
+  br i1 %t137, label %L39, label %L40
+L39:
+  br label %L41
+L40:
+  %t138 = getelementptr [11 x i8], ptr @.str19, i64 0, i64 0
+  %t139 = call i32 @strcmp(ptr %t0, ptr %t138)
+  %t140 = sext i32 %t139 to i64
+  %t142 = sext i32 0 to i64
+  %t141 = icmp eq i64 %t140, %t142
+  %t143 = zext i1 %t141 to i64
+  %t144 = icmp ne i64 %t143, 0
+  %t145 = zext i1 %t144 to i64
+  br label %L41
+L41:
+  %t146 = phi i64 [ 1, %L39 ], [ %t145, %L40 ]
+  %t147 = icmp ne i64 %t146, 0
+  br i1 %t147, label %L42, label %L43
+L42:
+  br label %L44
+L43:
+  %t148 = getelementptr [9 x i8], ptr @.str20, i64 0, i64 0
+  %t149 = call i32 @strcmp(ptr %t0, ptr %t148)
+  %t150 = sext i32 %t149 to i64
+  %t152 = sext i32 0 to i64
+  %t151 = icmp eq i64 %t150, %t152
+  %t153 = zext i1 %t151 to i64
+  %t154 = icmp ne i64 %t153, 0
+  %t155 = zext i1 %t154 to i64
+  br label %L44
+L44:
+  %t156 = phi i64 [ 1, %L42 ], [ %t155, %L43 ]
+  %t157 = icmp ne i64 %t156, 0
+  br i1 %t157, label %L45, label %L46
+L45:
+  br label %L47
+L46:
+  %t158 = getelementptr [8 x i8], ptr @.str21, i64 0, i64 0
+  %t159 = call i32 @strcmp(ptr %t0, ptr %t158)
+  %t160 = sext i32 %t159 to i64
+  %t162 = sext i32 0 to i64
+  %t161 = icmp eq i64 %t160, %t162
+  %t163 = zext i1 %t161 to i64
+  %t164 = icmp ne i64 %t163, 0
+  %t165 = zext i1 %t164 to i64
+  br label %L47
+L47:
+  %t166 = phi i64 [ 1, %L45 ], [ %t165, %L46 ]
+  %t167 = icmp ne i64 %t166, 0
+  br i1 %t167, label %L48, label %L49
+L48:
+  br label %L50
+L49:
+  %t168 = getelementptr [11 x i8], ptr @.str22, i64 0, i64 0
+  %t169 = call i32 @strcmp(ptr %t0, ptr %t168)
+  %t170 = sext i32 %t169 to i64
+  %t172 = sext i32 0 to i64
+  %t171 = icmp eq i64 %t170, %t172
+  %t173 = zext i1 %t171 to i64
+  %t174 = icmp ne i64 %t173, 0
+  %t175 = zext i1 %t174 to i64
+  br label %L50
+L50:
+  %t176 = phi i64 [ 1, %L48 ], [ %t175, %L49 ]
+  %t177 = icmp ne i64 %t176, 0
+  br i1 %t177, label %L51, label %L52
+L51:
+  br label %L53
+L52:
+  %t178 = getelementptr [14 x i8], ptr @.str23, i64 0, i64 0
+  %t179 = call i32 @strcmp(ptr %t0, ptr %t178)
+  %t180 = sext i32 %t179 to i64
+  %t182 = sext i32 0 to i64
+  %t181 = icmp eq i64 %t180, %t182
+  %t183 = zext i1 %t181 to i64
+  %t184 = icmp ne i64 %t183, 0
+  %t185 = zext i1 %t184 to i64
+  br label %L53
+L53:
+  %t186 = phi i64 [ 1, %L51 ], [ %t185, %L52 ]
+  %t187 = icmp ne i64 %t186, 0
+  br i1 %t187, label %L54, label %L55
+L54:
+  br label %L56
+L55:
+  %t188 = getelementptr [10 x i8], ptr @.str24, i64 0, i64 0
+  %t189 = call i32 @strcmp(ptr %t0, ptr %t188)
+  %t190 = sext i32 %t189 to i64
+  %t192 = sext i32 0 to i64
+  %t191 = icmp eq i64 %t190, %t192
+  %t193 = zext i1 %t191 to i64
+  %t194 = icmp ne i64 %t193, 0
+  %t195 = zext i1 %t194 to i64
+  br label %L56
+L56:
+  %t196 = phi i64 [ 1, %L54 ], [ %t195, %L55 ]
+  %t197 = trunc i64 %t196 to i32
+  ret i32 %t197
+L57:
   ret i32 0
 }
 
@@ -609,17 +756,28 @@ L10:
   %t20 = sext i32 0 to i64
   %t19 = icmp eq i64 %t18, %t20
   %t21 = zext i1 %t19 to i64
-  %t22 = load ptr, ptr %t12
-  %t23 = getelementptr [8 x i8], ptr @.str26, i64 0, i64 0
-  %t24 = call i32 @strcmp(ptr %t22, ptr %t23)
-  %t25 = sext i32 %t24 to i64
-  %t27 = sext i32 0 to i64
-  %t26 = icmp eq i64 %t25, %t27
-  %t28 = zext i1 %t26 to i64
-  %t30 = icmp ne i64 %t21, 0
-  %t31 = icmp ne i64 %t28, 0
-  %t32 = or i1 %t30, %t31
-  %t33 = zext i1 %t32 to i64
+  %t22 = icmp ne i64 %t21, 0
+  br i1 %t22, label %L12, label %L13
+L12:
+  br label %L14
+L13:
+  %t23 = load ptr, ptr %t12
+  %t24 = getelementptr [8 x i8], ptr @.str26, i64 0, i64 0
+  %t25 = call i32 @strcmp(ptr %t23, ptr %t24)
+  %t26 = sext i32 %t25 to i64
+  %t28 = sext i32 0 to i64
+  %t27 = icmp eq i64 %t26, %t28
+  %t29 = zext i1 %t27 to i64
+  %t30 = icmp ne i64 %t29, 0
+  %t31 = zext i1 %t30 to i64
+  br label %L14
+L14:
+  %t32 = phi i64 [ 1, %L12 ], [ %t31, %L13 ]
+  %t33 = icmp ne i64 %t32, 0
+  br i1 %t33, label %L15, label %L16
+L15:
+  br label %L17
+L16:
   %t34 = load ptr, ptr %t12
   %t35 = getelementptr [6 x i8], ptr @.str27, i64 0, i64 0
   %t36 = call i32 @strcmp(ptr %t34, ptr %t35)
@@ -627,103 +785,134 @@ L10:
   %t39 = sext i32 0 to i64
   %t38 = icmp eq i64 %t37, %t39
   %t40 = zext i1 %t38 to i64
-  %t42 = icmp ne i64 %t33, 0
-  %t43 = icmp ne i64 %t40, 0
-  %t44 = or i1 %t42, %t43
-  %t45 = zext i1 %t44 to i64
-  %t46 = load ptr, ptr %t12
-  %t47 = getelementptr [11 x i8], ptr @.str28, i64 0, i64 0
-  %t48 = call i32 @strcmp(ptr %t46, ptr %t47)
-  %t49 = sext i32 %t48 to i64
-  %t51 = sext i32 0 to i64
-  %t50 = icmp eq i64 %t49, %t51
-  %t52 = zext i1 %t50 to i64
-  %t54 = icmp ne i64 %t45, 0
-  %t55 = icmp ne i64 %t52, 0
-  %t56 = or i1 %t54, %t55
-  %t57 = zext i1 %t56 to i64
-  %t58 = load ptr, ptr %t12
-  %t59 = getelementptr [9 x i8], ptr @.str29, i64 0, i64 0
-  %t60 = call i32 @strcmp(ptr %t58, ptr %t59)
-  %t61 = sext i32 %t60 to i64
-  %t63 = sext i32 0 to i64
-  %t62 = icmp eq i64 %t61, %t63
-  %t64 = zext i1 %t62 to i64
-  %t66 = icmp ne i64 %t57, 0
-  %t67 = icmp ne i64 %t64, 0
-  %t68 = or i1 %t66, %t67
-  %t69 = zext i1 %t68 to i64
-  %t70 = load ptr, ptr %t12
-  %t71 = getelementptr [11 x i8], ptr @.str30, i64 0, i64 0
-  %t72 = call i32 @strcmp(ptr %t70, ptr %t71)
-  %t73 = sext i32 %t72 to i64
-  %t75 = sext i32 0 to i64
-  %t74 = icmp eq i64 %t73, %t75
-  %t76 = zext i1 %t74 to i64
-  %t78 = icmp ne i64 %t69, 0
-  %t79 = icmp ne i64 %t76, 0
-  %t80 = or i1 %t78, %t79
-  %t81 = zext i1 %t80 to i64
-  store i64 %t81, ptr %t14
-  call void @advance(ptr %t0)
-  %t83 = load i64, ptr %t14
-  %t84 = call i32 @check(ptr %t0, i64 72)
-  %t85 = sext i32 %t84 to i64
-  %t87 = icmp ne i64 %t83, 0
-  %t88 = icmp ne i64 %t85, 0
-  %t89 = and i1 %t87, %t88
-  %t90 = zext i1 %t89 to i64
-  %t91 = icmp ne i64 %t90, 0
-  br i1 %t91, label %L12, label %L14
-L12:
-  %t92 = alloca i64
-  %t93 = sext i32 1 to i64
-  store i64 %t93, ptr %t92
-  call void @advance(ptr %t0)
-  br label %L15
-L15:
-  %t95 = call i32 @check(ptr %t0, i64 81)
-  %t96 = sext i32 %t95 to i64
-  %t98 = icmp eq i64 %t96, 0
-  %t97 = zext i1 %t98 to i64
-  %t99 = load i64, ptr %t92
-  %t101 = sext i32 0 to i64
-  %t100 = icmp sgt i64 %t99, %t101
-  %t102 = zext i1 %t100 to i64
-  %t104 = icmp ne i64 %t97, 0
-  %t105 = icmp ne i64 %t102, 0
-  %t106 = and i1 %t104, %t105
-  %t107 = zext i1 %t106 to i64
-  %t108 = icmp ne i64 %t107, 0
-  br i1 %t108, label %L16, label %L17
-L16:
-  %t109 = call i32 @check(ptr %t0, i64 72)
-  %t110 = sext i32 %t109 to i64
-  %t111 = icmp ne i64 %t110, 0
-  br i1 %t111, label %L18, label %L19
+  %t41 = icmp ne i64 %t40, 0
+  %t42 = zext i1 %t41 to i64
+  br label %L17
+L17:
+  %t43 = phi i64 [ 1, %L15 ], [ %t42, %L16 ]
+  %t44 = icmp ne i64 %t43, 0
+  br i1 %t44, label %L18, label %L19
 L18:
-  %t112 = load i64, ptr %t92
-  %t113 = add i64 %t112, 1
-  store i64 %t113, ptr %t92
   br label %L20
 L19:
-  %t114 = call i32 @check(ptr %t0, i64 73)
-  %t115 = sext i32 %t114 to i64
-  %t116 = icmp ne i64 %t115, 0
-  br i1 %t116, label %L21, label %L23
-L21:
-  %t117 = load i64, ptr %t92
-  %t118 = sub i64 %t117, 1
-  store i64 %t118, ptr %t92
-  br label %L23
-L23:
+  %t45 = load ptr, ptr %t12
+  %t46 = getelementptr [11 x i8], ptr @.str28, i64 0, i64 0
+  %t47 = call i32 @strcmp(ptr %t45, ptr %t46)
+  %t48 = sext i32 %t47 to i64
+  %t50 = sext i32 0 to i64
+  %t49 = icmp eq i64 %t48, %t50
+  %t51 = zext i1 %t49 to i64
+  %t52 = icmp ne i64 %t51, 0
+  %t53 = zext i1 %t52 to i64
   br label %L20
 L20:
+  %t54 = phi i64 [ 1, %L18 ], [ %t53, %L19 ]
+  %t55 = icmp ne i64 %t54, 0
+  br i1 %t55, label %L21, label %L22
+L21:
+  br label %L23
+L22:
+  %t56 = load ptr, ptr %t12
+  %t57 = getelementptr [9 x i8], ptr @.str29, i64 0, i64 0
+  %t58 = call i32 @strcmp(ptr %t56, ptr %t57)
+  %t59 = sext i32 %t58 to i64
+  %t61 = sext i32 0 to i64
+  %t60 = icmp eq i64 %t59, %t61
+  %t62 = zext i1 %t60 to i64
+  %t63 = icmp ne i64 %t62, 0
+  %t64 = zext i1 %t63 to i64
+  br label %L23
+L23:
+  %t65 = phi i64 [ 1, %L21 ], [ %t64, %L22 ]
+  %t66 = icmp ne i64 %t65, 0
+  br i1 %t66, label %L24, label %L25
+L24:
+  br label %L26
+L25:
+  %t67 = load ptr, ptr %t12
+  %t68 = getelementptr [11 x i8], ptr @.str30, i64 0, i64 0
+  %t69 = call i32 @strcmp(ptr %t67, ptr %t68)
+  %t70 = sext i32 %t69 to i64
+  %t72 = sext i32 0 to i64
+  %t71 = icmp eq i64 %t70, %t72
+  %t73 = zext i1 %t71 to i64
+  %t74 = icmp ne i64 %t73, 0
+  %t75 = zext i1 %t74 to i64
+  br label %L26
+L26:
+  %t76 = phi i64 [ 1, %L24 ], [ %t75, %L25 ]
+  store i64 %t76, ptr %t14
   call void @advance(ptr %t0)
-  br label %L15
-L17:
-  br label %L14
-L14:
+  %t78 = load i64, ptr %t14
+  %t79 = icmp ne i64 %t78, 0
+  br i1 %t79, label %L27, label %L28
+L27:
+  %t80 = call i32 @check(ptr %t0, i64 72)
+  %t81 = sext i32 %t80 to i64
+  %t82 = icmp ne i64 %t81, 0
+  %t83 = zext i1 %t82 to i64
+  br label %L29
+L28:
+  br label %L29
+L29:
+  %t84 = phi i64 [ %t83, %L27 ], [ 0, %L28 ]
+  %t85 = icmp ne i64 %t84, 0
+  br i1 %t85, label %L30, label %L32
+L30:
+  %t86 = alloca i64
+  %t87 = sext i32 1 to i64
+  store i64 %t87, ptr %t86
+  call void @advance(ptr %t0)
+  br label %L33
+L33:
+  %t89 = call i32 @check(ptr %t0, i64 81)
+  %t90 = sext i32 %t89 to i64
+  %t92 = icmp eq i64 %t90, 0
+  %t91 = zext i1 %t92 to i64
+  %t93 = icmp ne i64 %t91, 0
+  br i1 %t93, label %L36, label %L37
+L36:
+  %t94 = load i64, ptr %t86
+  %t96 = sext i32 0 to i64
+  %t95 = icmp sgt i64 %t94, %t96
+  %t97 = zext i1 %t95 to i64
+  %t98 = icmp ne i64 %t97, 0
+  %t99 = zext i1 %t98 to i64
+  br label %L38
+L37:
+  br label %L38
+L38:
+  %t100 = phi i64 [ %t99, %L36 ], [ 0, %L37 ]
+  %t101 = icmp ne i64 %t100, 0
+  br i1 %t101, label %L34, label %L35
+L34:
+  %t102 = call i32 @check(ptr %t0, i64 72)
+  %t103 = sext i32 %t102 to i64
+  %t104 = icmp ne i64 %t103, 0
+  br i1 %t104, label %L39, label %L40
+L39:
+  %t105 = load i64, ptr %t86
+  %t106 = add i64 %t105, 1
+  store i64 %t106, ptr %t86
+  br label %L41
+L40:
+  %t107 = call i32 @check(ptr %t0, i64 73)
+  %t108 = sext i32 %t107 to i64
+  %t109 = icmp ne i64 %t108, 0
+  br i1 %t109, label %L42, label %L44
+L42:
+  %t110 = load i64, ptr %t86
+  %t111 = sub i64 %t110, 1
+  store i64 %t111, ptr %t86
+  br label %L44
+L44:
+  br label %L41
+L41:
+  call void @advance(ptr %t0)
+  br label %L33
+L35:
+  br label %L32
+L32:
   br label %L2
 L2:
   br label %L0
@@ -735,51 +924,51 @@ define internal i32 @is_type_start(ptr %t0) {
 entry:
   %t1 = call i32 @check(ptr %t0, i64 4)
   %t2 = sext i32 %t1 to i64
-  %t3 = load ptr, ptr %t0
-  %t4 = call i32 @is_gcc_extension(ptr %t3)
-  %t5 = sext i32 %t4 to i64
-  %t7 = icmp ne i64 %t2, 0
-  %t8 = icmp ne i64 %t5, 0
-  %t9 = and i1 %t7, %t8
-  %t10 = zext i1 %t9 to i64
-  %t11 = icmp ne i64 %t10, 0
-  br i1 %t11, label %L0, label %L2
+  %t3 = icmp ne i64 %t2, 0
+  br i1 %t3, label %L0, label %L1
 L0:
-  %t12 = sext i32 0 to i64
-  %t13 = trunc i64 %t12 to i32
-  ret i32 %t13
-L3:
+  %t4 = load ptr, ptr %t0
+  %t5 = call i32 @is_gcc_extension(ptr %t4)
+  %t6 = sext i32 %t5 to i64
+  %t7 = icmp ne i64 %t6, 0
+  %t8 = zext i1 %t7 to i64
+  br label %L2
+L1:
   br label %L2
 L2:
-  %t14 = load ptr, ptr %t0
-  %t15 = ptrtoint ptr %t14 to i64
-  %t16 = add i64 %t15, 0
-  switch i64 %t16, label %L23 [
-    i64 5, label %L5
-    i64 6, label %L6
-    i64 7, label %L7
-    i64 8, label %L8
-    i64 9, label %L9
-    i64 10, label %L10
-    i64 11, label %L11
-    i64 12, label %L12
-    i64 13, label %L13
-    i64 26, label %L14
-    i64 27, label %L15
-    i64 28, label %L16
-    i64 32, label %L17
-    i64 33, label %L18
-    i64 30, label %L19
-    i64 31, label %L20
-    i64 29, label %L21
-    i64 4, label %L22
-  ]
-L5:
-  br label %L6
+  %t9 = phi i64 [ %t8, %L0 ], [ 0, %L1 ]
+  %t10 = icmp ne i64 %t9, 0
+  br i1 %t10, label %L3, label %L5
+L3:
+  %t11 = sext i32 0 to i64
+  %t12 = trunc i64 %t11 to i32
+  ret i32 %t12
 L6:
-  br label %L7
-L7:
-  br label %L8
+  br label %L5
+L5:
+  %t13 = load ptr, ptr %t0
+  %t14 = ptrtoint ptr %t13 to i64
+  %t15 = add i64 %t14, 0
+  switch i64 %t15, label %L26 [
+    i64 5, label %L8
+    i64 6, label %L9
+    i64 7, label %L10
+    i64 8, label %L11
+    i64 9, label %L12
+    i64 10, label %L13
+    i64 11, label %L14
+    i64 12, label %L15
+    i64 13, label %L16
+    i64 26, label %L17
+    i64 27, label %L18
+    i64 28, label %L19
+    i64 32, label %L20
+    i64 33, label %L21
+    i64 30, label %L22
+    i64 31, label %L23
+    i64 29, label %L24
+    i64 4, label %L25
+  ]
 L8:
   br label %L9
 L9:
@@ -807,31 +996,37 @@ L19:
 L20:
   br label %L21
 L21:
-  %t17 = sext i32 1 to i64
-  %t18 = trunc i64 %t17 to i32
-  ret i32 %t18
-L24:
   br label %L22
 L22:
-  %t19 = load ptr, ptr %t0
-  %t20 = call ptr @lookup_typedef(ptr %t0, ptr %t19)
-  %t22 = sext i32 0 to i64
-  %t21 = inttoptr i64 %t22 to ptr
-  %t24 = ptrtoint ptr %t20 to i64
-  %t25 = ptrtoint ptr %t21 to i64
-  %t23 = icmp ne i64 %t24, %t25
-  %t26 = zext i1 %t23 to i64
-  %t27 = trunc i64 %t26 to i32
-  ret i32 %t27
-L25:
-  br label %L4
+  br label %L23
 L23:
-  %t28 = sext i32 0 to i64
-  %t29 = trunc i64 %t28 to i32
-  ret i32 %t29
+  br label %L24
+L24:
+  %t16 = sext i32 1 to i64
+  %t17 = trunc i64 %t16 to i32
+  ret i32 %t17
+L27:
+  br label %L25
+L25:
+  %t18 = load ptr, ptr %t0
+  %t19 = call ptr @lookup_typedef(ptr %t0, ptr %t18)
+  %t21 = sext i32 0 to i64
+  %t20 = inttoptr i64 %t21 to ptr
+  %t23 = ptrtoint ptr %t19 to i64
+  %t24 = ptrtoint ptr %t20 to i64
+  %t22 = icmp ne i64 %t23, %t24
+  %t25 = zext i1 %t22 to i64
+  %t26 = trunc i64 %t25 to i32
+  ret i32 %t26
+L28:
+  br label %L7
 L26:
-  br label %L4
-L4:
+  %t27 = sext i32 0 to i64
+  %t28 = trunc i64 %t27 to i32
+  ret i32 %t28
+L29:
+  br label %L7
+L7:
   ret i32 0
 }
 
@@ -892,47 +1087,53 @@ L9:
   %t33 = sext i32 %t32 to i64
   %t35 = icmp eq i64 %t33, 0
   %t34 = zext i1 %t35 to i64
-  %t36 = load i64, ptr %t30
-  %t38 = sext i32 0 to i64
-  %t37 = icmp sgt i64 %t36, %t38
-  %t39 = zext i1 %t37 to i64
-  %t41 = icmp ne i64 %t34, 0
-  %t42 = icmp ne i64 %t39, 0
-  %t43 = and i1 %t41, %t42
-  %t44 = zext i1 %t43 to i64
-  %t45 = icmp ne i64 %t44, 0
-  br i1 %t45, label %L10, label %L11
-L10:
-  %t46 = call i32 @check(ptr %t0, i64 74)
-  %t47 = sext i32 %t46 to i64
-  %t48 = icmp ne i64 %t47, 0
-  br i1 %t48, label %L12, label %L13
+  %t36 = icmp ne i64 %t34, 0
+  br i1 %t36, label %L12, label %L13
 L12:
-  %t49 = load i64, ptr %t30
-  %t50 = add i64 %t49, 1
-  store i64 %t50, ptr %t30
+  %t37 = load i64, ptr %t30
+  %t39 = sext i32 0 to i64
+  %t38 = icmp sgt i64 %t37, %t39
+  %t40 = zext i1 %t38 to i64
+  %t41 = icmp ne i64 %t40, 0
+  %t42 = zext i1 %t41 to i64
   br label %L14
 L13:
-  %t51 = call i32 @check(ptr %t0, i64 75)
-  %t52 = sext i32 %t51 to i64
-  %t53 = icmp ne i64 %t52, 0
-  br i1 %t53, label %L15, label %L17
-L15:
-  %t54 = load i64, ptr %t30
-  %t55 = sub i64 %t54, 1
-  store i64 %t55, ptr %t30
-  br label %L17
-L17:
   br label %L14
 L14:
+  %t43 = phi i64 [ %t42, %L12 ], [ 0, %L13 ]
+  %t44 = icmp ne i64 %t43, 0
+  br i1 %t44, label %L10, label %L11
+L10:
+  %t45 = call i32 @check(ptr %t0, i64 74)
+  %t46 = sext i32 %t45 to i64
+  %t47 = icmp ne i64 %t46, 0
+  br i1 %t47, label %L15, label %L16
+L15:
+  %t48 = load i64, ptr %t30
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t30
+  br label %L17
+L16:
+  %t50 = call i32 @check(ptr %t0, i64 75)
+  %t51 = sext i32 %t50 to i64
+  %t52 = icmp ne i64 %t51, 0
+  br i1 %t52, label %L18, label %L20
+L18:
+  %t53 = load i64, ptr %t30
+  %t54 = sub i64 %t53, 1
+  store i64 %t54, ptr %t30
+  br label %L20
+L20:
+  br label %L17
+L17:
   call void @advance(ptr %t0)
   br label %L9
 L11:
   br label %L8
 L8:
-  %t57 = load ptr, ptr %t17
-  ret ptr %t57
-L18:
+  %t56 = load ptr, ptr %t17
+  ret ptr %t56
+L21:
   ret ptr null
 }
 
@@ -969,176 +1170,188 @@ L6:
   %t18 = sext i32 %t17 to i64
   %t20 = icmp eq i64 %t18, 0
   %t19 = zext i1 %t20 to i64
-  %t21 = call i32 @check(ptr %t0, i64 81)
-  %t22 = sext i32 %t21 to i64
-  %t24 = icmp eq i64 %t22, 0
-  %t23 = zext i1 %t24 to i64
-  %t26 = icmp ne i64 %t19, 0
-  %t27 = icmp ne i64 %t23, 0
-  %t28 = and i1 %t26, %t27
-  %t29 = zext i1 %t28 to i64
-  %t30 = icmp ne i64 %t29, 0
-  br i1 %t30, label %L7, label %L8
-L7:
-  %t31 = call i32 @check(ptr %t0, i64 4)
-  %t32 = sext i32 %t31 to i64
-  %t33 = icmp ne i64 %t32, 0
-  br i1 %t33, label %L9, label %L10
+  %t21 = icmp ne i64 %t19, 0
+  br i1 %t21, label %L9, label %L10
 L9:
-  %t34 = alloca ptr
-  %t35 = load ptr, ptr %t0
-  %t36 = call ptr @strdup(ptr %t35)
-  store ptr %t36, ptr %t34
-  call void @advance(ptr %t0)
-  %t38 = call i32 @match(ptr %t0, i64 55)
-  %t39 = sext i32 %t38 to i64
-  %t40 = icmp ne i64 %t39, 0
-  br i1 %t40, label %L12, label %L14
+  %t22 = call i32 @check(ptr %t0, i64 81)
+  %t23 = sext i32 %t22 to i64
+  %t25 = icmp eq i64 %t23, 0
+  %t24 = zext i1 %t25 to i64
+  %t26 = icmp ne i64 %t24, 0
+  %t27 = zext i1 %t26 to i64
+  br label %L11
+L10:
+  br label %L11
+L11:
+  %t28 = phi i64 [ %t27, %L9 ], [ 0, %L10 ]
+  %t29 = icmp ne i64 %t28, 0
+  br i1 %t29, label %L7, label %L8
+L7:
+  %t30 = call i32 @check(ptr %t0, i64 4)
+  %t31 = sext i32 %t30 to i64
+  %t32 = icmp ne i64 %t31, 0
+  br i1 %t32, label %L12, label %L13
 L12:
-  %t41 = call i32 @check(ptr %t0, i64 0)
-  %t42 = sext i32 %t41 to i64
-  %t43 = icmp ne i64 %t42, 0
-  br i1 %t43, label %L15, label %L16
+  %t33 = alloca ptr
+  %t34 = load ptr, ptr %t0
+  %t35 = call ptr @strdup(ptr %t34)
+  store ptr %t35, ptr %t33
+  call void @advance(ptr %t0)
+  %t37 = call i32 @match(ptr %t0, i64 55)
+  %t38 = sext i32 %t37 to i64
+  %t39 = icmp ne i64 %t38, 0
+  br i1 %t39, label %L15, label %L17
 L15:
-  %t44 = load ptr, ptr %t0
-  %t46 = sext i32 0 to i64
-  %t45 = inttoptr i64 %t46 to ptr
-  %t47 = call i64 @strtoll(ptr %t44, ptr %t45, i64 0)
-  %t48 = add i64 %t47, 0
-  store i64 %t48, ptr %t15
-  call void @advance(ptr %t0)
-  br label %L17
-L16:
-  %t50 = call i32 @check(ptr %t0, i64 36)
-  %t51 = sext i32 %t50 to i64
-  %t52 = icmp ne i64 %t51, 0
-  br i1 %t52, label %L18, label %L19
+  %t40 = call i32 @check(ptr %t0, i64 0)
+  %t41 = sext i32 %t40 to i64
+  %t42 = icmp ne i64 %t41, 0
+  br i1 %t42, label %L18, label %L19
 L18:
+  %t43 = load ptr, ptr %t0
+  %t45 = sext i32 0 to i64
+  %t44 = inttoptr i64 %t45 to ptr
+  %t46 = call i64 @strtoll(ptr %t43, ptr %t44, i64 0)
+  %t47 = add i64 %t46, 0
+  store i64 %t47, ptr %t15
   call void @advance(ptr %t0)
-  %t54 = call i32 @check(ptr %t0, i64 0)
-  %t55 = sext i32 %t54 to i64
-  %t56 = icmp ne i64 %t55, 0
-  br i1 %t56, label %L21, label %L23
-L21:
-  %t57 = load ptr, ptr %t0
-  %t59 = sext i32 0 to i64
-  %t58 = inttoptr i64 %t59 to ptr
-  %t60 = call i64 @strtoll(ptr %t57, ptr %t58, i64 0)
-  %t61 = add i64 %t60, 0
-  %t62 = sub i64 0, %t61
-  store i64 %t62, ptr %t15
-  call void @advance(ptr %t0)
-  br label %L23
-L23:
   br label %L20
 L19:
-  %t64 = call i32 @check(ptr %t0, i64 4)
-  %t65 = sext i32 %t64 to i64
-  %t66 = icmp ne i64 %t65, 0
-  br i1 %t66, label %L24, label %L26
+  %t49 = call i32 @check(ptr %t0, i64 36)
+  %t50 = sext i32 %t49 to i64
+  %t51 = icmp ne i64 %t50, 0
+  br i1 %t51, label %L21, label %L22
+L21:
+  call void @advance(ptr %t0)
+  %t53 = call i32 @check(ptr %t0, i64 0)
+  %t54 = sext i32 %t53 to i64
+  %t55 = icmp ne i64 %t54, 0
+  br i1 %t55, label %L24, label %L26
 L24:
-  %t67 = alloca i64
-  %t68 = load ptr, ptr %t0
-  %t69 = call i32 @lookup_enum_const(ptr %t0, ptr %t68, ptr %t67)
-  %t70 = sext i32 %t69 to i64
-  %t71 = icmp ne i64 %t70, 0
-  br i1 %t71, label %L27, label %L29
-L27:
-  %t72 = load i64, ptr %t67
-  store i64 %t72, ptr %t15
-  br label %L29
-L29:
+  %t56 = load ptr, ptr %t0
+  %t58 = sext i32 0 to i64
+  %t57 = inttoptr i64 %t58 to ptr
+  %t59 = call i64 @strtoll(ptr %t56, ptr %t57, i64 0)
+  %t60 = add i64 %t59, 0
+  %t61 = sub i64 0, %t60
+  store i64 %t61, ptr %t15
   call void @advance(ptr %t0)
-  %t74 = call i32 @check(ptr %t0, i64 35)
-  %t75 = sext i32 %t74 to i64
-  %t76 = call i32 @check(ptr %t0, i64 36)
-  %t77 = sext i32 %t76 to i64
-  %t79 = icmp ne i64 %t75, 0
-  %t80 = icmp ne i64 %t77, 0
-  %t81 = or i1 %t79, %t80
-  %t82 = zext i1 %t81 to i64
-  %t83 = icmp ne i64 %t82, 0
-  br i1 %t83, label %L30, label %L32
-L30:
-  %t84 = alloca i64
-  %t85 = load ptr, ptr %t0
-  %t87 = ptrtoint ptr %t85 to i64
-  %t88 = sext i32 36 to i64
-  %t86 = icmp eq i64 %t87, %t88
-  %t89 = zext i1 %t86 to i64
-  store i64 %t89, ptr %t84
-  call void @advance(ptr %t0)
-  %t91 = call i32 @check(ptr %t0, i64 0)
-  %t92 = sext i32 %t91 to i64
-  %t93 = icmp ne i64 %t92, 0
-  br i1 %t93, label %L33, label %L35
-L33:
-  %t94 = alloca i64
-  %t95 = load ptr, ptr %t0
-  %t97 = sext i32 0 to i64
-  %t96 = inttoptr i64 %t97 to ptr
-  %t98 = call i64 @strtoll(ptr %t95, ptr %t96, i64 0)
-  store i64 %t98, ptr %t94
-  %t99 = load i64, ptr %t84
-  %t100 = icmp ne i64 %t99, 0
-  br i1 %t100, label %L36, label %L37
-L36:
-  %t101 = load i64, ptr %t15
-  %t102 = load i64, ptr %t94
-  %t103 = sub i64 %t101, %t102
-  br label %L38
-L37:
-  %t104 = load i64, ptr %t15
-  %t105 = load i64, ptr %t94
-  %t106 = add i64 %t104, %t105
-  br label %L38
-L38:
-  %t107 = phi i64 [ %t103, %L36 ], [ %t106, %L37 ]
-  store i64 %t107, ptr %t15
-  call void @advance(ptr %t0)
-  br label %L35
-L35:
-  br label %L32
-L32:
   br label %L26
 L26:
+  br label %L23
+L22:
+  %t63 = call i32 @check(ptr %t0, i64 4)
+  %t64 = sext i32 %t63 to i64
+  %t65 = icmp ne i64 %t64, 0
+  br i1 %t65, label %L27, label %L29
+L27:
+  %t66 = alloca i64
+  %t67 = load ptr, ptr %t0
+  %t68 = call i32 @lookup_enum_const(ptr %t0, ptr %t67, ptr %t66)
+  %t69 = sext i32 %t68 to i64
+  %t70 = icmp ne i64 %t69, 0
+  br i1 %t70, label %L30, label %L32
+L30:
+  %t71 = load i64, ptr %t66
+  store i64 %t71, ptr %t15
+  br label %L32
+L32:
+  call void @advance(ptr %t0)
+  %t73 = call i32 @check(ptr %t0, i64 35)
+  %t74 = sext i32 %t73 to i64
+  %t75 = icmp ne i64 %t74, 0
+  br i1 %t75, label %L33, label %L34
+L33:
+  br label %L35
+L34:
+  %t76 = call i32 @check(ptr %t0, i64 36)
+  %t77 = sext i32 %t76 to i64
+  %t78 = icmp ne i64 %t77, 0
+  %t79 = zext i1 %t78 to i64
+  br label %L35
+L35:
+  %t80 = phi i64 [ 1, %L33 ], [ %t79, %L34 ]
+  %t81 = icmp ne i64 %t80, 0
+  br i1 %t81, label %L36, label %L38
+L36:
+  %t82 = alloca i64
+  %t83 = load ptr, ptr %t0
+  %t85 = ptrtoint ptr %t83 to i64
+  %t86 = sext i32 36 to i64
+  %t84 = icmp eq i64 %t85, %t86
+  %t87 = zext i1 %t84 to i64
+  store i64 %t87, ptr %t82
+  call void @advance(ptr %t0)
+  %t89 = call i32 @check(ptr %t0, i64 0)
+  %t90 = sext i32 %t89 to i64
+  %t91 = icmp ne i64 %t90, 0
+  br i1 %t91, label %L39, label %L41
+L39:
+  %t92 = alloca i64
+  %t93 = load ptr, ptr %t0
+  %t95 = sext i32 0 to i64
+  %t94 = inttoptr i64 %t95 to ptr
+  %t96 = call i64 @strtoll(ptr %t93, ptr %t94, i64 0)
+  store i64 %t96, ptr %t92
+  %t97 = load i64, ptr %t82
+  %t98 = icmp ne i64 %t97, 0
+  br i1 %t98, label %L42, label %L43
+L42:
+  %t99 = load i64, ptr %t15
+  %t100 = load i64, ptr %t92
+  %t101 = sub i64 %t99, %t100
+  br label %L44
+L43:
+  %t102 = load i64, ptr %t15
+  %t103 = load i64, ptr %t92
+  %t104 = add i64 %t102, %t103
+  br label %L44
+L44:
+  %t105 = phi i64 [ %t101, %L42 ], [ %t104, %L43 ]
+  store i64 %t105, ptr %t15
+  call void @advance(ptr %t0)
+  br label %L41
+L41:
+  br label %L38
+L38:
+  br label %L29
+L29:
+  br label %L23
+L23:
   br label %L20
 L20:
   br label %L17
 L17:
+  %t107 = load ptr, ptr %t33
+  %t108 = load i64, ptr %t15
+  %t109 = add i64 %t108, 1
+  store i64 %t109, ptr %t15
+  call void @register_enum_const(ptr %t0, ptr %t107, i64 %t108)
+  %t111 = load ptr, ptr %t33
+  call void @free(ptr %t111)
+  br label %L14
+L13:
+  call void @advance(ptr %t0)
   br label %L14
 L14:
-  %t109 = load ptr, ptr %t34
-  %t110 = load i64, ptr %t15
-  %t111 = add i64 %t110, 1
-  store i64 %t111, ptr %t15
-  call void @register_enum_const(ptr %t0, ptr %t109, i64 %t110)
-  %t113 = load ptr, ptr %t34
-  call void @free(ptr %t113)
-  br label %L11
-L10:
-  call void @advance(ptr %t0)
-  br label %L11
-L11:
-  %t116 = call i32 @match(ptr %t0, i64 79)
-  %t117 = sext i32 %t116 to i64
-  %t119 = icmp eq i64 %t117, 0
-  %t118 = zext i1 %t119 to i64
-  %t120 = icmp ne i64 %t118, 0
-  br i1 %t120, label %L39, label %L41
-L39:
+  %t114 = call i32 @match(ptr %t0, i64 79)
+  %t115 = sext i32 %t114 to i64
+  %t117 = icmp eq i64 %t115, 0
+  %t116 = zext i1 %t117 to i64
+  %t118 = icmp ne i64 %t116, 0
+  br i1 %t118, label %L45, label %L47
+L45:
   br label %L8
-L42:
-  br label %L41
-L41:
+L48:
+  br label %L47
+L47:
   br label %L6
 L8:
   call void @expect(ptr %t0, i64 75)
   br label %L5
 L5:
-  %t122 = load ptr, ptr %t2
-  ret ptr %t122
-L43:
+  %t120 = load ptr, ptr %t2
+  ret ptr %t120
+L49:
   ret ptr null
 }
 
@@ -1190,418 +1403,454 @@ L0:
 L1:
   %t31 = call i32 @check(ptr %t0, i64 4)
   %t32 = sext i32 %t31 to i64
-  %t33 = load ptr, ptr %t0
-  %t34 = call i32 @is_gcc_extension(ptr %t33)
-  %t35 = sext i32 %t34 to i64
-  %t37 = icmp ne i64 %t32, 0
-  %t38 = icmp ne i64 %t35, 0
-  %t39 = and i1 %t37, %t38
-  %t40 = zext i1 %t39 to i64
-  %t41 = icmp ne i64 %t40, 0
-  br i1 %t41, label %L4, label %L6
+  %t33 = icmp ne i64 %t32, 0
+  br i1 %t33, label %L4, label %L5
 L4:
-  call void @skip_gcc_extension(ptr %t0)
-  br label %L2
-L7:
+  %t34 = load ptr, ptr %t0
+  %t35 = call i32 @is_gcc_extension(ptr %t34)
+  %t36 = sext i32 %t35 to i64
+  %t37 = icmp ne i64 %t36, 0
+  %t38 = zext i1 %t37 to i64
+  br label %L6
+L5:
   br label %L6
 L6:
-  %t43 = load ptr, ptr %t0
-  %t44 = ptrtoint ptr %t43 to i64
-  %t45 = add i64 %t44, 0
-  switch i64 %t45, label %L27 [
-    i64 29, label %L9
-    i64 30, label %L10
-    i64 31, label %L11
-    i64 32, label %L12
-    i64 33, label %L13
-    i64 12, label %L14
-    i64 13, label %L15
-    i64 11, label %L16
-    i64 10, label %L17
-    i64 9, label %L18
-    i64 6, label %L19
-    i64 5, label %L20
-    i64 7, label %L21
-    i64 8, label %L22
-    i64 26, label %L23
-    i64 27, label %L24
-    i64 28, label %L25
-    i64 4, label %L26
-  ]
-L9:
-  %t46 = sext i32 1 to i64
-  store i64 %t46, ptr %t4
-  call void @advance(ptr %t0)
-  br label %L8
-L28:
-  br label %L10
+  %t39 = phi i64 [ %t38, %L4 ], [ 0, %L5 ]
+  %t40 = icmp ne i64 %t39, 0
+  br i1 %t40, label %L7, label %L9
+L7:
+  call void @skip_gcc_extension(ptr %t0)
+  br label %L2
 L10:
-  %t48 = sext i32 1 to i64
-  store i64 %t48, ptr %t6
-  call void @advance(ptr %t0)
-  br label %L8
-L29:
-  br label %L11
-L11:
-  %t50 = sext i32 1 to i64
-  store i64 %t50, ptr %t8
-  call void @advance(ptr %t0)
-  br label %L8
-L30:
-  br label %L12
+  br label %L9
+L9:
+  %t42 = load ptr, ptr %t0
+  %t43 = ptrtoint ptr %t42 to i64
+  %t44 = add i64 %t43, 0
+  switch i64 %t44, label %L30 [
+    i64 29, label %L12
+    i64 30, label %L13
+    i64 31, label %L14
+    i64 32, label %L15
+    i64 33, label %L16
+    i64 12, label %L17
+    i64 13, label %L18
+    i64 11, label %L19
+    i64 10, label %L20
+    i64 9, label %L21
+    i64 6, label %L22
+    i64 5, label %L23
+    i64 7, label %L24
+    i64 8, label %L25
+    i64 26, label %L26
+    i64 27, label %L27
+    i64 28, label %L28
+    i64 4, label %L29
+  ]
 L12:
-  %t52 = sext i32 1 to i64
-  store i64 %t52, ptr %t10
+  %t45 = sext i32 1 to i64
+  store i64 %t45, ptr %t4
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L31:
   br label %L13
 L13:
-  %t54 = sext i32 1 to i64
-  store i64 %t54, ptr %t12
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t6
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L32:
   br label %L14
 L14:
-  %t56 = sext i32 1 to i64
-  store i64 %t56, ptr %t14
+  %t49 = sext i32 1 to i64
+  store i64 %t49, ptr %t8
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L33:
   br label %L15
 L15:
-  %t58 = sext i32 1 to i64
-  store i64 %t58, ptr %t16
+  %t51 = sext i32 1 to i64
+  store i64 %t51, ptr %t10
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L34:
   br label %L16
 L16:
-  %t60 = sext i32 1 to i64
-  store i64 %t60, ptr %t22
+  %t53 = sext i32 1 to i64
+  store i64 %t53, ptr %t12
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L35:
   br label %L17
 L17:
-  %t62 = load i64, ptr %t18
-  %t63 = icmp ne i64 %t62, 0
-  br i1 %t63, label %L36, label %L37
-L36:
-  %t64 = sext i32 1 to i64
-  store i64 %t64, ptr %t20
-  br label %L38
-L37:
-  %t65 = sext i32 1 to i64
-  store i64 %t65, ptr %t18
-  br label %L38
-L38:
+  %t55 = sext i32 1 to i64
+  store i64 %t55, ptr %t14
   call void @advance(ptr %t0)
-  br label %L8
-L39:
+  br label %L11
+L36:
   br label %L18
 L18:
-  %t67 = sext i32 0 to i64
-  store i64 %t67, ptr %t24
-  %t68 = sext i32 1 to i64
-  store i64 %t68, ptr %t26
+  %t57 = sext i32 1 to i64
+  store i64 %t57, ptr %t16
   call void @advance(ptr %t0)
-  br label %L8
-L40:
+  br label %L11
+L37:
   br label %L19
 L19:
-  %t70 = sext i32 2 to i64
-  store i64 %t70, ptr %t24
-  %t71 = sext i32 1 to i64
-  store i64 %t71, ptr %t26
+  %t59 = sext i32 1 to i64
+  store i64 %t59, ptr %t22
   call void @advance(ptr %t0)
-  br label %L8
-L41:
+  br label %L11
+L38:
   br label %L20
 L20:
-  %t73 = sext i32 7 to i64
-  store i64 %t73, ptr %t24
-  %t74 = sext i32 1 to i64
-  store i64 %t74, ptr %t26
+  %t61 = load i64, ptr %t18
+  %t62 = icmp ne i64 %t61, 0
+  br i1 %t62, label %L39, label %L40
+L39:
+  %t63 = sext i32 1 to i64
+  store i64 %t63, ptr %t20
+  br label %L41
+L40:
+  %t64 = sext i32 1 to i64
+  store i64 %t64, ptr %t18
+  br label %L41
+L41:
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L42:
   br label %L21
 L21:
-  %t76 = sext i32 13 to i64
-  store i64 %t76, ptr %t24
-  %t77 = sext i32 1 to i64
-  store i64 %t77, ptr %t26
+  %t66 = sext i32 0 to i64
+  store i64 %t66, ptr %t24
+  %t67 = sext i32 1 to i64
+  store i64 %t67, ptr %t26
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L43:
   br label %L22
 L22:
-  %t79 = sext i32 14 to i64
-  store i64 %t79, ptr %t24
-  %t80 = sext i32 1 to i64
-  store i64 %t80, ptr %t26
+  %t69 = sext i32 2 to i64
+  store i64 %t69, ptr %t24
+  %t70 = sext i32 1 to i64
+  store i64 %t70, ptr %t26
   call void @advance(ptr %t0)
-  br label %L8
+  br label %L11
 L44:
   br label %L23
 L23:
+  %t72 = sext i32 7 to i64
+  store i64 %t72, ptr %t24
+  %t73 = sext i32 1 to i64
+  store i64 %t73, ptr %t26
+  call void @advance(ptr %t0)
+  br label %L11
+L45:
   br label %L24
 L24:
-  %t82 = call ptr @parse_struct_union(ptr %t0)
-  store ptr %t82, ptr %t28
-  %t83 = sext i32 1 to i64
-  store i64 %t83, ptr %t26
-  br label %parse_type_done
-L45:
+  %t75 = sext i32 13 to i64
+  store i64 %t75, ptr %t24
+  %t76 = sext i32 1 to i64
+  store i64 %t76, ptr %t26
+  call void @advance(ptr %t0)
+  br label %L11
+L46:
   br label %L25
 L25:
-  %t84 = call ptr @parse_enum_specifier(ptr %t0)
-  store ptr %t84, ptr %t28
-  %t85 = sext i32 1 to i64
-  store i64 %t85, ptr %t26
-  br label %parse_type_done
-L46:
+  %t78 = sext i32 14 to i64
+  store i64 %t78, ptr %t24
+  %t79 = sext i32 1 to i64
+  store i64 %t79, ptr %t26
+  call void @advance(ptr %t0)
+  br label %L11
+L47:
   br label %L26
 L26:
-  %t86 = alloca ptr
-  %t87 = load ptr, ptr %t0
-  %t88 = call ptr @lookup_typedef(ptr %t0, ptr %t87)
-  store ptr %t88, ptr %t86
-  %t89 = load ptr, ptr %t86
-  %t90 = icmp ne ptr %t89, null
-  br i1 %t90, label %L47, label %L49
-L47:
-  %t91 = call ptr @type_new(i64 21)
-  store ptr %t91, ptr %t28
-  %t92 = load ptr, ptr %t0
-  %t93 = call ptr @strdup(ptr %t92)
-  %t94 = load ptr, ptr %t28
-  store ptr %t93, ptr %t94
-  %t95 = sext i32 1 to i64
-  store i64 %t95, ptr %t26
+  br label %L27
+L27:
+  %t81 = call ptr @parse_struct_union(ptr %t0)
+  store ptr %t81, ptr %t28
+  %t82 = sext i32 1 to i64
+  store i64 %t82, ptr %t26
+  br label %parse_type_done
+L48:
+  br label %L28
+L28:
+  %t83 = call ptr @parse_enum_specifier(ptr %t0)
+  store ptr %t83, ptr %t28
+  %t84 = sext i32 1 to i64
+  store i64 %t84, ptr %t26
+  br label %parse_type_done
+L49:
+  br label %L29
+L29:
+  %t85 = alloca ptr
+  %t86 = load ptr, ptr %t0
+  %t87 = call ptr @lookup_typedef(ptr %t0, ptr %t86)
+  store ptr %t87, ptr %t85
+  %t88 = load ptr, ptr %t85
+  %t89 = icmp ne ptr %t88, null
+  br i1 %t89, label %L50, label %L52
+L50:
+  %t90 = call ptr @type_new(i64 21)
+  store ptr %t90, ptr %t28
+  %t91 = load ptr, ptr %t0
+  %t92 = call ptr @strdup(ptr %t91)
+  %t93 = load ptr, ptr %t28
+  store ptr %t92, ptr %t93
+  %t94 = sext i32 1 to i64
+  store i64 %t94, ptr %t26
   call void @advance(ptr %t0)
   br label %parse_type_done
-L50:
-  br label %L49
-L49:
-  br label %parse_type_done
-L51:
-  br label %L8
-L27:
-  br label %parse_type_done
+L53:
+  br label %L52
 L52:
-  br label %L8
-L8:
+  br label %parse_type_done
+L54:
+  br label %L11
+L30:
+  br label %parse_type_done
+L55:
+  br label %L11
+L11:
   br label %L2
 L2:
   br label %L0
 L3:
   br label %parse_type_done
 parse_type_done:
-  %t97 = icmp ne ptr %t1, null
-  br i1 %t97, label %L53, label %L55
-L53:
-  %t98 = load i64, ptr %t4
-  store i64 %t98, ptr %t1
-  br label %L55
-L55:
-  %t99 = icmp ne ptr %t2, null
-  br i1 %t99, label %L56, label %L58
+  %t96 = icmp ne ptr %t1, null
+  br i1 %t96, label %L56, label %L58
 L56:
-  %t100 = load i64, ptr %t6
-  store i64 %t100, ptr %t2
+  %t97 = load i64, ptr %t4
+  store i64 %t97, ptr %t1
   br label %L58
 L58:
-  %t101 = icmp ne ptr %t3, null
-  br i1 %t101, label %L59, label %L61
+  %t98 = icmp ne ptr %t2, null
+  br i1 %t98, label %L59, label %L61
 L59:
-  %t102 = load i64, ptr %t8
-  store i64 %t102, ptr %t3
+  %t99 = load i64, ptr %t6
+  store i64 %t99, ptr %t2
   br label %L61
 L61:
-  %t103 = load ptr, ptr %t28
-  %t104 = icmp ne ptr %t103, null
-  br i1 %t104, label %L62, label %L64
+  %t100 = icmp ne ptr %t3, null
+  br i1 %t100, label %L62, label %L64
 L62:
-  %t105 = load i64, ptr %t10
-  %t106 = load ptr, ptr %t28
-  store i64 %t105, ptr %t106
-  %t107 = load i64, ptr %t12
-  %t108 = load ptr, ptr %t28
-  store i64 %t107, ptr %t108
-  %t109 = load ptr, ptr %t28
-  ret ptr %t109
-L65:
+  %t101 = load i64, ptr %t8
+  store i64 %t101, ptr %t3
   br label %L64
 L64:
-  %t110 = load i64, ptr %t26
-  %t112 = icmp eq i64 %t110, 0
-  %t111 = zext i1 %t112 to i64
+  %t102 = load ptr, ptr %t28
+  %t103 = icmp ne ptr %t102, null
+  br i1 %t103, label %L65, label %L67
+L65:
+  %t104 = load i64, ptr %t10
+  %t105 = load ptr, ptr %t28
+  store i64 %t104, ptr %t105
+  %t106 = load i64, ptr %t12
+  %t107 = load ptr, ptr %t28
+  store i64 %t106, ptr %t107
+  %t108 = load ptr, ptr %t28
+  ret ptr %t108
+L68:
+  br label %L67
+L67:
+  %t109 = load i64, ptr %t26
+  %t111 = icmp eq i64 %t109, 0
+  %t110 = zext i1 %t111 to i64
+  %t112 = icmp ne i64 %t110, 0
+  br i1 %t112, label %L69, label %L70
+L69:
   %t113 = load i64, ptr %t18
   %t115 = icmp eq i64 %t113, 0
   %t114 = zext i1 %t115 to i64
-  %t117 = icmp ne i64 %t111, 0
-  %t118 = icmp ne i64 %t114, 0
-  %t119 = and i1 %t117, %t118
-  %t120 = zext i1 %t119 to i64
-  %t121 = load i64, ptr %t22
-  %t123 = icmp eq i64 %t121, 0
-  %t122 = zext i1 %t123 to i64
-  %t125 = icmp ne i64 %t120, 0
-  %t126 = icmp ne i64 %t122, 0
-  %t127 = and i1 %t125, %t126
-  %t128 = zext i1 %t127 to i64
-  %t129 = load i64, ptr %t14
-  %t131 = icmp eq i64 %t129, 0
-  %t130 = zext i1 %t131 to i64
-  %t133 = icmp ne i64 %t128, 0
-  %t134 = icmp ne i64 %t130, 0
-  %t135 = and i1 %t133, %t134
-  %t136 = zext i1 %t135 to i64
-  %t137 = load i64, ptr %t16
-  %t139 = icmp eq i64 %t137, 0
-  %t138 = zext i1 %t139 to i64
-  %t141 = icmp ne i64 %t136, 0
-  %t142 = icmp ne i64 %t138, 0
-  %t143 = and i1 %t141, %t142
-  %t144 = zext i1 %t143 to i64
-  %t145 = icmp ne i64 %t144, 0
-  br i1 %t145, label %L66, label %L68
-L66:
-  %t147 = sext i32 0 to i64
-  %t146 = inttoptr i64 %t147 to ptr
-  ret ptr %t146
-L69:
-  br label %L68
-L68:
-  %t148 = load i64, ptr %t24
-  %t150 = sext i32 2 to i64
-  %t149 = icmp eq i64 %t148, %t150
-  %t151 = zext i1 %t149 to i64
-  %t152 = icmp ne i64 %t151, 0
-  br i1 %t152, label %L70, label %L71
+  %t116 = icmp ne i64 %t114, 0
+  %t117 = zext i1 %t116 to i64
+  br label %L71
 L70:
-  %t153 = load i64, ptr %t14
-  %t154 = icmp ne i64 %t153, 0
-  br i1 %t154, label %L73, label %L74
-L73:
-  %t155 = sext i32 4 to i64
-  store i64 %t155, ptr %t24
-  br label %L75
-L74:
-  %t156 = load i64, ptr %t16
-  %t157 = icmp ne i64 %t156, 0
-  br i1 %t157, label %L76, label %L78
-L76:
-  %t158 = sext i32 3 to i64
-  store i64 %t158, ptr %t24
-  br label %L78
-L78:
-  br label %L75
-L75:
-  br label %L72
+  br label %L71
 L71:
-  %t159 = load i64, ptr %t20
-  %t160 = icmp ne i64 %t159, 0
-  br i1 %t160, label %L79, label %L80
+  %t118 = phi i64 [ %t117, %L69 ], [ 0, %L70 ]
+  %t119 = icmp ne i64 %t118, 0
+  br i1 %t119, label %L72, label %L73
+L72:
+  %t120 = load i64, ptr %t22
+  %t122 = icmp eq i64 %t120, 0
+  %t121 = zext i1 %t122 to i64
+  %t123 = icmp ne i64 %t121, 0
+  %t124 = zext i1 %t123 to i64
+  br label %L74
+L73:
+  br label %L74
+L74:
+  %t125 = phi i64 [ %t124, %L72 ], [ 0, %L73 ]
+  %t126 = icmp ne i64 %t125, 0
+  br i1 %t126, label %L75, label %L76
+L75:
+  %t127 = load i64, ptr %t14
+  %t129 = icmp eq i64 %t127, 0
+  %t128 = zext i1 %t129 to i64
+  %t130 = icmp ne i64 %t128, 0
+  %t131 = zext i1 %t130 to i64
+  br label %L77
+L76:
+  br label %L77
+L77:
+  %t132 = phi i64 [ %t131, %L75 ], [ 0, %L76 ]
+  %t133 = icmp ne i64 %t132, 0
+  br i1 %t133, label %L78, label %L79
+L78:
+  %t134 = load i64, ptr %t16
+  %t136 = icmp eq i64 %t134, 0
+  %t135 = zext i1 %t136 to i64
+  %t137 = icmp ne i64 %t135, 0
+  %t138 = zext i1 %t137 to i64
+  br label %L80
 L79:
-  %t161 = load i64, ptr %t14
-  %t162 = icmp ne i64 %t161, 0
-  br i1 %t162, label %L82, label %L83
-L82:
-  %t163 = sext i32 12 to i64
-  br label %L84
-L83:
-  %t164 = sext i32 11 to i64
-  br label %L84
-L84:
-  %t165 = phi i64 [ %t163, %L82 ], [ %t164, %L83 ]
-  store i64 %t165, ptr %t24
-  br label %L81
+  br label %L80
 L80:
-  %t166 = load i64, ptr %t18
-  %t167 = icmp ne i64 %t166, 0
-  br i1 %t167, label %L85, label %L86
+  %t139 = phi i64 [ %t138, %L78 ], [ 0, %L79 ]
+  %t140 = icmp ne i64 %t139, 0
+  br i1 %t140, label %L81, label %L83
+L81:
+  %t142 = sext i32 0 to i64
+  %t141 = inttoptr i64 %t142 to ptr
+  ret ptr %t141
+L84:
+  br label %L83
+L83:
+  %t143 = load i64, ptr %t24
+  %t145 = sext i32 2 to i64
+  %t144 = icmp eq i64 %t143, %t145
+  %t146 = zext i1 %t144 to i64
+  %t147 = icmp ne i64 %t146, 0
+  br i1 %t147, label %L85, label %L86
 L85:
-  %t168 = load i64, ptr %t14
-  %t169 = icmp ne i64 %t168, 0
-  br i1 %t169, label %L88, label %L89
+  %t148 = load i64, ptr %t14
+  %t149 = icmp ne i64 %t148, 0
+  br i1 %t149, label %L88, label %L89
 L88:
-  %t170 = sext i32 10 to i64
+  %t150 = sext i32 4 to i64
+  store i64 %t150, ptr %t24
   br label %L90
 L89:
-  %t171 = sext i32 9 to i64
-  br label %L90
-L90:
-  %t172 = phi i64 [ %t170, %L88 ], [ %t171, %L89 ]
-  store i64 %t172, ptr %t24
-  br label %L87
-L86:
-  %t173 = load i64, ptr %t22
-  %t174 = icmp ne i64 %t173, 0
-  br i1 %t174, label %L91, label %L92
+  %t151 = load i64, ptr %t16
+  %t152 = icmp ne i64 %t151, 0
+  br i1 %t152, label %L91, label %L93
 L91:
-  %t175 = load i64, ptr %t14
-  %t176 = icmp ne i64 %t175, 0
-  br i1 %t176, label %L94, label %L95
-L94:
-  %t177 = sext i32 6 to i64
-  br label %L96
-L95:
-  %t178 = sext i32 5 to i64
-  br label %L96
-L96:
-  %t179 = phi i64 [ %t177, %L94 ], [ %t178, %L95 ]
-  store i64 %t179, ptr %t24
-  br label %L93
-L92:
-  %t180 = load i64, ptr %t24
-  %t182 = sext i32 7 to i64
-  %t181 = icmp eq i64 %t180, %t182
-  %t183 = zext i1 %t181 to i64
-  %t184 = load i64, ptr %t26
-  %t186 = icmp eq i64 %t184, 0
-  %t185 = zext i1 %t186 to i64
-  %t188 = icmp ne i64 %t183, 0
-  %t189 = icmp ne i64 %t185, 0
-  %t190 = or i1 %t188, %t189
-  %t191 = zext i1 %t190 to i64
-  %t192 = icmp ne i64 %t191, 0
-  br i1 %t192, label %L97, label %L99
-L97:
-  %t193 = load i64, ptr %t14
-  %t194 = icmp ne i64 %t193, 0
-  br i1 %t194, label %L100, label %L102
-L100:
-  %t195 = sext i32 8 to i64
-  store i64 %t195, ptr %t24
-  br label %L102
-L102:
-  br label %L99
-L99:
+  %t153 = sext i32 3 to i64
+  store i64 %t153, ptr %t24
   br label %L93
 L93:
+  br label %L90
+L90:
+  br label %L87
+L86:
+  %t154 = load i64, ptr %t20
+  %t155 = icmp ne i64 %t154, 0
+  br i1 %t155, label %L94, label %L95
+L94:
+  %t156 = load i64, ptr %t14
+  %t157 = icmp ne i64 %t156, 0
+  br i1 %t157, label %L97, label %L98
+L97:
+  %t158 = sext i32 12 to i64
+  br label %L99
+L98:
+  %t159 = sext i32 11 to i64
+  br label %L99
+L99:
+  %t160 = phi i64 [ %t158, %L97 ], [ %t159, %L98 ]
+  store i64 %t160, ptr %t24
+  br label %L96
+L95:
+  %t161 = load i64, ptr %t18
+  %t162 = icmp ne i64 %t161, 0
+  br i1 %t162, label %L100, label %L101
+L100:
+  %t163 = load i64, ptr %t14
+  %t164 = icmp ne i64 %t163, 0
+  br i1 %t164, label %L103, label %L104
+L103:
+  %t165 = sext i32 10 to i64
+  br label %L105
+L104:
+  %t166 = sext i32 9 to i64
+  br label %L105
+L105:
+  %t167 = phi i64 [ %t165, %L103 ], [ %t166, %L104 ]
+  store i64 %t167, ptr %t24
+  br label %L102
+L101:
+  %t168 = load i64, ptr %t22
+  %t169 = icmp ne i64 %t168, 0
+  br i1 %t169, label %L106, label %L107
+L106:
+  %t170 = load i64, ptr %t14
+  %t171 = icmp ne i64 %t170, 0
+  br i1 %t171, label %L109, label %L110
+L109:
+  %t172 = sext i32 6 to i64
+  br label %L111
+L110:
+  %t173 = sext i32 5 to i64
+  br label %L111
+L111:
+  %t174 = phi i64 [ %t172, %L109 ], [ %t173, %L110 ]
+  store i64 %t174, ptr %t24
+  br label %L108
+L107:
+  %t175 = load i64, ptr %t24
+  %t177 = sext i32 7 to i64
+  %t176 = icmp eq i64 %t175, %t177
+  %t178 = zext i1 %t176 to i64
+  %t179 = icmp ne i64 %t178, 0
+  br i1 %t179, label %L112, label %L113
+L112:
+  br label %L114
+L113:
+  %t180 = load i64, ptr %t26
+  %t182 = icmp eq i64 %t180, 0
+  %t181 = zext i1 %t182 to i64
+  %t183 = icmp ne i64 %t181, 0
+  %t184 = zext i1 %t183 to i64
+  br label %L114
+L114:
+  %t185 = phi i64 [ 1, %L112 ], [ %t184, %L113 ]
+  %t186 = icmp ne i64 %t185, 0
+  br i1 %t186, label %L115, label %L117
+L115:
+  %t187 = load i64, ptr %t14
+  %t188 = icmp ne i64 %t187, 0
+  br i1 %t188, label %L118, label %L120
+L118:
+  %t189 = sext i32 8 to i64
+  store i64 %t189, ptr %t24
+  br label %L120
+L120:
+  br label %L117
+L117:
+  br label %L108
+L108:
+  br label %L102
+L102:
+  br label %L96
+L96:
   br label %L87
 L87:
-  br label %L81
-L81:
-  br label %L72
-L72:
-  %t196 = alloca ptr
-  %t197 = load i64, ptr %t24
-  %t198 = call ptr @type_new(i64 %t197)
-  store ptr %t198, ptr %t196
-  %t199 = load i64, ptr %t10
-  %t200 = load ptr, ptr %t196
-  store i64 %t199, ptr %t200
-  %t201 = load i64, ptr %t12
-  %t202 = load ptr, ptr %t196
-  store i64 %t201, ptr %t202
-  %t203 = load ptr, ptr %t196
-  ret ptr %t203
-L103:
+  %t190 = alloca ptr
+  %t191 = load i64, ptr %t24
+  %t192 = call ptr @type_new(i64 %t191)
+  store ptr %t192, ptr %t190
+  %t193 = load i64, ptr %t10
+  %t194 = load ptr, ptr %t190
+  store i64 %t193, ptr %t194
+  %t195 = load i64, ptr %t12
+  %t196 = load ptr, ptr %t190
+  store i64 %t195, ptr %t196
+  %t197 = load ptr, ptr %t190
+  ret ptr %t197
+L121:
   ret ptr null
 }
 
@@ -1617,394 +1866,424 @@ entry:
 L0:
   %t7 = call i32 @check(ptr %t0, i64 37)
   %t8 = sext i32 %t7 to i64
-  %t9 = load i64, ptr %t3
-  %t11 = sext i32 16 to i64
-  %t10 = icmp slt i64 %t9, %t11
-  %t12 = zext i1 %t10 to i64
-  %t14 = icmp ne i64 %t8, 0
-  %t15 = icmp ne i64 %t12, 0
-  %t16 = and i1 %t14, %t15
-  %t17 = zext i1 %t16 to i64
-  %t18 = icmp ne i64 %t17, 0
-  br i1 %t18, label %L1, label %L2
+  %t9 = icmp ne i64 %t8, 0
+  br i1 %t9, label %L3, label %L4
+L3:
+  %t10 = load i64, ptr %t3
+  %t12 = sext i32 16 to i64
+  %t11 = icmp slt i64 %t10, %t12
+  %t13 = zext i1 %t11 to i64
+  %t14 = icmp ne i64 %t13, 0
+  %t15 = zext i1 %t14 to i64
+  br label %L5
+L4:
+  br label %L5
+L5:
+  %t16 = phi i64 [ %t15, %L3 ], [ 0, %L4 ]
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L1, label %L2
 L1:
   call void @advance(ptr %t0)
-  %t20 = load ptr, ptr %t5
-  %t21 = load i64, ptr %t3
-  %t22 = getelementptr i8, ptr %t20, i64 %t21
-  %t23 = sext i32 0 to i64
-  store i64 %t23, ptr %t22
-  br label %L3
-L3:
-  %t24 = call i32 @check(ptr %t0, i64 32)
-  %t25 = sext i32 %t24 to i64
+  %t19 = load ptr, ptr %t5
+  %t20 = load i64, ptr %t3
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = sext i32 0 to i64
+  store i64 %t22, ptr %t21
+  br label %L6
+L6:
+  %t23 = call i32 @check(ptr %t0, i64 32)
+  %t24 = sext i32 %t23 to i64
+  %t25 = icmp ne i64 %t24, 0
+  br i1 %t25, label %L9, label %L10
+L9:
+  br label %L11
+L10:
   %t26 = call i32 @check(ptr %t0, i64 33)
   %t27 = sext i32 %t26 to i64
-  %t29 = icmp ne i64 %t25, 0
-  %t30 = icmp ne i64 %t27, 0
-  %t31 = or i1 %t29, %t30
-  %t32 = zext i1 %t31 to i64
-  %t33 = icmp ne i64 %t32, 0
-  br i1 %t33, label %L4, label %L5
-L4:
-  %t34 = call i32 @check(ptr %t0, i64 32)
-  %t35 = sext i32 %t34 to i64
-  %t36 = icmp ne i64 %t35, 0
-  br i1 %t36, label %L6, label %L8
-L6:
-  %t37 = load ptr, ptr %t5
-  %t38 = load i64, ptr %t3
-  %t39 = getelementptr i8, ptr %t37, i64 %t38
-  %t40 = sext i32 1 to i64
-  store i64 %t40, ptr %t39
-  br label %L8
-L8:
-  call void @advance(ptr %t0)
-  br label %L3
-L5:
-  %t42 = load i64, ptr %t3
-  %t43 = add i64 %t42, 1
-  store i64 %t43, ptr %t3
-  br label %L0
-L2:
-  %t44 = alloca i64
-  %t45 = load i64, ptr %t3
-  %t47 = sext i32 1 to i64
-  %t46 = sub i64 %t45, %t47
-  store i64 %t46, ptr %t44
-  br label %L9
-L9:
-  %t48 = load i64, ptr %t44
-  %t50 = sext i32 0 to i64
-  %t49 = icmp sge i64 %t48, %t50
-  %t51 = zext i1 %t49 to i64
-  %t52 = icmp ne i64 %t51, 0
-  br i1 %t52, label %L10, label %L12
-L10:
-  %t53 = alloca ptr
-  %t54 = call ptr @type_ptr(ptr %t1)
-  store ptr %t54, ptr %t53
-  %t55 = load ptr, ptr %t5
-  %t56 = load i64, ptr %t44
-  %t57 = getelementptr i32, ptr %t55, i64 %t56
-  %t58 = load i64, ptr %t57
-  %t59 = load ptr, ptr %t53
-  store i64 %t58, ptr %t59
-  %t60 = load ptr, ptr %t53
-  store ptr %t60, ptr %t1
+  %t28 = icmp ne i64 %t27, 0
+  %t29 = zext i1 %t28 to i64
   br label %L11
 L11:
-  %t61 = load i64, ptr %t44
-  %t62 = sub i64 %t61, 1
-  store i64 %t62, ptr %t44
-  br label %L9
+  %t30 = phi i64 [ 1, %L9 ], [ %t29, %L10 ]
+  %t31 = icmp ne i64 %t30, 0
+  br i1 %t31, label %L7, label %L8
+L7:
+  %t32 = call i32 @check(ptr %t0, i64 32)
+  %t33 = sext i32 %t32 to i64
+  %t34 = icmp ne i64 %t33, 0
+  br i1 %t34, label %L12, label %L14
 L12:
-  %t63 = icmp ne ptr %t2, null
-  br i1 %t63, label %L13, label %L15
-L13:
-  %t65 = sext i32 0 to i64
-  %t64 = inttoptr i64 %t65 to ptr
-  store ptr %t64, ptr %t2
+  %t35 = load ptr, ptr %t5
+  %t36 = load i64, ptr %t3
+  %t37 = getelementptr ptr, ptr %t35, i64 %t36
+  %t38 = sext i32 1 to i64
+  store i64 %t38, ptr %t37
+  br label %L14
+L14:
+  call void @advance(ptr %t0)
+  br label %L6
+L8:
+  %t40 = load i64, ptr %t3
+  %t41 = add i64 %t40, 1
+  store i64 %t41, ptr %t3
+  br label %L0
+L2:
+  %t42 = alloca i64
+  %t43 = load i64, ptr %t3
+  %t45 = sext i32 1 to i64
+  %t44 = sub i64 %t43, %t45
+  store i64 %t44, ptr %t42
   br label %L15
 L15:
-  call void @skip_gcc_extension(ptr %t0)
-  %t67 = call i32 @check(ptr %t0, i64 4)
-  %t68 = sext i32 %t67 to i64
-  %t69 = load ptr, ptr %t0
-  %t70 = call i32 @is_gcc_extension(ptr %t69)
-  %t71 = sext i32 %t70 to i64
-  %t73 = icmp eq i64 %t71, 0
-  %t72 = zext i1 %t73 to i64
-  %t75 = icmp ne i64 %t68, 0
-  %t76 = icmp ne i64 %t72, 0
-  %t77 = and i1 %t75, %t76
-  %t78 = zext i1 %t77 to i64
-  %t79 = icmp ne i64 %t78, 0
-  br i1 %t79, label %L16, label %L17
+  %t46 = load i64, ptr %t42
+  %t48 = sext i32 0 to i64
+  %t47 = icmp sge i64 %t46, %t48
+  %t49 = zext i1 %t47 to i64
+  %t50 = icmp ne i64 %t49, 0
+  br i1 %t50, label %L16, label %L18
 L16:
-  %t80 = icmp ne ptr %t2, null
-  br i1 %t80, label %L19, label %L21
+  %t51 = alloca ptr
+  %t52 = call ptr @type_ptr(ptr %t1)
+  store ptr %t52, ptr %t51
+  %t53 = load ptr, ptr %t5
+  %t54 = load i64, ptr %t42
+  %t55 = getelementptr ptr, ptr %t53, i64 %t54
+  %t56 = load ptr, ptr %t55
+  %t57 = load ptr, ptr %t51
+  store ptr %t56, ptr %t57
+  %t58 = load ptr, ptr %t51
+  store ptr %t58, ptr %t1
+  br label %L17
+L17:
+  %t59 = load i64, ptr %t42
+  %t60 = sub i64 %t59, 1
+  store i64 %t60, ptr %t42
+  br label %L15
+L18:
+  %t61 = icmp ne ptr %t2, null
+  br i1 %t61, label %L19, label %L21
 L19:
-  %t81 = load ptr, ptr %t0
-  %t82 = call ptr @strdup(ptr %t81)
-  store ptr %t82, ptr %t2
+  %t63 = sext i32 0 to i64
+  %t62 = inttoptr i64 %t63 to ptr
+  store ptr %t62, ptr %t2
   br label %L21
 L21:
-  call void @advance(ptr %t0)
-  br label %L18
-L17:
-  %t84 = call i32 @check(ptr %t0, i64 72)
-  %t85 = sext i32 %t84 to i64
-  %t86 = icmp ne i64 %t85, 0
-  br i1 %t86, label %L22, label %L24
+  call void @skip_gcc_extension(ptr %t0)
+  %t65 = call i32 @check(ptr %t0, i64 4)
+  %t66 = sext i32 %t65 to i64
+  %t67 = icmp ne i64 %t66, 0
+  br i1 %t67, label %L22, label %L23
 L22:
-  call void @advance(ptr %t0)
-  %t88 = call ptr @parse_declarator(ptr %t0, ptr %t1, ptr %t2)
-  store ptr %t88, ptr %t1
-  call void @expect(ptr %t0, i64 73)
+  %t68 = load ptr, ptr %t0
+  %t69 = call i32 @is_gcc_extension(ptr %t68)
+  %t70 = sext i32 %t69 to i64
+  %t72 = icmp eq i64 %t70, 0
+  %t71 = zext i1 %t72 to i64
+  %t73 = icmp ne i64 %t71, 0
+  %t74 = zext i1 %t73 to i64
+  br label %L24
+L23:
   br label %L24
 L24:
-  br label %L18
-L18:
-  call void @skip_gcc_extension(ptr %t0)
-  br label %L25
+  %t75 = phi i64 [ %t74, %L22 ], [ 0, %L23 ]
+  %t76 = icmp ne i64 %t75, 0
+  br i1 %t76, label %L25, label %L26
 L25:
-  br label %L26
-L26:
-  %t91 = call i32 @check(ptr %t0, i64 4)
-  %t92 = sext i32 %t91 to i64
-  %t93 = load ptr, ptr %t0
-  %t94 = call i32 @is_gcc_extension(ptr %t93)
-  %t95 = sext i32 %t94 to i64
-  %t97 = icmp ne i64 %t92, 0
-  %t98 = icmp ne i64 %t95, 0
-  %t99 = and i1 %t97, %t98
-  %t100 = zext i1 %t99 to i64
-  %t101 = icmp ne i64 %t100, 0
-  br i1 %t101, label %L29, label %L31
-L29:
-  call void @skip_gcc_extension(ptr %t0)
+  %t77 = icmp ne ptr %t2, null
+  br i1 %t77, label %L28, label %L30
+L28:
+  %t78 = load ptr, ptr %t0
+  %t79 = call ptr @strdup(ptr %t78)
+  store ptr %t79, ptr %t2
+  br label %L30
+L30:
+  call void @advance(ptr %t0)
   br label %L27
-L32:
-  br label %L31
+L26:
+  %t81 = call i32 @check(ptr %t0, i64 72)
+  %t82 = sext i32 %t81 to i64
+  %t83 = icmp ne i64 %t82, 0
+  br i1 %t83, label %L31, label %L33
 L31:
-  %t103 = call i32 @check(ptr %t0, i64 76)
-  %t104 = sext i32 %t103 to i64
-  %t105 = icmp ne i64 %t104, 0
-  br i1 %t105, label %L33, label %L34
-L33:
   call void @advance(ptr %t0)
-  %t107 = alloca i64
-  %t109 = sext i32 1 to i64
-  %t108 = sub i64 0, %t109
-  store i64 %t108, ptr %t107
-  %t110 = call i32 @check(ptr %t0, i64 77)
-  %t111 = sext i32 %t110 to i64
-  %t113 = icmp eq i64 %t111, 0
-  %t112 = zext i1 %t113 to i64
-  %t114 = icmp ne i64 %t112, 0
-  br i1 %t114, label %L36, label %L38
-L36:
-  %t115 = call i32 @check(ptr %t0, i64 0)
-  %t116 = sext i32 %t115 to i64
-  %t117 = icmp ne i64 %t116, 0
-  br i1 %t117, label %L39, label %L40
-L39:
-  %t118 = load ptr, ptr %t0
-  %t119 = call i64 @atol(ptr %t118)
-  %t120 = add i64 %t119, 0
-  store i64 %t120, ptr %t107
-  call void @advance(ptr %t0)
-  br label %L41
-L40:
-  %t122 = alloca i64
-  %t123 = sext i32 0 to i64
-  store i64 %t123, ptr %t122
-  br label %L42
-L42:
-  %t124 = call i32 @check(ptr %t0, i64 81)
-  %t125 = sext i32 %t124 to i64
-  %t127 = icmp eq i64 %t125, 0
-  %t126 = zext i1 %t127 to i64
-  %t128 = icmp ne i64 %t126, 0
-  br i1 %t128, label %L43, label %L44
-L43:
-  %t129 = call i32 @check(ptr %t0, i64 76)
-  %t130 = sext i32 %t129 to i64
-  %t131 = icmp ne i64 %t130, 0
-  br i1 %t131, label %L45, label %L47
-L45:
-  %t132 = load i64, ptr %t122
-  %t133 = add i64 %t132, 1
-  store i64 %t133, ptr %t122
-  br label %L47
-L47:
-  %t134 = call i32 @check(ptr %t0, i64 77)
-  %t135 = sext i32 %t134 to i64
-  %t136 = icmp ne i64 %t135, 0
-  br i1 %t136, label %L48, label %L50
-L48:
-  %t137 = load i64, ptr %t122
-  %t139 = sext i32 0 to i64
-  %t138 = icmp eq i64 %t137, %t139
-  %t140 = zext i1 %t138 to i64
-  %t141 = icmp ne i64 %t140, 0
-  br i1 %t141, label %L51, label %L53
-L51:
-  br label %L44
-L54:
-  br label %L53
-L53:
-  %t142 = load i64, ptr %t122
-  %t143 = sub i64 %t142, 1
-  store i64 %t143, ptr %t122
-  br label %L50
-L50:
-  call void @advance(ptr %t0)
-  br label %L42
-L44:
-  br label %L41
-L41:
-  br label %L38
-L38:
-  call void @expect(ptr %t0, i64 77)
-  %t146 = load i64, ptr %t107
-  %t147 = call ptr @type_array(ptr %t1, i64 %t146)
-  store ptr %t147, ptr %t1
-  br label %L35
-L34:
-  %t148 = call i32 @check(ptr %t0, i64 72)
-  %t149 = sext i32 %t148 to i64
-  %t150 = icmp ne i64 %t149, 0
-  br i1 %t150, label %L55, label %L56
-L55:
-  call void @advance(ptr %t0)
-  %t152 = alloca ptr
-  %t153 = call ptr @type_new(i64 17)
-  store ptr %t153, ptr %t152
-  %t154 = load ptr, ptr %t152
-  store ptr %t1, ptr %t154
-  %t155 = alloca ptr
-  %t157 = sext i32 0 to i64
-  %t156 = inttoptr i64 %t157 to ptr
-  store ptr %t156, ptr %t155
-  %t158 = alloca i64
-  %t159 = sext i32 0 to i64
-  store i64 %t159, ptr %t158
-  %t160 = alloca i64
-  %t161 = sext i32 0 to i64
-  store i64 %t161, ptr %t160
-  br label %L58
-L58:
-  %t162 = call i32 @check(ptr %t0, i64 73)
-  %t163 = sext i32 %t162 to i64
-  %t165 = icmp eq i64 %t163, 0
-  %t164 = zext i1 %t165 to i64
-  %t166 = call i32 @check(ptr %t0, i64 81)
-  %t167 = sext i32 %t166 to i64
-  %t169 = icmp eq i64 %t167, 0
-  %t168 = zext i1 %t169 to i64
-  %t171 = icmp ne i64 %t164, 0
-  %t172 = icmp ne i64 %t168, 0
-  %t173 = and i1 %t171, %t172
-  %t174 = zext i1 %t173 to i64
-  %t175 = icmp ne i64 %t174, 0
-  br i1 %t175, label %L59, label %L60
-L59:
-  %t176 = call i32 @check(ptr %t0, i64 80)
-  %t177 = sext i32 %t176 to i64
-  %t178 = icmp ne i64 %t177, 0
-  br i1 %t178, label %L61, label %L63
-L61:
-  %t179 = sext i32 1 to i64
-  store i64 %t179, ptr %t160
-  call void @advance(ptr %t0)
-  br label %L60
-L64:
-  br label %L63
-L63:
-  %t181 = alloca i64
-  %t182 = sext i32 0 to i64
-  store i64 %t182, ptr %t181
-  %t183 = alloca i64
-  %t184 = sext i32 0 to i64
-  store i64 %t184, ptr %t183
-  %t185 = alloca i64
-  %t186 = sext i32 0 to i64
-  store i64 %t186, ptr %t185
-  %t187 = alloca ptr
-  %t188 = call ptr @parse_type_specifier(ptr %t0, ptr %t181, ptr %t183, ptr %t185)
-  store ptr %t188, ptr %t187
-  %t189 = load ptr, ptr %t187
-  %t191 = ptrtoint ptr %t189 to i64
-  %t192 = icmp eq i64 %t191, 0
-  %t190 = zext i1 %t192 to i64
-  %t193 = icmp ne i64 %t190, 0
-  br i1 %t193, label %L65, label %L67
-L65:
-  br label %L60
-L68:
-  br label %L67
-L67:
-  %t194 = alloca ptr
-  %t196 = sext i32 0 to i64
-  %t195 = inttoptr i64 %t196 to ptr
-  store ptr %t195, ptr %t194
-  %t197 = load ptr, ptr %t187
-  %t198 = call ptr @parse_declarator(ptr %t0, ptr %t197, ptr %t194)
-  store ptr %t198, ptr %t187
-  %t199 = load ptr, ptr %t155
-  %t200 = load i64, ptr %t158
-  %t202 = sext i32 1 to i64
-  %t201 = add i64 %t200, %t202
-  %t204 = sext i32 8 to i64
-  %t203 = mul i64 %t201, %t204
-  %t205 = call ptr @realloc(ptr %t199, i64 %t203)
-  store ptr %t205, ptr %t155
-  %t206 = load ptr, ptr %t155
-  %t208 = ptrtoint ptr %t206 to i64
-  %t209 = icmp eq i64 %t208, 0
-  %t207 = zext i1 %t209 to i64
-  %t210 = icmp ne i64 %t207, 0
-  br i1 %t210, label %L69, label %L71
-L69:
-  %t211 = getelementptr [8 x i8], ptr @.str31, i64 0, i64 0
-  call void @perror(ptr %t211)
-  call void @exit(i64 1)
-  br label %L71
-L71:
-  %t214 = load ptr, ptr %t194
-  %t215 = load ptr, ptr %t155
-  %t216 = load i64, ptr %t158
-  %t217 = getelementptr i8, ptr %t215, i64 %t216
-  store ptr %t214, ptr %t217
-  %t218 = load ptr, ptr %t187
-  %t219 = load ptr, ptr %t155
-  %t220 = load i64, ptr %t158
-  %t221 = getelementptr i8, ptr %t219, i64 %t220
-  store ptr %t218, ptr %t221
-  %t222 = load i64, ptr %t158
-  %t223 = add i64 %t222, 1
-  store i64 %t223, ptr %t158
-  %t224 = call i32 @match(ptr %t0, i64 79)
-  %t225 = sext i32 %t224 to i64
-  %t227 = icmp eq i64 %t225, 0
-  %t226 = zext i1 %t227 to i64
-  %t228 = icmp ne i64 %t226, 0
-  br i1 %t228, label %L72, label %L74
-L72:
-  br label %L60
-L75:
-  br label %L74
-L74:
-  br label %L58
-L60:
+  %t85 = call ptr @parse_declarator(ptr %t0, ptr %t1, ptr %t2)
+  store ptr %t85, ptr %t1
   call void @expect(ptr %t0, i64 73)
-  %t230 = load ptr, ptr %t155
-  %t231 = load ptr, ptr %t152
-  store ptr %t230, ptr %t231
-  %t232 = load i64, ptr %t158
-  %t233 = load ptr, ptr %t152
-  store i64 %t232, ptr %t233
-  %t234 = load i64, ptr %t160
-  %t235 = load ptr, ptr %t152
-  store i64 %t234, ptr %t235
-  %t236 = load ptr, ptr %t152
-  store ptr %t236, ptr %t1
-  br label %L57
-L56:
-  br label %L28
-L76:
-  br label %L57
-L57:
-  br label %L35
-L35:
+  br label %L33
+L33:
   br label %L27
 L27:
-  br label %L25
-L28:
+  call void @skip_gcc_extension(ptr %t0)
+  br label %L34
+L34:
+  br label %L35
+L35:
+  %t88 = call i32 @check(ptr %t0, i64 4)
+  %t89 = sext i32 %t88 to i64
+  %t90 = icmp ne i64 %t89, 0
+  br i1 %t90, label %L38, label %L39
+L38:
+  %t91 = load ptr, ptr %t0
+  %t92 = call i32 @is_gcc_extension(ptr %t91)
+  %t93 = sext i32 %t92 to i64
+  %t94 = icmp ne i64 %t93, 0
+  %t95 = zext i1 %t94 to i64
+  br label %L40
+L39:
+  br label %L40
+L40:
+  %t96 = phi i64 [ %t95, %L38 ], [ 0, %L39 ]
+  %t97 = icmp ne i64 %t96, 0
+  br i1 %t97, label %L41, label %L43
+L41:
+  call void @skip_gcc_extension(ptr %t0)
+  br label %L36
+L44:
+  br label %L43
+L43:
+  %t99 = call i32 @check(ptr %t0, i64 76)
+  %t100 = sext i32 %t99 to i64
+  %t101 = icmp ne i64 %t100, 0
+  br i1 %t101, label %L45, label %L46
+L45:
+  call void @advance(ptr %t0)
+  %t103 = alloca i64
+  %t105 = sext i32 1 to i64
+  %t104 = sub i64 0, %t105
+  store i64 %t104, ptr %t103
+  %t106 = call i32 @check(ptr %t0, i64 77)
+  %t107 = sext i32 %t106 to i64
+  %t109 = icmp eq i64 %t107, 0
+  %t108 = zext i1 %t109 to i64
+  %t110 = icmp ne i64 %t108, 0
+  br i1 %t110, label %L48, label %L50
+L48:
+  %t111 = call i32 @check(ptr %t0, i64 0)
+  %t112 = sext i32 %t111 to i64
+  %t113 = icmp ne i64 %t112, 0
+  br i1 %t113, label %L51, label %L52
+L51:
+  %t114 = load ptr, ptr %t0
+  %t115 = call i64 @atol(ptr %t114)
+  %t116 = add i64 %t115, 0
+  store i64 %t116, ptr %t103
+  call void @advance(ptr %t0)
+  br label %L53
+L52:
+  %t118 = alloca i64
+  %t119 = sext i32 0 to i64
+  store i64 %t119, ptr %t118
+  br label %L54
+L54:
+  %t120 = call i32 @check(ptr %t0, i64 81)
+  %t121 = sext i32 %t120 to i64
+  %t123 = icmp eq i64 %t121, 0
+  %t122 = zext i1 %t123 to i64
+  %t124 = icmp ne i64 %t122, 0
+  br i1 %t124, label %L55, label %L56
+L55:
+  %t125 = call i32 @check(ptr %t0, i64 76)
+  %t126 = sext i32 %t125 to i64
+  %t127 = icmp ne i64 %t126, 0
+  br i1 %t127, label %L57, label %L59
+L57:
+  %t128 = load i64, ptr %t118
+  %t129 = add i64 %t128, 1
+  store i64 %t129, ptr %t118
+  br label %L59
+L59:
+  %t130 = call i32 @check(ptr %t0, i64 77)
+  %t131 = sext i32 %t130 to i64
+  %t132 = icmp ne i64 %t131, 0
+  br i1 %t132, label %L60, label %L62
+L60:
+  %t133 = load i64, ptr %t118
+  %t135 = sext i32 0 to i64
+  %t134 = icmp eq i64 %t133, %t135
+  %t136 = zext i1 %t134 to i64
+  %t137 = icmp ne i64 %t136, 0
+  br i1 %t137, label %L63, label %L65
+L63:
+  br label %L56
+L66:
+  br label %L65
+L65:
+  %t138 = load i64, ptr %t118
+  %t139 = sub i64 %t138, 1
+  store i64 %t139, ptr %t118
+  br label %L62
+L62:
+  call void @advance(ptr %t0)
+  br label %L54
+L56:
+  br label %L53
+L53:
+  br label %L50
+L50:
+  call void @expect(ptr %t0, i64 77)
+  %t142 = load i64, ptr %t103
+  %t143 = call ptr @type_array(ptr %t1, i64 %t142)
+  store ptr %t143, ptr %t1
+  br label %L47
+L46:
+  %t144 = call i32 @check(ptr %t0, i64 72)
+  %t145 = sext i32 %t144 to i64
+  %t146 = icmp ne i64 %t145, 0
+  br i1 %t146, label %L67, label %L68
+L67:
+  call void @advance(ptr %t0)
+  %t148 = alloca ptr
+  %t149 = call ptr @type_new(i64 17)
+  store ptr %t149, ptr %t148
+  %t150 = load ptr, ptr %t148
+  store ptr %t1, ptr %t150
+  %t151 = alloca ptr
+  %t153 = sext i32 0 to i64
+  %t152 = inttoptr i64 %t153 to ptr
+  store ptr %t152, ptr %t151
+  %t154 = alloca i64
+  %t155 = sext i32 0 to i64
+  store i64 %t155, ptr %t154
+  %t156 = alloca i64
+  %t157 = sext i32 0 to i64
+  store i64 %t157, ptr %t156
+  br label %L70
+L70:
+  %t158 = call i32 @check(ptr %t0, i64 73)
+  %t159 = sext i32 %t158 to i64
+  %t161 = icmp eq i64 %t159, 0
+  %t160 = zext i1 %t161 to i64
+  %t162 = icmp ne i64 %t160, 0
+  br i1 %t162, label %L73, label %L74
+L73:
+  %t163 = call i32 @check(ptr %t0, i64 81)
+  %t164 = sext i32 %t163 to i64
+  %t166 = icmp eq i64 %t164, 0
+  %t165 = zext i1 %t166 to i64
+  %t167 = icmp ne i64 %t165, 0
+  %t168 = zext i1 %t167 to i64
+  br label %L75
+L74:
+  br label %L75
+L75:
+  %t169 = phi i64 [ %t168, %L73 ], [ 0, %L74 ]
+  %t170 = icmp ne i64 %t169, 0
+  br i1 %t170, label %L71, label %L72
+L71:
+  %t171 = call i32 @check(ptr %t0, i64 80)
+  %t172 = sext i32 %t171 to i64
+  %t173 = icmp ne i64 %t172, 0
+  br i1 %t173, label %L76, label %L78
+L76:
+  %t174 = sext i32 1 to i64
+  store i64 %t174, ptr %t156
+  call void @advance(ptr %t0)
+  br label %L72
+L79:
+  br label %L78
+L78:
+  %t176 = alloca i64
+  %t177 = sext i32 0 to i64
+  store i64 %t177, ptr %t176
+  %t178 = alloca i64
+  %t179 = sext i32 0 to i64
+  store i64 %t179, ptr %t178
+  %t180 = alloca i64
+  %t181 = sext i32 0 to i64
+  store i64 %t181, ptr %t180
+  %t182 = alloca ptr
+  %t183 = call ptr @parse_type_specifier(ptr %t0, ptr %t176, ptr %t178, ptr %t180)
+  store ptr %t183, ptr %t182
+  %t184 = load ptr, ptr %t182
+  %t186 = ptrtoint ptr %t184 to i64
+  %t187 = icmp eq i64 %t186, 0
+  %t185 = zext i1 %t187 to i64
+  %t188 = icmp ne i64 %t185, 0
+  br i1 %t188, label %L80, label %L82
+L80:
+  br label %L72
+L83:
+  br label %L82
+L82:
+  %t189 = alloca ptr
+  %t191 = sext i32 0 to i64
+  %t190 = inttoptr i64 %t191 to ptr
+  store ptr %t190, ptr %t189
+  %t192 = load ptr, ptr %t182
+  %t193 = call ptr @parse_declarator(ptr %t0, ptr %t192, ptr %t189)
+  store ptr %t193, ptr %t182
+  %t194 = load ptr, ptr %t151
+  %t195 = load i64, ptr %t154
+  %t197 = sext i32 1 to i64
+  %t196 = add i64 %t195, %t197
+  %t199 = sext i32 0 to i64
+  %t198 = mul i64 %t196, %t199
+  %t200 = call ptr @realloc(ptr %t194, i64 %t198)
+  store ptr %t200, ptr %t151
+  %t201 = load ptr, ptr %t151
+  %t203 = ptrtoint ptr %t201 to i64
+  %t204 = icmp eq i64 %t203, 0
+  %t202 = zext i1 %t204 to i64
+  %t205 = icmp ne i64 %t202, 0
+  br i1 %t205, label %L84, label %L86
+L84:
+  %t206 = getelementptr [8 x i8], ptr @.str31, i64 0, i64 0
+  call void @perror(ptr %t206)
+  call void @exit(i64 1)
+  br label %L86
+L86:
+  %t209 = load ptr, ptr %t189
+  %t210 = load ptr, ptr %t151
+  %t211 = load i64, ptr %t154
+  %t212 = getelementptr ptr, ptr %t210, i64 %t211
+  store ptr %t209, ptr %t212
+  %t213 = load ptr, ptr %t182
+  %t214 = load ptr, ptr %t151
+  %t215 = load i64, ptr %t154
+  %t216 = getelementptr ptr, ptr %t214, i64 %t215
+  store ptr %t213, ptr %t216
+  %t217 = load i64, ptr %t154
+  %t218 = add i64 %t217, 1
+  store i64 %t218, ptr %t154
+  %t219 = call i32 @match(ptr %t0, i64 79)
+  %t220 = sext i32 %t219 to i64
+  %t222 = icmp eq i64 %t220, 0
+  %t221 = zext i1 %t222 to i64
+  %t223 = icmp ne i64 %t221, 0
+  br i1 %t223, label %L87, label %L89
+L87:
+  br label %L72
+L90:
+  br label %L89
+L89:
+  br label %L70
+L72:
+  call void @expect(ptr %t0, i64 73)
+  %t225 = load ptr, ptr %t151
+  %t226 = load ptr, ptr %t148
+  store ptr %t225, ptr %t226
+  %t227 = load i64, ptr %t154
+  %t228 = load ptr, ptr %t148
+  store i64 %t227, ptr %t228
+  %t229 = load i64, ptr %t156
+  %t230 = load ptr, ptr %t148
+  store i64 %t229, ptr %t230
+  %t231 = load ptr, ptr %t148
+  store ptr %t231, ptr %t1
+  br label %L69
+L68:
+  br label %L37
+L91:
+  br label %L69
+L69:
+  br label %L47
+L47:
+  br label %L36
+L36:
+  br label %L34
+L37:
   ret ptr %t1
-L77:
+L92:
   ret ptr null
 }
 
@@ -2069,397 +2348,406 @@ L8:
   store ptr %t36, ptr %t35
   %t37 = load ptr, ptr %t35
   %t38 = sext i32 0 to i64
-  %t39 = getelementptr i32, ptr %t37, i64 %t38
-  %t40 = load i64, ptr %t39
-  %t42 = sext i32 39 to i64
-  %t41 = icmp eq i64 %t40, %t42
-  %t43 = zext i1 %t41 to i64
-  %t44 = load ptr, ptr %t35
-  %t45 = sext i32 1 to i64
-  %t46 = getelementptr i32, ptr %t44, i64 %t45
-  %t47 = load i64, ptr %t46
-  %t49 = sext i32 92 to i64
-  %t48 = icmp eq i64 %t47, %t49
-  %t50 = zext i1 %t48 to i64
-  %t52 = icmp ne i64 %t43, 0
-  %t53 = icmp ne i64 %t50, 0
-  %t54 = and i1 %t52, %t53
-  %t55 = zext i1 %t54 to i64
-  %t56 = icmp ne i64 %t55, 0
-  br i1 %t56, label %L11, label %L12
+  %t39 = getelementptr ptr, ptr %t37, i64 %t38
+  %t40 = load ptr, ptr %t39
+  %t42 = ptrtoint ptr %t40 to i64
+  %t43 = sext i32 39 to i64
+  %t41 = icmp eq i64 %t42, %t43
+  %t44 = zext i1 %t41 to i64
+  %t45 = icmp ne i64 %t44, 0
+  br i1 %t45, label %L11, label %L12
 L11:
-  %t57 = load ptr, ptr %t35
-  %t58 = sext i32 2 to i64
-  %t59 = getelementptr i32, ptr %t57, i64 %t58
-  %t60 = load i64, ptr %t59
-  %t61 = add i64 %t60, 0
-  switch i64 %t61, label %L19 [
-    i64 110, label %L15
-    i64 116, label %L16
-    i64 114, label %L17
-    i64 48, label %L18
-  ]
-L15:
-  %t62 = load ptr, ptr %t32
-  %t63 = sext i32 10 to i64
-  store i64 %t63, ptr %t62
-  br label %L14
-L20:
-  br label %L16
-L16:
-  %t64 = load ptr, ptr %t32
-  %t65 = sext i32 9 to i64
-  store i64 %t65, ptr %t64
-  br label %L14
-L21:
-  br label %L17
-L17:
-  %t66 = load ptr, ptr %t32
-  %t67 = sext i32 13 to i64
-  store i64 %t67, ptr %t66
-  br label %L14
-L22:
-  br label %L18
-L18:
-  %t68 = load ptr, ptr %t32
-  %t69 = sext i32 0 to i64
-  store i64 %t69, ptr %t68
-  br label %L14
-L23:
-  br label %L14
-L19:
-  %t70 = load ptr, ptr %t35
-  %t71 = sext i32 2 to i64
-  %t72 = getelementptr i32, ptr %t70, i64 %t71
-  %t73 = load i64, ptr %t72
-  %t74 = load ptr, ptr %t32
-  store i64 %t73, ptr %t74
-  br label %L14
-L24:
-  br label %L14
-L14:
+  %t46 = load ptr, ptr %t35
+  %t47 = sext i32 1 to i64
+  %t48 = getelementptr ptr, ptr %t46, i64 %t47
+  %t49 = load ptr, ptr %t48
+  %t51 = ptrtoint ptr %t49 to i64
+  %t52 = sext i32 92 to i64
+  %t50 = icmp eq i64 %t51, %t52
+  %t53 = zext i1 %t50 to i64
+  %t54 = icmp ne i64 %t53, 0
+  %t55 = zext i1 %t54 to i64
   br label %L13
 L12:
-  %t75 = load ptr, ptr %t35
-  %t76 = sext i32 1 to i64
-  %t77 = getelementptr i32, ptr %t75, i64 %t76
-  %t78 = load i64, ptr %t77
-  %t79 = add i64 %t78, 0
-  %t80 = load ptr, ptr %t32
-  store i64 %t79, ptr %t80
   br label %L13
 L13:
-  call void @advance(ptr %t0)
-  %t82 = load ptr, ptr %t32
-  ret ptr %t82
+  %t56 = phi i64 [ %t55, %L11 ], [ 0, %L12 ]
+  %t57 = icmp ne i64 %t56, 0
+  br i1 %t57, label %L14, label %L15
+L14:
+  %t58 = load ptr, ptr %t35
+  %t59 = sext i32 2 to i64
+  %t60 = getelementptr ptr, ptr %t58, i64 %t59
+  %t61 = load ptr, ptr %t60
+  %t62 = ptrtoint ptr %t61 to i64
+  %t63 = add i64 %t62, 0
+  switch i64 %t63, label %L22 [
+    i64 110, label %L18
+    i64 116, label %L19
+    i64 114, label %L20
+    i64 48, label %L21
+  ]
+L18:
+  %t64 = load ptr, ptr %t32
+  %t65 = sext i32 10 to i64
+  store i64 %t65, ptr %t64
+  br label %L17
+L23:
+  br label %L19
+L19:
+  %t66 = load ptr, ptr %t32
+  %t67 = sext i32 9 to i64
+  store i64 %t67, ptr %t66
+  br label %L17
+L24:
+  br label %L20
+L20:
+  %t68 = load ptr, ptr %t32
+  %t69 = sext i32 13 to i64
+  store i64 %t69, ptr %t68
+  br label %L17
 L25:
+  br label %L21
+L21:
+  %t70 = load ptr, ptr %t32
+  %t71 = sext i32 0 to i64
+  store i64 %t71, ptr %t70
+  br label %L17
+L26:
+  br label %L17
+L22:
+  %t72 = load ptr, ptr %t35
+  %t73 = sext i32 2 to i64
+  %t74 = getelementptr ptr, ptr %t72, i64 %t73
+  %t75 = load ptr, ptr %t74
+  %t76 = load ptr, ptr %t32
+  store ptr %t75, ptr %t76
+  br label %L17
+L27:
+  br label %L17
+L17:
+  br label %L16
+L15:
+  %t77 = load ptr, ptr %t35
+  %t78 = sext i32 1 to i64
+  %t79 = getelementptr ptr, ptr %t77, i64 %t78
+  %t80 = load ptr, ptr %t79
+  %t81 = ptrtoint ptr %t80 to i64
+  %t82 = load ptr, ptr %t32
+  store i64 %t81, ptr %t82
+  br label %L16
+L16:
+  call void @advance(ptr %t0)
+  %t84 = load ptr, ptr %t32
+  ret ptr %t84
+L28:
   br label %L10
 L10:
-  %t83 = call i32 @check(ptr %t0, i64 3)
-  %t84 = sext i32 %t83 to i64
-  %t85 = icmp ne i64 %t84, 0
-  br i1 %t85, label %L26, label %L28
-L26:
-  %t86 = alloca ptr
-  %t87 = load i64, ptr %t1
-  %t88 = call ptr @node_new(i64 22, i64 %t87)
-  store ptr %t88, ptr %t86
-  %t89 = alloca i64
-  %t90 = load ptr, ptr %t0
-  %t91 = call i64 @strlen(ptr %t90)
-  store i64 %t91, ptr %t89
-  %t92 = alloca ptr
-  %t93 = load i64, ptr %t89
-  %t95 = sext i32 1 to i64
-  %t94 = add i64 %t93, %t95
-  %t96 = call ptr @malloc(i64 %t94)
-  store ptr %t96, ptr %t92
-  %t97 = load ptr, ptr %t92
-  %t98 = load ptr, ptr %t0
-  %t99 = load i64, ptr %t89
-  %t101 = sext i32 1 to i64
-  %t100 = sub i64 %t99, %t101
-  %t102 = call ptr @memcpy(ptr %t97, ptr %t98, i64 %t100)
-  %t103 = load ptr, ptr %t92
-  %t104 = load i64, ptr %t89
-  %t106 = sext i32 1 to i64
-  %t105 = sub i64 %t104, %t106
-  %t107 = getelementptr i8, ptr %t103, i64 %t105
-  %t108 = sext i32 0 to i64
-  store i64 %t108, ptr %t107
-  call void @advance(ptr %t0)
-  br label %L29
+  %t85 = call i32 @check(ptr %t0, i64 3)
+  %t86 = sext i32 %t85 to i64
+  %t87 = icmp ne i64 %t86, 0
+  br i1 %t87, label %L29, label %L31
 L29:
-  %t110 = call i32 @check(ptr %t0, i64 3)
-  %t111 = sext i32 %t110 to i64
-  %t112 = icmp ne i64 %t111, 0
-  br i1 %t112, label %L30, label %L31
-L30:
-  %t113 = alloca ptr
-  %t114 = load ptr, ptr %t0
-  %t116 = ptrtoint ptr %t114 to i64
-  %t117 = sext i32 1 to i64
-  %t118 = inttoptr i64 %t116 to ptr
-  %t115 = getelementptr i8, ptr %t118, i64 %t117
-  store ptr %t115, ptr %t113
-  %t119 = alloca i64
-  %t120 = load ptr, ptr %t113
-  %t121 = call i64 @strlen(ptr %t120)
-  store i64 %t121, ptr %t119
-  %t122 = alloca i64
-  %t123 = load ptr, ptr %t92
-  %t124 = call i64 @strlen(ptr %t123)
-  store i64 %t124, ptr %t122
-  %t125 = load ptr, ptr %t92
-  %t126 = load i64, ptr %t122
-  %t127 = load i64, ptr %t119
-  %t128 = add i64 %t126, %t127
-  %t130 = sext i32 1 to i64
-  %t129 = add i64 %t128, %t130
-  %t131 = call ptr @realloc(ptr %t125, i64 %t129)
-  store ptr %t131, ptr %t92
-  %t132 = load ptr, ptr %t92
-  %t133 = load i64, ptr %t122
-  %t135 = ptrtoint ptr %t132 to i64
-  %t136 = inttoptr i64 %t135 to ptr
-  %t134 = getelementptr i8, ptr %t136, i64 %t133
-  %t137 = load ptr, ptr %t113
-  %t138 = load i64, ptr %t119
-  %t139 = call ptr @memcpy(ptr %t134, ptr %t137, i64 %t138)
-  %t140 = load ptr, ptr %t92
-  %t141 = load i64, ptr %t122
-  %t142 = load i64, ptr %t119
-  %t143 = add i64 %t141, %t142
-  %t144 = getelementptr i8, ptr %t140, i64 %t143
-  %t145 = sext i32 0 to i64
-  store i64 %t145, ptr %t144
+  %t88 = alloca ptr
+  %t89 = load i64, ptr %t1
+  %t90 = call ptr @node_new(i64 22, i64 %t89)
+  store ptr %t90, ptr %t88
+  %t91 = alloca i64
+  %t92 = load ptr, ptr %t0
+  %t93 = call i64 @strlen(ptr %t92)
+  store i64 %t93, ptr %t91
+  %t94 = alloca ptr
+  %t95 = load i64, ptr %t91
+  %t97 = sext i32 1 to i64
+  %t96 = add i64 %t95, %t97
+  %t98 = call ptr @malloc(i64 %t96)
+  store ptr %t98, ptr %t94
+  %t99 = load ptr, ptr %t94
+  %t100 = load ptr, ptr %t0
+  %t101 = load i64, ptr %t91
+  %t103 = sext i32 1 to i64
+  %t102 = sub i64 %t101, %t103
+  %t104 = call ptr @memcpy(ptr %t99, ptr %t100, i64 %t102)
+  %t105 = load ptr, ptr %t94
+  %t106 = load i64, ptr %t91
+  %t108 = sext i32 1 to i64
+  %t107 = sub i64 %t106, %t108
+  %t109 = getelementptr ptr, ptr %t105, i64 %t107
+  %t110 = sext i32 0 to i64
+  store i64 %t110, ptr %t109
   call void @advance(ptr %t0)
-  br label %L29
-L31:
-  %t147 = alloca i64
-  %t148 = load ptr, ptr %t92
-  %t149 = call i64 @strlen(ptr %t148)
-  store i64 %t149, ptr %t147
-  %t150 = load ptr, ptr %t92
-  %t151 = load i64, ptr %t147
-  %t153 = sext i32 2 to i64
-  %t152 = add i64 %t151, %t153
-  %t154 = call ptr @realloc(ptr %t150, i64 %t152)
-  store ptr %t154, ptr %t92
-  %t155 = load ptr, ptr %t92
-  %t156 = load i64, ptr %t147
-  %t157 = getelementptr i8, ptr %t155, i64 %t156
-  %t158 = sext i32 34 to i64
-  store i64 %t158, ptr %t157
-  %t159 = load ptr, ptr %t92
-  %t160 = load i64, ptr %t147
-  %t162 = sext i32 1 to i64
-  %t161 = add i64 %t160, %t162
-  %t163 = getelementptr i8, ptr %t159, i64 %t161
-  %t164 = sext i32 0 to i64
-  store i64 %t164, ptr %t163
-  %t165 = load ptr, ptr %t92
-  %t166 = load ptr, ptr %t86
-  store ptr %t165, ptr %t166
-  %t167 = load ptr, ptr %t86
-  ret ptr %t167
+  br label %L32
 L32:
-  br label %L28
-L28:
-  %t168 = call i32 @check(ptr %t0, i64 4)
-  %t169 = sext i32 %t168 to i64
-  %t170 = icmp ne i64 %t169, 0
-  br i1 %t170, label %L33, label %L35
+  %t112 = call i32 @check(ptr %t0, i64 3)
+  %t113 = sext i32 %t112 to i64
+  %t114 = icmp ne i64 %t113, 0
+  br i1 %t114, label %L33, label %L34
 L33:
-  %t171 = alloca i64
-  %t172 = load ptr, ptr %t0
-  %t173 = call i32 @lookup_enum_const(ptr %t0, ptr %t172, ptr %t171)
-  %t174 = sext i32 %t173 to i64
-  %t175 = icmp ne i64 %t174, 0
-  br i1 %t175, label %L36, label %L38
-L36:
-  %t176 = alloca ptr
-  %t177 = load i64, ptr %t1
-  %t178 = call ptr @node_new(i64 19, i64 %t177)
-  store ptr %t178, ptr %t176
-  %t179 = load i64, ptr %t171
-  %t180 = load ptr, ptr %t176
-  store i64 %t179, ptr %t180
+  %t115 = alloca ptr
+  %t116 = load ptr, ptr %t0
+  %t118 = ptrtoint ptr %t116 to i64
+  %t119 = sext i32 1 to i64
+  %t120 = inttoptr i64 %t118 to ptr
+  %t117 = getelementptr i8, ptr %t120, i64 %t119
+  store ptr %t117, ptr %t115
+  %t121 = alloca i64
+  %t122 = load ptr, ptr %t115
+  %t123 = call i64 @strlen(ptr %t122)
+  store i64 %t123, ptr %t121
+  %t124 = alloca i64
+  %t125 = load ptr, ptr %t94
+  %t126 = call i64 @strlen(ptr %t125)
+  store i64 %t126, ptr %t124
+  %t127 = load ptr, ptr %t94
+  %t128 = load i64, ptr %t124
+  %t129 = load i64, ptr %t121
+  %t130 = add i64 %t128, %t129
+  %t132 = sext i32 1 to i64
+  %t131 = add i64 %t130, %t132
+  %t133 = call ptr @realloc(ptr %t127, i64 %t131)
+  store ptr %t133, ptr %t94
+  %t134 = load ptr, ptr %t94
+  %t135 = load i64, ptr %t124
+  %t137 = ptrtoint ptr %t134 to i64
+  %t138 = inttoptr i64 %t137 to ptr
+  %t136 = getelementptr i8, ptr %t138, i64 %t135
+  %t139 = load ptr, ptr %t115
+  %t140 = load i64, ptr %t121
+  %t141 = call ptr @memcpy(ptr %t136, ptr %t139, i64 %t140)
+  %t142 = load ptr, ptr %t94
+  %t143 = load i64, ptr %t124
+  %t144 = load i64, ptr %t121
+  %t145 = add i64 %t143, %t144
+  %t146 = getelementptr ptr, ptr %t142, i64 %t145
+  %t147 = sext i32 0 to i64
+  store i64 %t147, ptr %t146
   call void @advance(ptr %t0)
-  %t182 = load ptr, ptr %t176
-  ret ptr %t182
+  br label %L32
+L34:
+  %t149 = alloca i64
+  %t150 = load ptr, ptr %t94
+  %t151 = call i64 @strlen(ptr %t150)
+  store i64 %t151, ptr %t149
+  %t152 = load ptr, ptr %t94
+  %t153 = load i64, ptr %t149
+  %t155 = sext i32 2 to i64
+  %t154 = add i64 %t153, %t155
+  %t156 = call ptr @realloc(ptr %t152, i64 %t154)
+  store ptr %t156, ptr %t94
+  %t157 = load ptr, ptr %t94
+  %t158 = load i64, ptr %t149
+  %t159 = getelementptr ptr, ptr %t157, i64 %t158
+  %t160 = sext i32 34 to i64
+  store i64 %t160, ptr %t159
+  %t161 = load ptr, ptr %t94
+  %t162 = load i64, ptr %t149
+  %t164 = sext i32 1 to i64
+  %t163 = add i64 %t162, %t164
+  %t165 = getelementptr ptr, ptr %t161, i64 %t163
+  %t166 = sext i32 0 to i64
+  store i64 %t166, ptr %t165
+  %t167 = load ptr, ptr %t94
+  %t168 = load ptr, ptr %t88
+  store ptr %t167, ptr %t168
+  %t169 = load ptr, ptr %t88
+  ret ptr %t169
+L35:
+  br label %L31
+L31:
+  %t170 = call i32 @check(ptr %t0, i64 4)
+  %t171 = sext i32 %t170 to i64
+  %t172 = icmp ne i64 %t171, 0
+  br i1 %t172, label %L36, label %L38
+L36:
+  %t173 = alloca i64
+  %t174 = load ptr, ptr %t0
+  %t175 = call i32 @lookup_enum_const(ptr %t0, ptr %t174, ptr %t173)
+  %t176 = sext i32 %t175 to i64
+  %t177 = icmp ne i64 %t176, 0
+  br i1 %t177, label %L39, label %L41
 L39:
+  %t178 = alloca ptr
+  %t179 = load i64, ptr %t1
+  %t180 = call ptr @node_new(i64 19, i64 %t179)
+  store ptr %t180, ptr %t178
+  %t181 = load i64, ptr %t173
+  %t182 = load ptr, ptr %t178
+  store i64 %t181, ptr %t182
+  call void @advance(ptr %t0)
+  %t184 = load ptr, ptr %t178
+  ret ptr %t184
+L42:
+  br label %L41
+L41:
+  %t185 = alloca ptr
+  %t186 = load i64, ptr %t1
+  %t187 = call ptr @node_new(i64 23, i64 %t186)
+  store ptr %t187, ptr %t185
+  %t188 = load ptr, ptr %t0
+  %t189 = call ptr @strdup(ptr %t188)
+  %t190 = load ptr, ptr %t185
+  store ptr %t189, ptr %t190
+  call void @advance(ptr %t0)
+  %t192 = load ptr, ptr %t185
+  ret ptr %t192
+L43:
   br label %L38
 L38:
-  %t183 = alloca ptr
-  %t184 = load i64, ptr %t1
-  %t185 = call ptr @node_new(i64 23, i64 %t184)
-  store ptr %t185, ptr %t183
-  %t186 = load ptr, ptr %t0
-  %t187 = call ptr @strdup(ptr %t186)
-  %t188 = load ptr, ptr %t183
-  store ptr %t187, ptr %t188
-  call void @advance(ptr %t0)
-  %t190 = load ptr, ptr %t183
-  ret ptr %t190
-L40:
-  br label %L35
-L35:
-  %t191 = call i32 @match(ptr %t0, i64 72)
-  %t192 = sext i32 %t191 to i64
-  %t193 = icmp ne i64 %t192, 0
-  br i1 %t193, label %L41, label %L43
-L41:
-  %t194 = call i32 @is_type_start(ptr %t0)
-  %t195 = sext i32 %t194 to i64
-  %t196 = icmp ne i64 %t195, 0
-  br i1 %t196, label %L44, label %L46
+  %t193 = call i32 @match(ptr %t0, i64 72)
+  %t194 = sext i32 %t193 to i64
+  %t195 = icmp ne i64 %t194, 0
+  br i1 %t195, label %L44, label %L46
 L44:
-  %t197 = alloca i64
-  %t198 = sext i32 0 to i64
-  store i64 %t198, ptr %t197
+  %t196 = call i32 @is_type_start(ptr %t0)
+  %t197 = sext i32 %t196 to i64
+  %t198 = icmp ne i64 %t197, 0
+  br i1 %t198, label %L47, label %L49
+L47:
   %t199 = alloca i64
   %t200 = sext i32 0 to i64
   store i64 %t200, ptr %t199
   %t201 = alloca i64
   %t202 = sext i32 0 to i64
   store i64 %t202, ptr %t201
-  %t203 = alloca ptr
-  %t204 = call ptr @parse_type_specifier(ptr %t0, ptr %t197, ptr %t199, ptr %t201)
-  store ptr %t204, ptr %t203
-  %t205 = load ptr, ptr %t203
-  %t206 = icmp ne ptr %t205, null
-  br i1 %t206, label %L47, label %L49
-L47:
-  %t207 = alloca ptr
-  %t209 = sext i32 0 to i64
-  %t208 = inttoptr i64 %t209 to ptr
-  store ptr %t208, ptr %t207
-  %t210 = load ptr, ptr %t203
-  %t211 = call ptr @parse_declarator(ptr %t0, ptr %t210, ptr %t207)
-  store ptr %t211, ptr %t203
-  %t212 = load ptr, ptr %t207
-  call void @free(ptr %t212)
-  %t214 = call i32 @match(ptr %t0, i64 73)
-  %t215 = sext i32 %t214 to i64
-  %t216 = icmp ne i64 %t215, 0
-  br i1 %t216, label %L50, label %L52
+  %t203 = alloca i64
+  %t204 = sext i32 0 to i64
+  store i64 %t204, ptr %t203
+  %t205 = alloca ptr
+  %t206 = call ptr @parse_type_specifier(ptr %t0, ptr %t199, ptr %t201, ptr %t203)
+  store ptr %t206, ptr %t205
+  %t207 = load ptr, ptr %t205
+  %t208 = icmp ne ptr %t207, null
+  br i1 %t208, label %L50, label %L52
 L50:
-  %t217 = alloca ptr
-  %t218 = load i64, ptr %t1
-  %t219 = call ptr @node_new(i64 29, i64 %t218)
-  store ptr %t219, ptr %t217
-  %t220 = load ptr, ptr %t203
-  %t221 = load ptr, ptr %t217
-  store ptr %t220, ptr %t221
-  %t222 = call ptr @parse_cast(ptr %t0)
-  %t223 = load ptr, ptr %t217
-  store ptr %t222, ptr %t223
-  %t224 = load ptr, ptr %t217
-  ret ptr %t224
+  %t209 = alloca ptr
+  %t211 = sext i32 0 to i64
+  %t210 = inttoptr i64 %t211 to ptr
+  store ptr %t210, ptr %t209
+  %t212 = load ptr, ptr %t205
+  %t213 = call ptr @parse_declarator(ptr %t0, ptr %t212, ptr %t209)
+  store ptr %t213, ptr %t205
+  %t214 = load ptr, ptr %t209
+  call void @free(ptr %t214)
+  %t216 = call i32 @match(ptr %t0, i64 73)
+  %t217 = sext i32 %t216 to i64
+  %t218 = icmp ne i64 %t217, 0
+  br i1 %t218, label %L53, label %L55
 L53:
+  %t219 = alloca ptr
+  %t220 = load i64, ptr %t1
+  %t221 = call ptr @node_new(i64 29, i64 %t220)
+  store ptr %t221, ptr %t219
+  %t222 = load ptr, ptr %t205
+  %t223 = load ptr, ptr %t219
+  store ptr %t222, ptr %t223
+  %t224 = call ptr @parse_cast(ptr %t0)
+  %t225 = load ptr, ptr %t219
+  store ptr %t224, ptr %t225
+  %t226 = load ptr, ptr %t219
+  ret ptr %t226
+L56:
+  br label %L55
+L55:
   br label %L52
 L52:
   br label %L49
 L49:
+  %t227 = alloca ptr
+  %t228 = call ptr @parse_expr(ptr %t0)
+  store ptr %t228, ptr %t227
+  call void @expect(ptr %t0, i64 73)
+  %t230 = load ptr, ptr %t227
+  ret ptr %t230
+L57:
   br label %L46
 L46:
-  %t225 = alloca ptr
-  %t226 = call ptr @parse_expr(ptr %t0)
-  store ptr %t226, ptr %t225
-  call void @expect(ptr %t0, i64 73)
-  %t228 = load ptr, ptr %t225
-  ret ptr %t228
-L54:
-  br label %L43
-L43:
-  %t229 = call i32 @check(ptr %t0, i64 34)
-  %t230 = sext i32 %t229 to i64
-  %t231 = icmp ne i64 %t230, 0
-  br i1 %t231, label %L55, label %L57
-L55:
-  call void @advance(ptr %t0)
-  %t233 = call i32 @match(ptr %t0, i64 72)
-  %t234 = sext i32 %t233 to i64
-  %t235 = icmp ne i64 %t234, 0
-  br i1 %t235, label %L58, label %L60
+  %t231 = call i32 @check(ptr %t0, i64 34)
+  %t232 = sext i32 %t231 to i64
+  %t233 = icmp ne i64 %t232, 0
+  br i1 %t233, label %L58, label %L60
 L58:
-  %t236 = call i32 @is_type_start(ptr %t0)
-  %t237 = sext i32 %t236 to i64
-  %t238 = icmp ne i64 %t237, 0
-  br i1 %t238, label %L61, label %L63
+  call void @advance(ptr %t0)
+  %t235 = call i32 @match(ptr %t0, i64 72)
+  %t236 = sext i32 %t235 to i64
+  %t237 = icmp ne i64 %t236, 0
+  br i1 %t237, label %L61, label %L63
 L61:
-  %t239 = alloca i64
-  %t240 = sext i32 0 to i64
-  store i64 %t240, ptr %t239
+  %t238 = call i32 @is_type_start(ptr %t0)
+  %t239 = sext i32 %t238 to i64
+  %t240 = icmp ne i64 %t239, 0
+  br i1 %t240, label %L64, label %L66
+L64:
   %t241 = alloca i64
   %t242 = sext i32 0 to i64
   store i64 %t242, ptr %t241
   %t243 = alloca i64
   %t244 = sext i32 0 to i64
   store i64 %t244, ptr %t243
-  %t245 = alloca ptr
-  %t246 = call ptr @parse_type_specifier(ptr %t0, ptr %t239, ptr %t241, ptr %t243)
-  store ptr %t246, ptr %t245
+  %t245 = alloca i64
+  %t246 = sext i32 0 to i64
+  store i64 %t246, ptr %t245
   %t247 = alloca ptr
-  %t249 = sext i32 0 to i64
-  %t248 = inttoptr i64 %t249 to ptr
+  %t248 = call ptr @parse_type_specifier(ptr %t0, ptr %t241, ptr %t243, ptr %t245)
   store ptr %t248, ptr %t247
-  %t250 = load ptr, ptr %t245
-  %t251 = call ptr @parse_declarator(ptr %t0, ptr %t250, ptr %t247)
-  store ptr %t251, ptr %t245
+  %t249 = alloca ptr
+  %t251 = sext i32 0 to i64
+  %t250 = inttoptr i64 %t251 to ptr
+  store ptr %t250, ptr %t249
   %t252 = load ptr, ptr %t247
-  call void @free(ptr %t252)
+  %t253 = call ptr @parse_declarator(ptr %t0, ptr %t252, ptr %t249)
+  store ptr %t253, ptr %t247
+  %t254 = load ptr, ptr %t249
+  call void @free(ptr %t254)
   call void @expect(ptr %t0, i64 73)
-  %t255 = alloca ptr
-  %t256 = load i64, ptr %t1
-  %t257 = call ptr @node_new(i64 31, i64 %t256)
-  store ptr %t257, ptr %t255
-  %t258 = load ptr, ptr %t245
-  %t259 = load ptr, ptr %t255
-  store ptr %t258, ptr %t259
-  %t260 = load ptr, ptr %t255
-  ret ptr %t260
-L64:
+  %t257 = alloca ptr
+  %t258 = load i64, ptr %t1
+  %t259 = call ptr @node_new(i64 31, i64 %t258)
+  store ptr %t259, ptr %t257
+  %t260 = load ptr, ptr %t247
+  %t261 = load ptr, ptr %t257
+  store ptr %t260, ptr %t261
+  %t262 = load ptr, ptr %t257
+  ret ptr %t262
+L67:
+  br label %L66
+L66:
+  %t263 = alloca ptr
+  %t264 = call ptr @parse_expr(ptr %t0)
+  store ptr %t264, ptr %t263
+  call void @expect(ptr %t0, i64 73)
+  %t266 = alloca ptr
+  %t267 = load i64, ptr %t1
+  %t268 = call ptr @node_new(i64 32, i64 %t267)
+  store ptr %t268, ptr %t266
+  %t269 = load ptr, ptr %t266
+  %t270 = load ptr, ptr %t263
+  call void @node_add_child(ptr %t269, ptr %t270)
+  %t272 = load ptr, ptr %t266
+  ret ptr %t272
+L68:
   br label %L63
 L63:
-  %t261 = alloca ptr
-  %t262 = call ptr @parse_expr(ptr %t0)
-  store ptr %t262, ptr %t261
-  call void @expect(ptr %t0, i64 73)
-  %t264 = alloca ptr
-  %t265 = load i64, ptr %t1
-  %t266 = call ptr @node_new(i64 32, i64 %t265)
-  store ptr %t266, ptr %t264
-  %t267 = load ptr, ptr %t264
-  %t268 = load ptr, ptr %t261
-  call void @node_add_child(ptr %t267, ptr %t268)
-  %t270 = load ptr, ptr %t264
-  ret ptr %t270
-L65:
+  %t273 = alloca ptr
+  %t274 = call ptr @parse_unary(ptr %t0)
+  store ptr %t274, ptr %t273
+  %t275 = alloca ptr
+  %t276 = load i64, ptr %t1
+  %t277 = call ptr @node_new(i64 32, i64 %t276)
+  store ptr %t277, ptr %t275
+  %t278 = load ptr, ptr %t275
+  %t279 = load ptr, ptr %t273
+  call void @node_add_child(ptr %t278, ptr %t279)
+  %t281 = load ptr, ptr %t275
+  ret ptr %t281
+L69:
   br label %L60
 L60:
-  %t271 = alloca ptr
-  %t272 = call ptr @parse_unary(ptr %t0)
-  store ptr %t272, ptr %t271
-  %t273 = alloca ptr
-  %t274 = load i64, ptr %t1
-  %t275 = call ptr @node_new(i64 32, i64 %t274)
-  store ptr %t275, ptr %t273
-  %t276 = load ptr, ptr %t273
-  %t277 = load ptr, ptr %t271
-  call void @node_add_child(ptr %t276, ptr %t277)
-  %t279 = load ptr, ptr %t273
-  ret ptr %t279
-L66:
-  br label %L57
-L57:
-  %t280 = getelementptr [28 x i8], ptr @.str32, i64 0, i64 0
-  call void @p_error(ptr %t0, ptr %t280)
-  %t283 = sext i32 0 to i64
-  %t282 = inttoptr i64 %t283 to ptr
-  ret ptr %t282
-L67:
+  %t282 = getelementptr [28 x i8], ptr @.str32, i64 0, i64 0
+  call void @p_error(ptr %t0, ptr %t282)
+  %t285 = sext i32 0 to i64
+  %t284 = inttoptr i64 %t285 to ptr
+  ret ptr %t284
+L70:
   ret ptr null
 }
 
@@ -2493,132 +2781,140 @@ L7:
   %t15 = sext i32 %t14 to i64
   %t17 = icmp eq i64 %t15, 0
   %t16 = zext i1 %t17 to i64
-  %t18 = call i32 @check(ptr %t0, i64 81)
-  %t19 = sext i32 %t18 to i64
-  %t21 = icmp eq i64 %t19, 0
-  %t20 = zext i1 %t21 to i64
-  %t23 = icmp ne i64 %t16, 0
-  %t24 = icmp ne i64 %t20, 0
-  %t25 = and i1 %t23, %t24
-  %t26 = zext i1 %t25 to i64
-  %t27 = icmp ne i64 %t26, 0
-  br i1 %t27, label %L8, label %L9
-L8:
-  %t28 = load ptr, ptr %t8
-  %t29 = call ptr @parse_assign(ptr %t0)
-  call void @node_add_child(ptr %t28, ptr %t29)
-  %t31 = call i32 @match(ptr %t0, i64 79)
-  %t32 = sext i32 %t31 to i64
-  %t34 = icmp eq i64 %t32, 0
-  %t33 = zext i1 %t34 to i64
-  %t35 = icmp ne i64 %t33, 0
-  br i1 %t35, label %L10, label %L12
+  %t18 = icmp ne i64 %t16, 0
+  br i1 %t18, label %L10, label %L11
 L10:
-  br label %L9
-L13:
+  %t19 = call i32 @check(ptr %t0, i64 81)
+  %t20 = sext i32 %t19 to i64
+  %t22 = icmp eq i64 %t20, 0
+  %t21 = zext i1 %t22 to i64
+  %t23 = icmp ne i64 %t21, 0
+  %t24 = zext i1 %t23 to i64
+  br label %L12
+L11:
   br label %L12
 L12:
+  %t25 = phi i64 [ %t24, %L10 ], [ 0, %L11 ]
+  %t26 = icmp ne i64 %t25, 0
+  br i1 %t26, label %L8, label %L9
+L8:
+  %t27 = load ptr, ptr %t8
+  %t28 = call ptr @parse_assign(ptr %t0)
+  call void @node_add_child(ptr %t27, ptr %t28)
+  %t30 = call i32 @match(ptr %t0, i64 79)
+  %t31 = sext i32 %t30 to i64
+  %t33 = icmp eq i64 %t31, 0
+  %t32 = zext i1 %t33 to i64
+  %t34 = icmp ne i64 %t32, 0
+  br i1 %t34, label %L13, label %L15
+L13:
+  br label %L9
+L16:
+  br label %L15
+L15:
   br label %L7
 L9:
   call void @expect(ptr %t0, i64 73)
-  %t37 = load ptr, ptr %t8
-  store ptr %t37, ptr %t1
+  %t36 = load ptr, ptr %t8
+  store ptr %t36, ptr %t1
   br label %L6
 L5:
-  %t38 = call i32 @match(ptr %t0, i64 76)
-  %t39 = sext i32 %t38 to i64
-  %t40 = icmp ne i64 %t39, 0
-  br i1 %t40, label %L14, label %L15
-L14:
-  %t41 = alloca ptr
-  %t42 = load i64, ptr %t3
-  %t43 = call ptr @node_new(i64 33, i64 %t42)
-  store ptr %t43, ptr %t41
-  %t44 = load ptr, ptr %t41
-  %t45 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t44, ptr %t45)
-  %t47 = load ptr, ptr %t41
-  %t48 = call ptr @parse_expr(ptr %t0)
-  call void @node_add_child(ptr %t47, ptr %t48)
-  call void @expect(ptr %t0, i64 77)
-  %t51 = load ptr, ptr %t41
-  store ptr %t51, ptr %t1
-  br label %L16
-L15:
-  %t52 = call i32 @match(ptr %t0, i64 69)
-  %t53 = sext i32 %t52 to i64
-  %t54 = icmp ne i64 %t53, 0
-  br i1 %t54, label %L17, label %L18
+  %t37 = call i32 @match(ptr %t0, i64 76)
+  %t38 = sext i32 %t37 to i64
+  %t39 = icmp ne i64 %t38, 0
+  br i1 %t39, label %L17, label %L18
 L17:
-  %t55 = alloca ptr
-  %t56 = load i64, ptr %t3
-  %t57 = call ptr @node_new(i64 34, i64 %t56)
-  store ptr %t57, ptr %t55
-  %t58 = call ptr @expect_ident(ptr %t0)
-  %t59 = load ptr, ptr %t55
-  store ptr %t58, ptr %t59
-  %t60 = load ptr, ptr %t55
-  %t61 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t60, ptr %t61)
-  %t63 = load ptr, ptr %t55
-  store ptr %t63, ptr %t1
+  %t40 = alloca ptr
+  %t41 = load i64, ptr %t3
+  %t42 = call ptr @node_new(i64 33, i64 %t41)
+  store ptr %t42, ptr %t40
+  %t43 = load ptr, ptr %t40
+  %t44 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t40
+  %t47 = call ptr @parse_expr(ptr %t0)
+  call void @node_add_child(ptr %t46, ptr %t47)
+  call void @expect(ptr %t0, i64 77)
+  %t50 = load ptr, ptr %t40
+  store ptr %t50, ptr %t1
   br label %L19
 L18:
-  %t64 = call i32 @match(ptr %t0, i64 68)
-  %t65 = sext i32 %t64 to i64
-  %t66 = icmp ne i64 %t65, 0
-  br i1 %t66, label %L20, label %L21
+  %t51 = call i32 @match(ptr %t0, i64 69)
+  %t52 = sext i32 %t51 to i64
+  %t53 = icmp ne i64 %t52, 0
+  br i1 %t53, label %L20, label %L21
 L20:
-  %t67 = alloca ptr
-  %t68 = load i64, ptr %t3
-  %t69 = call ptr @node_new(i64 35, i64 %t68)
-  store ptr %t69, ptr %t67
-  %t70 = call ptr @expect_ident(ptr %t0)
-  %t71 = load ptr, ptr %t67
-  store ptr %t70, ptr %t71
-  %t72 = load ptr, ptr %t67
-  %t73 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t72, ptr %t73)
-  %t75 = load ptr, ptr %t67
-  store ptr %t75, ptr %t1
+  %t54 = alloca ptr
+  %t55 = load i64, ptr %t3
+  %t56 = call ptr @node_new(i64 34, i64 %t55)
+  store ptr %t56, ptr %t54
+  %t57 = call ptr @expect_ident(ptr %t0)
+  %t58 = load ptr, ptr %t54
+  store ptr %t57, ptr %t58
+  %t59 = load ptr, ptr %t54
+  %t60 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t59, ptr %t60)
+  %t62 = load ptr, ptr %t54
+  store ptr %t62, ptr %t1
   br label %L22
 L21:
-  %t76 = call i32 @check(ptr %t0, i64 66)
-  %t77 = sext i32 %t76 to i64
-  %t78 = icmp ne i64 %t77, 0
-  br i1 %t78, label %L23, label %L24
+  %t63 = call i32 @match(ptr %t0, i64 68)
+  %t64 = sext i32 %t63 to i64
+  %t65 = icmp ne i64 %t64, 0
+  br i1 %t65, label %L23, label %L24
 L23:
-  call void @advance(ptr %t0)
-  %t80 = alloca ptr
-  %t81 = load i64, ptr %t3
-  %t82 = call ptr @node_new(i64 40, i64 %t81)
-  store ptr %t82, ptr %t80
-  %t83 = load ptr, ptr %t80
-  %t84 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t83, ptr %t84)
-  %t86 = load ptr, ptr %t80
-  store ptr %t86, ptr %t1
+  %t66 = alloca ptr
+  %t67 = load i64, ptr %t3
+  %t68 = call ptr @node_new(i64 35, i64 %t67)
+  store ptr %t68, ptr %t66
+  %t69 = call ptr @expect_ident(ptr %t0)
+  %t70 = load ptr, ptr %t66
+  store ptr %t69, ptr %t70
+  %t71 = load ptr, ptr %t66
+  %t72 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t71, ptr %t72)
+  %t74 = load ptr, ptr %t66
+  store ptr %t74, ptr %t1
   br label %L25
 L24:
-  %t87 = call i32 @check(ptr %t0, i64 67)
-  %t88 = sext i32 %t87 to i64
-  %t89 = icmp ne i64 %t88, 0
-  br i1 %t89, label %L26, label %L27
+  %t75 = call i32 @check(ptr %t0, i64 66)
+  %t76 = sext i32 %t75 to i64
+  %t77 = icmp ne i64 %t76, 0
+  br i1 %t77, label %L26, label %L27
 L26:
   call void @advance(ptr %t0)
-  %t91 = alloca ptr
-  %t92 = load i64, ptr %t3
-  %t93 = call ptr @node_new(i64 41, i64 %t92)
-  store ptr %t93, ptr %t91
-  %t94 = load ptr, ptr %t91
-  %t95 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t94, ptr %t95)
-  %t97 = load ptr, ptr %t91
-  store ptr %t97, ptr %t1
+  %t79 = alloca ptr
+  %t80 = load i64, ptr %t3
+  %t81 = call ptr @node_new(i64 40, i64 %t80)
+  store ptr %t81, ptr %t79
+  %t82 = load ptr, ptr %t79
+  %t83 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t82, ptr %t83)
+  %t85 = load ptr, ptr %t79
+  store ptr %t85, ptr %t1
   br label %L28
 L27:
-  br label %L3
+  %t86 = call i32 @check(ptr %t0, i64 67)
+  %t87 = sext i32 %t86 to i64
+  %t88 = icmp ne i64 %t87, 0
+  br i1 %t88, label %L29, label %L30
 L29:
+  call void @advance(ptr %t0)
+  %t90 = alloca ptr
+  %t91 = load i64, ptr %t3
+  %t92 = call ptr @node_new(i64 41, i64 %t91)
+  store ptr %t92, ptr %t90
+  %t93 = load ptr, ptr %t90
+  %t94 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t93, ptr %t94)
+  %t96 = load ptr, ptr %t90
+  store ptr %t96, ptr %t1
+  br label %L31
+L30:
+  br label %L3
+L32:
+  br label %L31
+L31:
   br label %L28
 L28:
   br label %L25
@@ -2627,17 +2923,15 @@ L25:
 L22:
   br label %L19
 L19:
-  br label %L16
-L16:
   br label %L6
 L6:
   br label %L2
 L2:
   br label %L0
 L3:
-  %t98 = load ptr, ptr %t1
-  ret ptr %t98
-L30:
+  %t97 = load ptr, ptr %t1
+  ret ptr %t97
+L33:
   ret ptr null
 }
 
@@ -2720,49 +3014,67 @@ L15:
 L14:
   %t47 = call i32 @check(ptr %t0, i64 36)
   %t48 = sext i32 %t47 to i64
-  %t49 = call i32 @check(ptr %t0, i64 35)
-  %t50 = sext i32 %t49 to i64
-  %t52 = icmp ne i64 %t48, 0
-  %t53 = icmp ne i64 %t50, 0
-  %t54 = or i1 %t52, %t53
-  %t55 = zext i1 %t54 to i64
-  %t56 = call i32 @check(ptr %t0, i64 54)
-  %t57 = sext i32 %t56 to i64
-  %t59 = icmp ne i64 %t55, 0
-  %t60 = icmp ne i64 %t57, 0
-  %t61 = or i1 %t59, %t60
-  %t62 = zext i1 %t61 to i64
-  %t63 = call i32 @check(ptr %t0, i64 43)
-  %t64 = sext i32 %t63 to i64
-  %t66 = icmp ne i64 %t62, 0
-  %t67 = icmp ne i64 %t64, 0
-  %t68 = or i1 %t66, %t67
-  %t69 = zext i1 %t68 to i64
-  %t70 = icmp ne i64 %t69, 0
-  br i1 %t70, label %L16, label %L18
+  %t49 = icmp ne i64 %t48, 0
+  br i1 %t49, label %L16, label %L17
 L16:
-  %t71 = alloca i64
-  %t72 = load ptr, ptr %t0
-  store ptr %t72, ptr %t71
-  call void @advance(ptr %t0)
-  %t74 = alloca ptr
-  %t75 = load i64, ptr %t1
-  %t76 = call ptr @node_new(i64 26, i64 %t75)
-  store ptr %t76, ptr %t74
-  %t77 = load i64, ptr %t71
-  %t78 = load ptr, ptr %t74
-  store i64 %t77, ptr %t78
-  %t79 = load ptr, ptr %t74
-  %t80 = call ptr @parse_cast(ptr %t0)
-  call void @node_add_child(ptr %t79, ptr %t80)
-  %t82 = load ptr, ptr %t74
-  ret ptr %t82
-L19:
+  br label %L18
+L17:
+  %t50 = call i32 @check(ptr %t0, i64 35)
+  %t51 = sext i32 %t50 to i64
+  %t52 = icmp ne i64 %t51, 0
+  %t53 = zext i1 %t52 to i64
   br label %L18
 L18:
-  %t83 = call ptr @parse_postfix(ptr %t0)
-  ret ptr %t83
+  %t54 = phi i64 [ 1, %L16 ], [ %t53, %L17 ]
+  %t55 = icmp ne i64 %t54, 0
+  br i1 %t55, label %L19, label %L20
+L19:
+  br label %L21
 L20:
+  %t56 = call i32 @check(ptr %t0, i64 54)
+  %t57 = sext i32 %t56 to i64
+  %t58 = icmp ne i64 %t57, 0
+  %t59 = zext i1 %t58 to i64
+  br label %L21
+L21:
+  %t60 = phi i64 [ 1, %L19 ], [ %t59, %L20 ]
+  %t61 = icmp ne i64 %t60, 0
+  br i1 %t61, label %L22, label %L23
+L22:
+  br label %L24
+L23:
+  %t62 = call i32 @check(ptr %t0, i64 43)
+  %t63 = sext i32 %t62 to i64
+  %t64 = icmp ne i64 %t63, 0
+  %t65 = zext i1 %t64 to i64
+  br label %L24
+L24:
+  %t66 = phi i64 [ 1, %L22 ], [ %t65, %L23 ]
+  %t67 = icmp ne i64 %t66, 0
+  br i1 %t67, label %L25, label %L27
+L25:
+  %t68 = alloca i64
+  %t69 = load ptr, ptr %t0
+  store ptr %t69, ptr %t68
+  call void @advance(ptr %t0)
+  %t71 = alloca ptr
+  %t72 = load i64, ptr %t1
+  %t73 = call ptr @node_new(i64 26, i64 %t72)
+  store ptr %t73, ptr %t71
+  %t74 = load i64, ptr %t68
+  %t75 = load ptr, ptr %t71
+  store i64 %t74, ptr %t75
+  %t76 = load ptr, ptr %t71
+  %t77 = call ptr @parse_cast(ptr %t0)
+  call void @node_add_child(ptr %t76, ptr %t77)
+  %t79 = load ptr, ptr %t71
+  ret ptr %t79
+L28:
+  br label %L27
+L27:
+  %t80 = call ptr @parse_postfix(ptr %t0)
+  ret ptr %t80
+L29:
   ret ptr null
 }
 
@@ -2796,68 +3108,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_cast(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_cast(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -2867,8 +3181,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -2895,68 +3209,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_mul(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_mul(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -2966,8 +3282,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -2994,68 +3310,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_add(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_add(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3065,8 +3383,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3093,68 +3411,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_shift(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_shift(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3164,8 +3484,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3192,68 +3512,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_relational(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_relational(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3263,8 +3585,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3291,68 +3613,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_equality(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_equality(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3362,8 +3686,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3390,68 +3714,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_bitand(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_bitand(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3461,8 +3787,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3489,68 +3815,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_bitxor(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_bitxor(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3560,8 +3888,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3588,68 +3916,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_bitor(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_bitor(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3659,8 +3989,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3687,68 +4017,70 @@ L1:
 L4:
   %t9 = load ptr, ptr %t3
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L5, label %L7
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L5, label %L7
 L5:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t3
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L8, label %L10
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t3
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L8, label %L10
 L8:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
   %t28 = alloca i64
   %t29 = load ptr, ptr %t0
   store ptr %t29, ptr %t28
+  %t30 = alloca i64
+  %t31 = load ptr, ptr %t0
+  store ptr %t31, ptr %t30
   call void @advance(ptr %t0)
-  %t31 = alloca ptr
-  %t32 = call ptr @parse_logand(ptr %t0)
-  store ptr %t32, ptr %t31
   %t33 = alloca ptr
-  %t34 = load i64, ptr %t26
-  %t35 = call ptr @node_new(i64 25, i64 %t34)
-  store ptr %t35, ptr %t33
+  %t34 = call ptr @parse_logand(ptr %t0)
+  store ptr %t34, ptr %t33
+  %t35 = alloca ptr
   %t36 = load i64, ptr %t28
-  %t37 = load ptr, ptr %t33
-  store i64 %t36, ptr %t37
-  %t38 = load ptr, ptr %t33
-  %t39 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t38, ptr %t39)
-  %t41 = load ptr, ptr %t33
-  %t42 = load ptr, ptr %t31
-  call void @node_add_child(ptr %t41, ptr %t42)
+  %t37 = call ptr @node_new(i64 25, i64 %t36)
+  store ptr %t37, ptr %t35
+  %t38 = load i64, ptr %t30
+  %t39 = load ptr, ptr %t35
+  store i64 %t38, ptr %t39
+  %t40 = load ptr, ptr %t35
+  %t41 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t40, ptr %t41)
+  %t43 = load ptr, ptr %t35
   %t44 = load ptr, ptr %t33
-  store ptr %t44, ptr %t1
-  %t45 = sext i32 1 to i64
-  store i64 %t45, ptr %t5
+  call void @node_add_child(ptr %t43, ptr %t44)
+  %t46 = load ptr, ptr %t35
+  store ptr %t46, ptr %t1
+  %t47 = sext i32 1 to i64
+  store i64 %t47, ptr %t5
   br label %L7
 L11:
   br label %L10
 L10:
   br label %L6
 L6:
-  %t46 = load i64, ptr %t7
-  %t47 = add i64 %t46, 1
-  store i64 %t47, ptr %t7
+  %t48 = load i64, ptr %t7
+  %t49 = add i64 %t48, 1
+  store i64 %t49, ptr %t7
   br label %L4
 L7:
-  %t48 = load i64, ptr %t5
-  %t50 = icmp eq i64 %t48, 0
-  %t49 = zext i1 %t50 to i64
-  %t51 = icmp ne i64 %t49, 0
-  br i1 %t51, label %L12, label %L14
+  %t50 = load i64, ptr %t5
+  %t52 = icmp eq i64 %t50, 0
+  %t51 = zext i1 %t52 to i64
+  %t53 = icmp ne i64 %t51, 0
+  br i1 %t53, label %L12, label %L14
 L12:
   br label %L3
 L15:
@@ -3758,8 +4090,8 @@ L14:
 L2:
   br label %L0
 L3:
-  %t52 = load ptr, ptr %t1
-  ret ptr %t52
+  %t54 = load ptr, ptr %t1
+  ret ptr %t54
 L16:
   ret ptr null
 }
@@ -3829,76 +4161,78 @@ entry:
 L0:
   %t9 = load ptr, ptr %t5
   %t10 = load i64, ptr %t7
-  %t11 = getelementptr i32, ptr %t9, i64 %t10
-  %t12 = load i64, ptr %t11
-  %t14 = sext i32 81 to i64
-  %t13 = icmp ne i64 %t12, %t14
-  %t15 = zext i1 %t13 to i64
-  %t16 = icmp ne i64 %t15, 0
-  br i1 %t16, label %L1, label %L3
+  %t11 = getelementptr ptr, ptr %t9, i64 %t10
+  %t12 = load ptr, ptr %t11
+  %t14 = ptrtoint ptr %t12 to i64
+  %t15 = sext i32 81 to i64
+  %t13 = icmp ne i64 %t14, %t15
+  %t16 = zext i1 %t13 to i64
+  %t17 = icmp ne i64 %t16, 0
+  br i1 %t17, label %L1, label %L3
 L1:
-  %t17 = load ptr, ptr %t0
-  %t18 = load ptr, ptr %t5
-  %t19 = load i64, ptr %t7
-  %t20 = getelementptr i32, ptr %t18, i64 %t19
-  %t21 = load i64, ptr %t20
-  %t23 = ptrtoint ptr %t17 to i64
-  %t22 = icmp eq i64 %t23, %t21
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L4, label %L6
+  %t18 = load ptr, ptr %t0
+  %t19 = load ptr, ptr %t5
+  %t20 = load i64, ptr %t7
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
+  %t22 = load ptr, ptr %t21
+  %t24 = ptrtoint ptr %t18 to i64
+  %t25 = ptrtoint ptr %t22 to i64
+  %t23 = icmp eq i64 %t24, %t25
+  %t26 = zext i1 %t23 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L4, label %L6
 L4:
-  %t26 = alloca i64
-  %t27 = load ptr, ptr %t0
-  store ptr %t27, ptr %t26
+  %t28 = alloca i64
+  %t29 = load ptr, ptr %t0
+  store ptr %t29, ptr %t28
   call void @advance(ptr %t0)
-  %t29 = alloca ptr
-  %t30 = call ptr @parse_assign(ptr %t0)
-  store ptr %t30, ptr %t29
-  %t31 = alloca i64
-  %t32 = load i64, ptr %t26
-  %t34 = sext i32 55 to i64
-  %t33 = icmp eq i64 %t32, %t34
-  %t35 = zext i1 %t33 to i64
-  %t36 = icmp ne i64 %t35, 0
-  br i1 %t36, label %L7, label %L8
+  %t31 = alloca ptr
+  %t32 = call ptr @parse_assign(ptr %t0)
+  store ptr %t32, ptr %t31
+  %t33 = alloca i64
+  %t34 = load i64, ptr %t28
+  %t36 = sext i32 55 to i64
+  %t35 = icmp eq i64 %t34, %t36
+  %t37 = zext i1 %t35 to i64
+  %t38 = icmp ne i64 %t37, 0
+  br i1 %t38, label %L7, label %L8
 L7:
-  %t37 = sext i32 27 to i64
+  %t39 = sext i32 27 to i64
   br label %L9
 L8:
-  %t38 = sext i32 28 to i64
+  %t40 = sext i32 28 to i64
   br label %L9
 L9:
-  %t39 = phi i64 [ %t37, %L7 ], [ %t38, %L8 ]
-  store i64 %t39, ptr %t31
-  %t40 = alloca ptr
-  %t41 = load i64, ptr %t31
-  %t42 = load i64, ptr %t3
-  %t43 = call ptr @node_new(i64 %t41, i64 %t42)
-  store ptr %t43, ptr %t40
-  %t44 = load i64, ptr %t26
-  %t45 = load ptr, ptr %t40
-  store i64 %t44, ptr %t45
-  %t46 = load ptr, ptr %t40
-  %t47 = load ptr, ptr %t1
-  call void @node_add_child(ptr %t46, ptr %t47)
-  %t49 = load ptr, ptr %t40
-  %t50 = load ptr, ptr %t29
-  call void @node_add_child(ptr %t49, ptr %t50)
-  %t52 = load ptr, ptr %t40
-  ret ptr %t52
+  %t41 = phi i64 [ %t39, %L7 ], [ %t40, %L8 ]
+  store i64 %t41, ptr %t33
+  %t42 = alloca ptr
+  %t43 = load i64, ptr %t33
+  %t44 = load i64, ptr %t3
+  %t45 = call ptr @node_new(i64 %t43, i64 %t44)
+  store ptr %t45, ptr %t42
+  %t46 = load i64, ptr %t28
+  %t47 = load ptr, ptr %t42
+  store i64 %t46, ptr %t47
+  %t48 = load ptr, ptr %t42
+  %t49 = load ptr, ptr %t1
+  call void @node_add_child(ptr %t48, ptr %t49)
+  %t51 = load ptr, ptr %t42
+  %t52 = load ptr, ptr %t31
+  call void @node_add_child(ptr %t51, ptr %t52)
+  %t54 = load ptr, ptr %t42
+  ret ptr %t54
 L10:
   br label %L6
 L6:
   br label %L2
 L2:
-  %t53 = load i64, ptr %t7
-  %t54 = add i64 %t53, 1
-  store i64 %t54, ptr %t7
+  %t55 = load i64, ptr %t7
+  %t56 = add i64 %t55, 1
+  store i64 %t56, ptr %t7
   br label %L0
 L3:
-  %t55 = load ptr, ptr %t1
-  ret ptr %t55
+  %t57 = load ptr, ptr %t1
+  ret ptr %t57
 L11:
   ret ptr null
 }
@@ -3991,105 +4325,110 @@ L4:
   %t26 = call ptr @parse_declarator(ptr %t0, ptr %t25, ptr %t21)
   store ptr %t26, ptr %t24
   %t27 = load i64, ptr %t3
-  %t28 = load ptr, ptr %t21
-  %t30 = ptrtoint ptr %t28 to i64
-  %t34 = ptrtoint ptr %t28 to i64
-  %t31 = icmp ne i64 %t27, 0
-  %t32 = icmp ne i64 %t34, 0
-  %t33 = and i1 %t31, %t32
-  %t35 = zext i1 %t33 to i64
-  %t36 = icmp ne i64 %t35, 0
-  br i1 %t36, label %L7, label %L8
+  %t28 = icmp ne i64 %t27, 0
+  br i1 %t28, label %L7, label %L8
 L7:
-  %t37 = load ptr, ptr %t21
-  %t38 = load ptr, ptr %t24
-  call void @register_typedef(ptr %t0, ptr %t37, ptr %t38)
-  %t40 = alloca ptr
-  %t41 = load i64, ptr %t1
-  %t42 = call ptr @node_new(i64 3, i64 %t41)
-  store ptr %t42, ptr %t40
-  %t43 = load ptr, ptr %t21
-  %t44 = load ptr, ptr %t40
-  store ptr %t43, ptr %t44
-  %t45 = load ptr, ptr %t24
-  %t46 = load ptr, ptr %t40
-  store ptr %t45, ptr %t46
-  %t47 = load ptr, ptr %t18
-  %t48 = load ptr, ptr %t40
-  call void @node_add_child(ptr %t47, ptr %t48)
+  %t29 = load ptr, ptr %t21
+  %t30 = ptrtoint ptr %t29 to i64
+  %t31 = icmp ne i64 %t30, 0
+  %t32 = zext i1 %t31 to i64
   br label %L9
 L8:
-  %t50 = alloca ptr
-  %t51 = load i64, ptr %t1
-  %t52 = call ptr @node_new(i64 2, i64 %t51)
-  store ptr %t52, ptr %t50
-  %t53 = load ptr, ptr %t21
-  %t54 = load ptr, ptr %t50
-  store ptr %t53, ptr %t54
-  %t55 = load ptr, ptr %t24
-  %t56 = load ptr, ptr %t50
-  store ptr %t55, ptr %t56
-  %t57 = load i64, ptr %t5
-  %t58 = load ptr, ptr %t50
-  store i64 %t57, ptr %t58
-  %t59 = load i64, ptr %t7
-  %t60 = load ptr, ptr %t50
-  store i64 %t59, ptr %t60
-  %t61 = call i32 @match(ptr %t0, i64 55)
-  %t62 = sext i32 %t61 to i64
-  %t63 = icmp ne i64 %t62, 0
-  br i1 %t63, label %L10, label %L12
-L10:
-  %t64 = load ptr, ptr %t50
-  %t65 = call ptr @parse_initializer(ptr %t0)
-  call void @node_add_child(ptr %t64, ptr %t65)
-  br label %L12
-L12:
-  %t67 = load ptr, ptr %t18
-  %t68 = load ptr, ptr %t50
-  call void @node_add_child(ptr %t67, ptr %t68)
   br label %L9
 L9:
-  br label %L5
-L5:
-  %t70 = call i32 @match(ptr %t0, i64 79)
-  %t71 = sext i32 %t70 to i64
-  %t72 = icmp ne i64 %t71, 0
-  br i1 %t72, label %L4, label %L6
-L6:
-  call void @expect(ptr %t0, i64 78)
-  %t74 = load ptr, ptr %t18
-  %t75 = load ptr, ptr %t74
-  %t77 = ptrtoint ptr %t75 to i64
-  %t78 = sext i32 1 to i64
-  %t76 = icmp eq i64 %t77, %t78
-  %t79 = zext i1 %t76 to i64
-  %t80 = icmp ne i64 %t79, 0
-  br i1 %t80, label %L13, label %L15
+  %t33 = phi i64 [ %t32, %L7 ], [ 0, %L8 ]
+  %t34 = icmp ne i64 %t33, 0
+  br i1 %t34, label %L10, label %L11
+L10:
+  %t35 = load ptr, ptr %t21
+  %t36 = load ptr, ptr %t24
+  call void @register_typedef(ptr %t0, ptr %t35, ptr %t36)
+  %t38 = alloca ptr
+  %t39 = load i64, ptr %t1
+  %t40 = call ptr @node_new(i64 3, i64 %t39)
+  store ptr %t40, ptr %t38
+  %t41 = load ptr, ptr %t21
+  %t42 = load ptr, ptr %t38
+  store ptr %t41, ptr %t42
+  %t43 = load ptr, ptr %t24
+  %t44 = load ptr, ptr %t38
+  store ptr %t43, ptr %t44
+  %t45 = load ptr, ptr %t18
+  %t46 = load ptr, ptr %t38
+  call void @node_add_child(ptr %t45, ptr %t46)
+  br label %L12
+L11:
+  %t48 = alloca ptr
+  %t49 = load i64, ptr %t1
+  %t50 = call ptr @node_new(i64 2, i64 %t49)
+  store ptr %t50, ptr %t48
+  %t51 = load ptr, ptr %t21
+  %t52 = load ptr, ptr %t48
+  store ptr %t51, ptr %t52
+  %t53 = load ptr, ptr %t24
+  %t54 = load ptr, ptr %t48
+  store ptr %t53, ptr %t54
+  %t55 = load i64, ptr %t5
+  %t56 = load ptr, ptr %t48
+  store i64 %t55, ptr %t56
+  %t57 = load i64, ptr %t7
+  %t58 = load ptr, ptr %t48
+  store i64 %t57, ptr %t58
+  %t59 = call i32 @match(ptr %t0, i64 55)
+  %t60 = sext i32 %t59 to i64
+  %t61 = icmp ne i64 %t60, 0
+  br i1 %t61, label %L13, label %L15
 L13:
-  %t81 = alloca ptr
-  %t82 = load ptr, ptr %t18
-  %t83 = load ptr, ptr %t82
-  %t84 = sext i32 0 to i64
-  %t85 = getelementptr i32, ptr %t83, i64 %t84
-  %t86 = load i64, ptr %t85
-  store i64 %t86, ptr %t81
-  %t87 = load ptr, ptr %t18
-  %t88 = sext i32 0 to i64
-  store i64 %t88, ptr %t87
-  %t89 = load ptr, ptr %t18
-  %t90 = load ptr, ptr %t89
-  call void @free(ptr %t90)
-  %t92 = load ptr, ptr %t18
-  call void @free(ptr %t92)
-  %t94 = load ptr, ptr %t81
-  ret ptr %t94
-L16:
+  %t62 = load ptr, ptr %t48
+  %t63 = call ptr @parse_initializer(ptr %t0)
+  call void @node_add_child(ptr %t62, ptr %t63)
   br label %L15
 L15:
-  %t95 = load ptr, ptr %t18
-  ret ptr %t95
-L17:
+  %t65 = load ptr, ptr %t18
+  %t66 = load ptr, ptr %t48
+  call void @node_add_child(ptr %t65, ptr %t66)
+  br label %L12
+L12:
+  br label %L5
+L5:
+  %t68 = call i32 @match(ptr %t0, i64 79)
+  %t69 = sext i32 %t68 to i64
+  %t70 = icmp ne i64 %t69, 0
+  br i1 %t70, label %L4, label %L6
+L6:
+  call void @expect(ptr %t0, i64 78)
+  %t72 = load ptr, ptr %t18
+  %t73 = load ptr, ptr %t72
+  %t75 = ptrtoint ptr %t73 to i64
+  %t76 = sext i32 1 to i64
+  %t74 = icmp eq i64 %t75, %t76
+  %t77 = zext i1 %t74 to i64
+  %t78 = icmp ne i64 %t77, 0
+  br i1 %t78, label %L16, label %L18
+L16:
+  %t79 = alloca ptr
+  %t80 = load ptr, ptr %t18
+  %t81 = load ptr, ptr %t80
+  %t82 = sext i32 0 to i64
+  %t83 = getelementptr ptr, ptr %t81, i64 %t82
+  %t84 = load ptr, ptr %t83
+  store ptr %t84, ptr %t79
+  %t85 = load ptr, ptr %t18
+  %t86 = sext i32 0 to i64
+  store i64 %t86, ptr %t85
+  %t87 = load ptr, ptr %t18
+  %t88 = load ptr, ptr %t87
+  call void @free(ptr %t88)
+  %t90 = load ptr, ptr %t18
+  call void @free(ptr %t90)
+  %t92 = load ptr, ptr %t79
+  ret ptr %t92
+L19:
+  br label %L18
+L18:
+  %t93 = load ptr, ptr %t18
+  ret ptr %t93
+L20:
   ret ptr null
 }
 
@@ -4120,68 +4459,74 @@ L4:
   %t13 = sext i32 %t12 to i64
   %t15 = icmp eq i64 %t13, 0
   %t14 = zext i1 %t15 to i64
-  %t16 = load i64, ptr %t10
-  %t18 = sext i32 0 to i64
-  %t17 = icmp sgt i64 %t16, %t18
-  %t19 = zext i1 %t17 to i64
-  %t21 = icmp ne i64 %t14, 0
-  %t22 = icmp ne i64 %t19, 0
-  %t23 = and i1 %t21, %t22
-  %t24 = zext i1 %t23 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L5, label %L6
-L5:
-  %t26 = call i32 @check(ptr %t0, i64 74)
-  %t27 = sext i32 %t26 to i64
-  %t28 = icmp ne i64 %t27, 0
-  br i1 %t28, label %L7, label %L8
+  %t16 = icmp ne i64 %t14, 0
+  br i1 %t16, label %L7, label %L8
 L7:
-  %t29 = load i64, ptr %t10
-  %t30 = add i64 %t29, 1
-  store i64 %t30, ptr %t10
+  %t17 = load i64, ptr %t10
+  %t19 = sext i32 0 to i64
+  %t18 = icmp sgt i64 %t17, %t19
+  %t20 = zext i1 %t18 to i64
+  %t21 = icmp ne i64 %t20, 0
+  %t22 = zext i1 %t21 to i64
   br label %L9
 L8:
-  %t31 = call i32 @check(ptr %t0, i64 75)
-  %t32 = sext i32 %t31 to i64
-  %t33 = icmp ne i64 %t32, 0
-  br i1 %t33, label %L10, label %L12
+  br label %L9
+L9:
+  %t23 = phi i64 [ %t22, %L7 ], [ 0, %L8 ]
+  %t24 = icmp ne i64 %t23, 0
+  br i1 %t24, label %L5, label %L6
+L5:
+  %t25 = call i32 @check(ptr %t0, i64 74)
+  %t26 = sext i32 %t25 to i64
+  %t27 = icmp ne i64 %t26, 0
+  br i1 %t27, label %L10, label %L11
 L10:
-  %t34 = load i64, ptr %t10
-  %t35 = sub i64 %t34, 1
-  store i64 %t35, ptr %t10
-  %t36 = load i64, ptr %t10
-  %t38 = sext i32 0 to i64
-  %t37 = icmp eq i64 %t36, %t38
-  %t39 = zext i1 %t37 to i64
-  %t40 = icmp ne i64 %t39, 0
-  br i1 %t40, label %L13, label %L15
+  %t28 = load i64, ptr %t10
+  %t29 = add i64 %t28, 1
+  store i64 %t29, ptr %t10
+  br label %L12
+L11:
+  %t30 = call i32 @check(ptr %t0, i64 75)
+  %t31 = sext i32 %t30 to i64
+  %t32 = icmp ne i64 %t31, 0
+  br i1 %t32, label %L13, label %L15
 L13:
-  br label %L6
+  %t33 = load i64, ptr %t10
+  %t34 = sub i64 %t33, 1
+  store i64 %t34, ptr %t10
+  %t35 = load i64, ptr %t10
+  %t37 = sext i32 0 to i64
+  %t36 = icmp eq i64 %t35, %t37
+  %t38 = zext i1 %t36 to i64
+  %t39 = icmp ne i64 %t38, 0
+  br i1 %t39, label %L16, label %L18
 L16:
+  br label %L6
+L19:
+  br label %L18
+L18:
   br label %L15
 L15:
   br label %L12
 L12:
-  br label %L9
-L9:
   call void @advance(ptr %t0)
   br label %L4
 L6:
   call void @expect(ptr %t0, i64 75)
-  %t43 = alloca ptr
-  %t44 = load i64, ptr %t1
-  %t45 = call ptr @node_new(i64 19, i64 %t44)
-  store ptr %t45, ptr %t43
-  %t46 = load ptr, ptr %t43
-  %t47 = sext i32 0 to i64
-  store i64 %t47, ptr %t46
-  %t48 = getelementptr [7 x i8], ptr @.str33, i64 0, i64 0
-  %t49 = call ptr @strdup(ptr %t48)
-  %t50 = load ptr, ptr %t43
-  store ptr %t49, ptr %t50
-  %t51 = load ptr, ptr %t43
-  ret ptr %t51
-L17:
+  %t42 = alloca ptr
+  %t43 = load i64, ptr %t1
+  %t44 = call ptr @node_new(i64 19, i64 %t43)
+  store ptr %t44, ptr %t42
+  %t45 = load ptr, ptr %t42
+  %t46 = sext i32 0 to i64
+  store i64 %t46, ptr %t45
+  %t47 = getelementptr [7 x i8], ptr @.str33, i64 0, i64 0
+  %t48 = call ptr @strdup(ptr %t47)
+  %t49 = load ptr, ptr %t42
+  store ptr %t48, ptr %t49
+  %t50 = load ptr, ptr %t42
+  ret ptr %t50
+L20:
   ret ptr null
 }
 
@@ -4460,191 +4805,235 @@ L57:
   %t160 = sext i32 %t159 to i64
   %t162 = icmp eq i64 %t160, 0
   %t161 = zext i1 %t162 to i64
-  %t163 = call i32 @check(ptr %t0, i64 24)
-  %t164 = sext i32 %t163 to i64
-  %t166 = icmp eq i64 %t164, 0
-  %t165 = zext i1 %t166 to i64
-  %t168 = icmp ne i64 %t161, 0
-  %t169 = icmp ne i64 %t165, 0
-  %t170 = and i1 %t168, %t169
-  %t171 = zext i1 %t170 to i64
+  %t163 = icmp ne i64 %t161, 0
+  br i1 %t163, label %L60, label %L61
+L60:
+  %t164 = call i32 @check(ptr %t0, i64 24)
+  %t165 = sext i32 %t164 to i64
+  %t167 = icmp eq i64 %t165, 0
+  %t166 = zext i1 %t167 to i64
+  %t168 = icmp ne i64 %t166, 0
+  %t169 = zext i1 %t168 to i64
+  br label %L62
+L61:
+  br label %L62
+L62:
+  %t170 = phi i64 [ %t169, %L60 ], [ 0, %L61 ]
+  %t171 = icmp ne i64 %t170, 0
+  br i1 %t171, label %L63, label %L64
+L63:
   %t172 = call i32 @check(ptr %t0, i64 75)
   %t173 = sext i32 %t172 to i64
   %t175 = icmp eq i64 %t173, 0
   %t174 = zext i1 %t175 to i64
-  %t177 = icmp ne i64 %t171, 0
-  %t178 = icmp ne i64 %t174, 0
-  %t179 = and i1 %t177, %t178
-  %t180 = zext i1 %t179 to i64
-  %t181 = call i32 @check(ptr %t0, i64 81)
-  %t182 = sext i32 %t181 to i64
-  %t184 = icmp eq i64 %t182, 0
-  %t183 = zext i1 %t184 to i64
-  %t186 = icmp ne i64 %t180, 0
-  %t187 = icmp ne i64 %t183, 0
-  %t188 = and i1 %t186, %t187
-  %t189 = zext i1 %t188 to i64
-  %t190 = icmp ne i64 %t189, 0
-  br i1 %t190, label %L58, label %L59
+  %t176 = icmp ne i64 %t174, 0
+  %t177 = zext i1 %t176 to i64
+  br label %L65
+L64:
+  br label %L65
+L65:
+  %t178 = phi i64 [ %t177, %L63 ], [ 0, %L64 ]
+  %t179 = icmp ne i64 %t178, 0
+  br i1 %t179, label %L66, label %L67
+L66:
+  %t180 = call i32 @check(ptr %t0, i64 81)
+  %t181 = sext i32 %t180 to i64
+  %t183 = icmp eq i64 %t181, 0
+  %t182 = zext i1 %t183 to i64
+  %t184 = icmp ne i64 %t182, 0
+  %t185 = zext i1 %t184 to i64
+  br label %L68
+L67:
+  br label %L68
+L68:
+  %t186 = phi i64 [ %t185, %L66 ], [ 0, %L67 ]
+  %t187 = icmp ne i64 %t186, 0
+  br i1 %t187, label %L58, label %L59
 L58:
-  %t191 = load ptr, ptr %t156
-  %t192 = call ptr @parse_stmt(ptr %t0)
-  call void @node_add_child(ptr %t191, ptr %t192)
+  %t188 = load ptr, ptr %t156
+  %t189 = call ptr @parse_stmt(ptr %t0)
+  call void @node_add_child(ptr %t188, ptr %t189)
   br label %L57
 L59:
+  %t191 = load ptr, ptr %t150
+  %t192 = load ptr, ptr %t156
+  call void @node_add_child(ptr %t191, ptr %t192)
   %t194 = load ptr, ptr %t150
-  %t195 = load ptr, ptr %t156
-  call void @node_add_child(ptr %t194, ptr %t195)
-  %t197 = load ptr, ptr %t150
-  ret ptr %t197
-L60:
+  ret ptr %t194
+L69:
   br label %L56
 L56:
-  %t198 = call i32 @check(ptr %t0, i64 24)
-  %t199 = sext i32 %t198 to i64
-  %t200 = icmp ne i64 %t199, 0
-  br i1 %t200, label %L61, label %L63
-L61:
+  %t195 = call i32 @check(ptr %t0, i64 24)
+  %t196 = sext i32 %t195 to i64
+  %t197 = icmp ne i64 %t196, 0
+  br i1 %t197, label %L70, label %L72
+L70:
   call void @advance(ptr %t0)
   call void @expect(ptr %t0, i64 71)
+  %t200 = alloca ptr
+  %t201 = load i64, ptr %t1
+  %t202 = call ptr @node_new(i64 15, i64 %t201)
+  store ptr %t202, ptr %t200
   %t203 = alloca ptr
   %t204 = load i64, ptr %t1
-  %t205 = call ptr @node_new(i64 15, i64 %t204)
+  %t205 = call ptr @node_new(i64 5, i64 %t204)
   store ptr %t205, ptr %t203
-  %t206 = alloca ptr
-  %t207 = load i64, ptr %t1
-  %t208 = call ptr @node_new(i64 5, i64 %t207)
-  store ptr %t208, ptr %t206
-  br label %L64
-L64:
-  %t209 = call i32 @check(ptr %t0, i64 23)
-  %t210 = sext i32 %t209 to i64
-  %t212 = icmp eq i64 %t210, 0
-  %t211 = zext i1 %t212 to i64
-  %t213 = call i32 @check(ptr %t0, i64 24)
-  %t214 = sext i32 %t213 to i64
-  %t216 = icmp eq i64 %t214, 0
-  %t215 = zext i1 %t216 to i64
-  %t218 = icmp ne i64 %t211, 0
-  %t219 = icmp ne i64 %t215, 0
-  %t220 = and i1 %t218, %t219
-  %t221 = zext i1 %t220 to i64
-  %t222 = call i32 @check(ptr %t0, i64 75)
-  %t223 = sext i32 %t222 to i64
-  %t225 = icmp eq i64 %t223, 0
-  %t224 = zext i1 %t225 to i64
-  %t227 = icmp ne i64 %t221, 0
-  %t228 = icmp ne i64 %t224, 0
-  %t229 = and i1 %t227, %t228
-  %t230 = zext i1 %t229 to i64
-  %t231 = call i32 @check(ptr %t0, i64 81)
-  %t232 = sext i32 %t231 to i64
-  %t234 = icmp eq i64 %t232, 0
-  %t233 = zext i1 %t234 to i64
-  %t236 = icmp ne i64 %t230, 0
-  %t237 = icmp ne i64 %t233, 0
-  %t238 = and i1 %t236, %t237
-  %t239 = zext i1 %t238 to i64
-  %t240 = icmp ne i64 %t239, 0
-  br i1 %t240, label %L65, label %L66
-L65:
-  %t241 = load ptr, ptr %t206
-  %t242 = call ptr @parse_stmt(ptr %t0)
-  call void @node_add_child(ptr %t241, ptr %t242)
-  br label %L64
-L66:
-  %t244 = load ptr, ptr %t203
-  %t245 = load ptr, ptr %t206
-  call void @node_add_child(ptr %t244, ptr %t245)
-  %t247 = load ptr, ptr %t203
-  ret ptr %t247
-L67:
-  br label %L63
-L63:
-  %t248 = call i32 @check(ptr %t0, i64 25)
-  %t249 = sext i32 %t248 to i64
-  %t250 = icmp ne i64 %t249, 0
-  br i1 %t250, label %L68, label %L70
-L68:
-  call void @advance(ptr %t0)
-  %t252 = alloca ptr
-  %t253 = load i64, ptr %t1
-  %t254 = call ptr @node_new(i64 17, i64 %t253)
-  store ptr %t254, ptr %t252
-  %t255 = call ptr @expect_ident(ptr %t0)
-  %t256 = load ptr, ptr %t252
-  store ptr %t255, ptr %t256
-  call void @expect(ptr %t0, i64 78)
-  %t258 = load ptr, ptr %t252
-  ret ptr %t258
-L71:
-  br label %L70
-L70:
-  %t259 = call i32 @check(ptr %t0, i64 4)
-  %t260 = sext i32 %t259 to i64
-  %t261 = load ptr, ptr null
-  %t263 = ptrtoint ptr %t261 to i64
-  %t264 = sext i32 71 to i64
-  %t262 = icmp eq i64 %t263, %t264
-  %t265 = zext i1 %t262 to i64
-  %t267 = icmp ne i64 %t260, 0
-  %t268 = icmp ne i64 %t265, 0
-  %t269 = and i1 %t267, %t268
-  %t270 = zext i1 %t269 to i64
-  %t271 = icmp ne i64 %t270, 0
-  br i1 %t271, label %L72, label %L74
-L72:
-  %t272 = alloca ptr
-  %t273 = load i64, ptr %t1
-  %t274 = call ptr @node_new(i64 16, i64 %t273)
-  store ptr %t274, ptr %t272
-  %t275 = load ptr, ptr %t0
-  %t276 = call ptr @strdup(ptr %t275)
-  %t277 = load ptr, ptr %t272
-  store ptr %t276, ptr %t277
-  call void @advance(ptr %t0)
-  call void @advance(ptr %t0)
-  %t280 = load ptr, ptr %t272
-  %t281 = call ptr @parse_stmt(ptr %t0)
-  call void @node_add_child(ptr %t280, ptr %t281)
-  %t283 = load ptr, ptr %t272
-  ret ptr %t283
-L75:
-  br label %L74
-L74:
-  %t284 = call i32 @is_type_start(ptr %t0)
-  %t285 = sext i32 %t284 to i64
-  %t286 = icmp ne i64 %t285, 0
-  br i1 %t286, label %L76, label %L78
+  br label %L73
+L73:
+  %t206 = call i32 @check(ptr %t0, i64 23)
+  %t207 = sext i32 %t206 to i64
+  %t209 = icmp eq i64 %t207, 0
+  %t208 = zext i1 %t209 to i64
+  %t210 = icmp ne i64 %t208, 0
+  br i1 %t210, label %L76, label %L77
 L76:
-  %t287 = call ptr @parse_local_decl(ptr %t0)
-  ret ptr %t287
-L79:
+  %t211 = call i32 @check(ptr %t0, i64 24)
+  %t212 = sext i32 %t211 to i64
+  %t214 = icmp eq i64 %t212, 0
+  %t213 = zext i1 %t214 to i64
+  %t215 = icmp ne i64 %t213, 0
+  %t216 = zext i1 %t215 to i64
+  br label %L78
+L77:
   br label %L78
 L78:
-  %t288 = call i32 @check(ptr %t0, i64 78)
-  %t289 = sext i32 %t288 to i64
-  %t290 = icmp ne i64 %t289, 0
-  br i1 %t290, label %L80, label %L82
+  %t217 = phi i64 [ %t216, %L76 ], [ 0, %L77 ]
+  %t218 = icmp ne i64 %t217, 0
+  br i1 %t218, label %L79, label %L80
+L79:
+  %t219 = call i32 @check(ptr %t0, i64 75)
+  %t220 = sext i32 %t219 to i64
+  %t222 = icmp eq i64 %t220, 0
+  %t221 = zext i1 %t222 to i64
+  %t223 = icmp ne i64 %t221, 0
+  %t224 = zext i1 %t223 to i64
+  br label %L81
 L80:
-  call void @advance(ptr %t0)
-  %t292 = load i64, ptr %t1
-  %t293 = call ptr @node_new(i64 5, i64 %t292)
-  ret ptr %t293
-L83:
-  br label %L82
+  br label %L81
+L81:
+  %t225 = phi i64 [ %t224, %L79 ], [ 0, %L80 ]
+  %t226 = icmp ne i64 %t225, 0
+  br i1 %t226, label %L82, label %L83
 L82:
-  %t294 = alloca ptr
-  %t295 = load i64, ptr %t1
-  %t296 = call ptr @node_new(i64 18, i64 %t295)
-  store ptr %t296, ptr %t294
-  %t297 = load ptr, ptr %t294
-  %t298 = call ptr @parse_expr(ptr %t0)
-  call void @node_add_child(ptr %t297, ptr %t298)
-  call void @expect(ptr %t0, i64 78)
-  %t301 = load ptr, ptr %t294
-  ret ptr %t301
+  %t227 = call i32 @check(ptr %t0, i64 81)
+  %t228 = sext i32 %t227 to i64
+  %t230 = icmp eq i64 %t228, 0
+  %t229 = zext i1 %t230 to i64
+  %t231 = icmp ne i64 %t229, 0
+  %t232 = zext i1 %t231 to i64
+  br label %L84
+L83:
+  br label %L84
 L84:
+  %t233 = phi i64 [ %t232, %L82 ], [ 0, %L83 ]
+  %t234 = icmp ne i64 %t233, 0
+  br i1 %t234, label %L74, label %L75
+L74:
+  %t235 = load ptr, ptr %t203
+  %t236 = call ptr @parse_stmt(ptr %t0)
+  call void @node_add_child(ptr %t235, ptr %t236)
+  br label %L73
+L75:
+  %t238 = load ptr, ptr %t200
+  %t239 = load ptr, ptr %t203
+  call void @node_add_child(ptr %t238, ptr %t239)
+  %t241 = load ptr, ptr %t200
+  ret ptr %t241
+L85:
+  br label %L72
+L72:
+  %t242 = call i32 @check(ptr %t0, i64 25)
+  %t243 = sext i32 %t242 to i64
+  %t244 = icmp ne i64 %t243, 0
+  br i1 %t244, label %L86, label %L88
+L86:
+  call void @advance(ptr %t0)
+  %t246 = alloca ptr
+  %t247 = load i64, ptr %t1
+  %t248 = call ptr @node_new(i64 17, i64 %t247)
+  store ptr %t248, ptr %t246
+  %t249 = call ptr @expect_ident(ptr %t0)
+  %t250 = load ptr, ptr %t246
+  store ptr %t249, ptr %t250
+  call void @expect(ptr %t0, i64 78)
+  %t252 = load ptr, ptr %t246
+  ret ptr %t252
+L89:
+  br label %L88
+L88:
+  %t253 = call i32 @check(ptr %t0, i64 4)
+  %t254 = sext i32 %t253 to i64
+  %t255 = icmp ne i64 %t254, 0
+  br i1 %t255, label %L90, label %L91
+L90:
+  %t256 = call i64 @peek(ptr %t0)
+  %t257 = inttoptr i64 %t256 to ptr
+  %t258 = load ptr, ptr %t257
+  %t260 = ptrtoint ptr %t258 to i64
+  %t261 = sext i32 71 to i64
+  %t259 = icmp eq i64 %t260, %t261
+  %t262 = zext i1 %t259 to i64
+  %t263 = icmp ne i64 %t262, 0
+  %t264 = zext i1 %t263 to i64
+  br label %L92
+L91:
+  br label %L92
+L92:
+  %t265 = phi i64 [ %t264, %L90 ], [ 0, %L91 ]
+  %t266 = icmp ne i64 %t265, 0
+  br i1 %t266, label %L93, label %L95
+L93:
+  %t267 = alloca ptr
+  %t268 = load i64, ptr %t1
+  %t269 = call ptr @node_new(i64 16, i64 %t268)
+  store ptr %t269, ptr %t267
+  %t270 = load ptr, ptr %t0
+  %t271 = call ptr @strdup(ptr %t270)
+  %t272 = load ptr, ptr %t267
+  store ptr %t271, ptr %t272
+  call void @advance(ptr %t0)
+  call void @advance(ptr %t0)
+  %t275 = load ptr, ptr %t267
+  %t276 = call ptr @parse_stmt(ptr %t0)
+  call void @node_add_child(ptr %t275, ptr %t276)
+  %t278 = load ptr, ptr %t267
+  ret ptr %t278
+L96:
+  br label %L95
+L95:
+  %t279 = call i32 @is_type_start(ptr %t0)
+  %t280 = sext i32 %t279 to i64
+  %t281 = icmp ne i64 %t280, 0
+  br i1 %t281, label %L97, label %L99
+L97:
+  %t282 = call ptr @parse_local_decl(ptr %t0)
+  ret ptr %t282
+L100:
+  br label %L99
+L99:
+  %t283 = call i32 @check(ptr %t0, i64 78)
+  %t284 = sext i32 %t283 to i64
+  %t285 = icmp ne i64 %t284, 0
+  br i1 %t285, label %L101, label %L103
+L101:
+  call void @advance(ptr %t0)
+  %t287 = load i64, ptr %t1
+  %t288 = call ptr @node_new(i64 5, i64 %t287)
+  ret ptr %t288
+L104:
+  br label %L103
+L103:
+  %t289 = alloca ptr
+  %t290 = load i64, ptr %t1
+  %t291 = call ptr @node_new(i64 18, i64 %t290)
+  store ptr %t291, ptr %t289
+  %t292 = load ptr, ptr %t289
+  %t293 = call ptr @parse_expr(ptr %t0)
+  call void @node_add_child(ptr %t292, ptr %t293)
+  call void @expect(ptr %t0, i64 78)
+  %t296 = load ptr, ptr %t289
+  ret ptr %t296
+L105:
   ret ptr null
 }
 
@@ -4667,26 +5056,32 @@ L0:
   %t10 = sext i32 %t9 to i64
   %t12 = icmp eq i64 %t10, 0
   %t11 = zext i1 %t12 to i64
-  %t13 = call i32 @check(ptr %t0, i64 81)
-  %t14 = sext i32 %t13 to i64
-  %t16 = icmp eq i64 %t14, 0
-  %t15 = zext i1 %t16 to i64
-  %t18 = icmp ne i64 %t11, 0
-  %t19 = icmp ne i64 %t15, 0
-  %t20 = and i1 %t18, %t19
-  %t21 = zext i1 %t20 to i64
-  %t22 = icmp ne i64 %t21, 0
-  br i1 %t22, label %L1, label %L2
+  %t13 = icmp ne i64 %t11, 0
+  br i1 %t13, label %L3, label %L4
+L3:
+  %t14 = call i32 @check(ptr %t0, i64 81)
+  %t15 = sext i32 %t14 to i64
+  %t17 = icmp eq i64 %t15, 0
+  %t16 = zext i1 %t17 to i64
+  %t18 = icmp ne i64 %t16, 0
+  %t19 = zext i1 %t18 to i64
+  br label %L5
+L4:
+  br label %L5
+L5:
+  %t20 = phi i64 [ %t19, %L3 ], [ 0, %L4 ]
+  %t21 = icmp ne i64 %t20, 0
+  br i1 %t21, label %L1, label %L2
 L1:
-  %t23 = load ptr, ptr %t4
-  %t24 = call ptr @parse_stmt(ptr %t0)
-  call void @node_add_child(ptr %t23, ptr %t24)
+  %t22 = load ptr, ptr %t4
+  %t23 = call ptr @parse_stmt(ptr %t0)
+  call void @node_add_child(ptr %t22, ptr %t23)
   br label %L0
 L2:
   call void @expect(ptr %t0, i64 75)
-  %t27 = load ptr, ptr %t4
-  ret ptr %t27
-L3:
+  %t26 = load ptr, ptr %t4
+  ret ptr %t26
+L6:
   ret ptr null
 }
 
@@ -4779,179 +5174,185 @@ L10:
   %t54 = sext i32 17 to i64
   %t52 = icmp eq i64 %t53, %t54
   %t55 = zext i1 %t52 to i64
-  %t56 = call i32 @check(ptr %t0, i64 74)
-  %t57 = sext i32 %t56 to i64
-  %t59 = icmp ne i64 %t55, 0
-  %t60 = icmp ne i64 %t57, 0
-  %t61 = and i1 %t59, %t60
-  %t62 = zext i1 %t61 to i64
-  %t63 = icmp ne i64 %t62, 0
-  br i1 %t63, label %L15, label %L17
+  %t56 = icmp ne i64 %t55, 0
+  br i1 %t56, label %L15, label %L16
 L15:
-  %t64 = alloca ptr
-  %t65 = load i64, ptr %t1
-  %t66 = call ptr @node_new(i64 1, i64 %t65)
-  store ptr %t66, ptr %t64
-  %t67 = load ptr, ptr %t27
-  %t68 = load ptr, ptr %t64
-  store ptr %t67, ptr %t68
-  %t69 = load ptr, ptr %t30
-  %t70 = load ptr, ptr %t64
-  store ptr %t69, ptr %t70
-  %t71 = load i64, ptr %t6
-  %t72 = load ptr, ptr %t64
-  store i64 %t71, ptr %t72
-  %t73 = load i64, ptr %t8
-  %t74 = load ptr, ptr %t64
-  store i64 %t73, ptr %t74
-  %t75 = load ptr, ptr %t30
-  %t76 = load ptr, ptr %t75
-  %t78 = ptrtoint ptr %t76 to i64
-  %t79 = sext i32 8 to i64
-  %t77 = mul i64 %t78, %t79
-  %t80 = call ptr @malloc(i64 %t77)
-  %t81 = load ptr, ptr %t64
-  store ptr %t80, ptr %t81
-  %t82 = alloca i64
-  %t83 = sext i32 0 to i64
-  store i64 %t83, ptr %t82
-  br label %L18
-L18:
-  %t84 = load i64, ptr %t82
-  %t85 = load ptr, ptr %t30
-  %t86 = load ptr, ptr %t85
-  %t88 = ptrtoint ptr %t86 to i64
-  %t87 = icmp slt i64 %t84, %t88
-  %t89 = zext i1 %t87 to i64
-  %t90 = icmp ne i64 %t89, 0
-  br i1 %t90, label %L19, label %L21
-L19:
-  %t91 = load ptr, ptr %t30
-  %t92 = load ptr, ptr %t91
-  %t93 = load i64, ptr %t82
-  %t94 = getelementptr i8, ptr %t92, i64 %t93
-  %t95 = load ptr, ptr %t94
-  %t96 = icmp ne ptr %t95, null
-  br i1 %t96, label %L22, label %L23
-L22:
-  %t97 = load ptr, ptr %t30
-  %t98 = load ptr, ptr %t97
-  %t99 = load i64, ptr %t82
-  %t100 = getelementptr i8, ptr %t98, i64 %t99
-  %t101 = load ptr, ptr %t100
-  %t102 = call ptr @strdup(ptr %t101)
-  %t103 = ptrtoint ptr %t102 to i64
-  br label %L24
-L23:
-  %t105 = sext i32 0 to i64
-  %t104 = inttoptr i64 %t105 to ptr
-  %t106 = ptrtoint ptr %t104 to i64
-  br label %L24
-L24:
-  %t107 = phi i64 [ %t103, %L22 ], [ %t106, %L23 ]
-  %t108 = load ptr, ptr %t64
-  %t109 = load ptr, ptr %t108
-  %t110 = load i64, ptr %t82
-  %t111 = getelementptr i8, ptr %t109, i64 %t110
-  store i64 %t107, ptr %t111
-  br label %L20
-L20:
-  %t112 = load i64, ptr %t82
-  %t113 = add i64 %t112, 1
-  store i64 %t113, ptr %t82
-  br label %L18
-L21:
-  %t114 = call ptr @parse_block(ptr %t0)
-  %t115 = load ptr, ptr %t64
-  store ptr %t114, ptr %t115
-  %t116 = load ptr, ptr %t64
-  ret ptr %t116
-L25:
+  %t57 = call i32 @check(ptr %t0, i64 74)
+  %t58 = sext i32 %t57 to i64
+  %t59 = icmp ne i64 %t58, 0
+  %t60 = zext i1 %t59 to i64
+  br label %L17
+L16:
   br label %L17
 L17:
-  %t117 = alloca ptr
-  %t118 = load i64, ptr %t1
-  %t119 = call ptr @node_new(i64 2, i64 %t118)
-  store ptr %t119, ptr %t117
-  %t120 = load ptr, ptr %t27
-  %t121 = load ptr, ptr %t117
-  store ptr %t120, ptr %t121
-  %t122 = load ptr, ptr %t30
-  %t123 = load ptr, ptr %t117
-  store ptr %t122, ptr %t123
-  %t124 = load ptr, ptr %t117
-  %t125 = sext i32 1 to i64
-  store i64 %t125, ptr %t124
-  %t126 = load i64, ptr %t6
-  %t127 = load ptr, ptr %t117
-  store i64 %t126, ptr %t127
-  %t128 = load i64, ptr %t8
-  %t129 = load ptr, ptr %t117
-  store i64 %t128, ptr %t129
-  %t130 = call i32 @match(ptr %t0, i64 55)
-  %t131 = sext i32 %t130 to i64
-  %t132 = icmp ne i64 %t131, 0
-  br i1 %t132, label %L26, label %L28
+  %t61 = phi i64 [ %t60, %L15 ], [ 0, %L16 ]
+  %t62 = icmp ne i64 %t61, 0
+  br i1 %t62, label %L18, label %L20
+L18:
+  %t63 = alloca ptr
+  %t64 = load i64, ptr %t1
+  %t65 = call ptr @node_new(i64 1, i64 %t64)
+  store ptr %t65, ptr %t63
+  %t66 = load ptr, ptr %t27
+  %t67 = load ptr, ptr %t63
+  store ptr %t66, ptr %t67
+  %t68 = load ptr, ptr %t30
+  %t69 = load ptr, ptr %t63
+  store ptr %t68, ptr %t69
+  %t70 = load i64, ptr %t6
+  %t71 = load ptr, ptr %t63
+  store i64 %t70, ptr %t71
+  %t72 = load i64, ptr %t8
+  %t73 = load ptr, ptr %t63
+  store i64 %t72, ptr %t73
+  %t74 = load ptr, ptr %t30
+  %t75 = load ptr, ptr %t74
+  %t77 = ptrtoint ptr %t75 to i64
+  %t78 = sext i32 8 to i64
+  %t76 = mul i64 %t77, %t78
+  %t79 = call ptr @malloc(i64 %t76)
+  %t80 = load ptr, ptr %t63
+  store ptr %t79, ptr %t80
+  %t81 = alloca i64
+  %t82 = sext i32 0 to i64
+  store i64 %t82, ptr %t81
+  br label %L21
+L21:
+  %t83 = load i64, ptr %t81
+  %t84 = load ptr, ptr %t30
+  %t85 = load ptr, ptr %t84
+  %t87 = ptrtoint ptr %t85 to i64
+  %t86 = icmp slt i64 %t83, %t87
+  %t88 = zext i1 %t86 to i64
+  %t89 = icmp ne i64 %t88, 0
+  br i1 %t89, label %L22, label %L24
+L22:
+  %t90 = load ptr, ptr %t30
+  %t91 = load ptr, ptr %t90
+  %t92 = load i64, ptr %t81
+  %t93 = getelementptr ptr, ptr %t91, i64 %t92
+  %t94 = load ptr, ptr %t93
+  %t95 = icmp ne ptr %t94, null
+  br i1 %t95, label %L25, label %L26
+L25:
+  %t96 = load ptr, ptr %t30
+  %t97 = load ptr, ptr %t96
+  %t98 = load i64, ptr %t81
+  %t99 = getelementptr ptr, ptr %t97, i64 %t98
+  %t100 = load ptr, ptr %t99
+  %t101 = call ptr @strdup(ptr %t100)
+  %t102 = ptrtoint ptr %t101 to i64
+  br label %L27
 L26:
-  %t133 = load ptr, ptr %t117
-  %t134 = call ptr @parse_initializer(ptr %t0)
-  call void @node_add_child(ptr %t133, ptr %t134)
-  br label %L28
+  %t104 = sext i32 0 to i64
+  %t103 = inttoptr i64 %t104 to ptr
+  %t105 = ptrtoint ptr %t103 to i64
+  br label %L27
+L27:
+  %t106 = phi i64 [ %t102, %L25 ], [ %t105, %L26 ]
+  %t107 = load ptr, ptr %t63
+  %t108 = load ptr, ptr %t107
+  %t109 = load i64, ptr %t81
+  %t110 = getelementptr ptr, ptr %t108, i64 %t109
+  store i64 %t106, ptr %t110
+  br label %L23
+L23:
+  %t111 = load i64, ptr %t81
+  %t112 = add i64 %t111, 1
+  store i64 %t112, ptr %t81
+  br label %L21
+L24:
+  %t113 = call ptr @parse_block(ptr %t0)
+  %t114 = load ptr, ptr %t63
+  store ptr %t113, ptr %t114
+  %t115 = load ptr, ptr %t63
+  ret ptr %t115
 L28:
-  br label %L29
+  br label %L20
+L20:
+  %t116 = alloca ptr
+  %t117 = load i64, ptr %t1
+  %t118 = call ptr @node_new(i64 2, i64 %t117)
+  store ptr %t118, ptr %t116
+  %t119 = load ptr, ptr %t27
+  %t120 = load ptr, ptr %t116
+  store ptr %t119, ptr %t120
+  %t121 = load ptr, ptr %t30
+  %t122 = load ptr, ptr %t116
+  store ptr %t121, ptr %t122
+  %t123 = load ptr, ptr %t116
+  %t124 = sext i32 1 to i64
+  store i64 %t124, ptr %t123
+  %t125 = load i64, ptr %t6
+  %t126 = load ptr, ptr %t116
+  store i64 %t125, ptr %t126
+  %t127 = load i64, ptr %t8
+  %t128 = load ptr, ptr %t116
+  store i64 %t127, ptr %t128
+  %t129 = call i32 @match(ptr %t0, i64 55)
+  %t130 = sext i32 %t129 to i64
+  %t131 = icmp ne i64 %t130, 0
+  br i1 %t131, label %L29, label %L31
 L29:
-  %t136 = call i32 @match(ptr %t0, i64 79)
-  %t137 = sext i32 %t136 to i64
-  %t138 = icmp ne i64 %t137, 0
-  br i1 %t138, label %L30, label %L31
-L30:
-  %t139 = alloca ptr
-  %t141 = sext i32 0 to i64
-  %t140 = inttoptr i64 %t141 to ptr
-  store ptr %t140, ptr %t139
-  %t142 = alloca ptr
-  %t143 = load ptr, ptr %t10
-  %t144 = call ptr @parse_declarator(ptr %t0, ptr %t143, ptr %t139)
-  store ptr %t144, ptr %t142
-  %t145 = alloca ptr
-  %t146 = load i64, ptr %t1
-  %t147 = call ptr @node_new(i64 2, i64 %t146)
-  store ptr %t147, ptr %t145
-  %t148 = load ptr, ptr %t139
-  %t149 = load ptr, ptr %t145
-  store ptr %t148, ptr %t149
-  %t150 = load ptr, ptr %t142
-  %t151 = load ptr, ptr %t145
-  store ptr %t150, ptr %t151
-  %t152 = load ptr, ptr %t145
-  %t153 = sext i32 1 to i64
-  store i64 %t153, ptr %t152
-  %t154 = call i32 @match(ptr %t0, i64 55)
-  %t155 = sext i32 %t154 to i64
-  %t156 = icmp ne i64 %t155, 0
-  br i1 %t156, label %L32, label %L34
-L32:
-  %t157 = load ptr, ptr %t145
-  %t158 = call ptr @parse_initializer(ptr %t0)
-  call void @node_add_child(ptr %t157, ptr %t158)
-  br label %L34
-L34:
-  %t160 = load ptr, ptr %t117
-  %t161 = load ptr, ptr %t145
-  call void @node_add_child(ptr %t160, ptr %t161)
-  br label %L29
+  %t132 = load ptr, ptr %t116
+  %t133 = call ptr @parse_initializer(ptr %t0)
+  call void @node_add_child(ptr %t132, ptr %t133)
+  br label %L31
 L31:
-  call void @expect(ptr %t0, i64 78)
-  %t164 = load ptr, ptr %t117
-  ret ptr %t164
+  br label %L32
+L32:
+  %t135 = call i32 @match(ptr %t0, i64 79)
+  %t136 = sext i32 %t135 to i64
+  %t137 = icmp ne i64 %t136, 0
+  br i1 %t137, label %L33, label %L34
+L33:
+  %t138 = alloca ptr
+  %t140 = sext i32 0 to i64
+  %t139 = inttoptr i64 %t140 to ptr
+  store ptr %t139, ptr %t138
+  %t141 = alloca ptr
+  %t142 = load ptr, ptr %t10
+  %t143 = call ptr @parse_declarator(ptr %t0, ptr %t142, ptr %t138)
+  store ptr %t143, ptr %t141
+  %t144 = alloca ptr
+  %t145 = load i64, ptr %t1
+  %t146 = call ptr @node_new(i64 2, i64 %t145)
+  store ptr %t146, ptr %t144
+  %t147 = load ptr, ptr %t138
+  %t148 = load ptr, ptr %t144
+  store ptr %t147, ptr %t148
+  %t149 = load ptr, ptr %t141
+  %t150 = load ptr, ptr %t144
+  store ptr %t149, ptr %t150
+  %t151 = load ptr, ptr %t144
+  %t152 = sext i32 1 to i64
+  store i64 %t152, ptr %t151
+  %t153 = call i32 @match(ptr %t0, i64 55)
+  %t154 = sext i32 %t153 to i64
+  %t155 = icmp ne i64 %t154, 0
+  br i1 %t155, label %L35, label %L37
 L35:
+  %t156 = load ptr, ptr %t144
+  %t157 = call ptr @parse_initializer(ptr %t0)
+  call void @node_add_child(ptr %t156, ptr %t157)
+  br label %L37
+L37:
+  %t159 = load ptr, ptr %t116
+  %t160 = load ptr, ptr %t144
+  call void @node_add_child(ptr %t159, ptr %t160)
+  br label %L32
+L34:
+  call void @expect(ptr %t0, i64 78)
+  %t163 = load ptr, ptr %t116
+  ret ptr %t163
+L38:
   ret ptr null
 }
 
 define dso_local ptr @parser_new(ptr %t0) {
 entry:
   %t1 = alloca ptr
-  %t2 = call ptr @calloc(i64 1, i64 8)
+  %t2 = call ptr @calloc(i64 1, i64 0)
   store ptr %t2, ptr %t1
   %t3 = load ptr, ptr %t1
   %t5 = ptrtoint ptr %t3 to i64
@@ -4970,44 +5371,53 @@ L2:
   %t12 = call i64 @lexer_next(ptr %t0)
   %t13 = load ptr, ptr %t1
   store i64 %t12, ptr %t13
-  %t14 = alloca ptr
-  %t15 = sext i32 0 to i64
-  store i64 %t15, ptr %t14
-  %t16 = alloca i64
-  %t17 = sext i32 0 to i64
-  store i64 %t17, ptr %t16
+  %t14 = call ptr @calloc(i64 512, i64 8)
+  %t15 = load ptr, ptr %t1
+  store ptr %t14, ptr %t15
+  %t16 = call ptr @calloc(i64 1024, i64 8)
+  %t17 = load ptr, ptr %t1
+  store ptr %t16, ptr %t17
+  %t18 = alloca ptr
+  %t19 = sext i32 0 to i64
+  store i64 %t19, ptr %t18
+  %t20 = alloca ptr
+  %t21 = sext i32 0 to i64
+  store i64 %t21, ptr %t20
+  %t22 = alloca i64
+  %t23 = sext i32 0 to i64
+  store i64 %t23, ptr %t22
   br label %L3
 L3:
-  %t18 = load ptr, ptr %t14
-  %t19 = load i64, ptr %t16
-  %t20 = getelementptr i8, ptr %t18, i64 %t19
-  %t21 = load ptr, ptr %t20
-  %t22 = icmp ne ptr %t21, null
-  br i1 %t22, label %L4, label %L6
-L4:
-  %t23 = alloca ptr
-  %t24 = load ptr, ptr %t14
-  %t25 = load i64, ptr %t16
-  %t26 = getelementptr i8, ptr %t24, i64 %t25
+  %t24 = load ptr, ptr %t18
+  %t25 = load i64, ptr %t22
+  %t26 = getelementptr ptr, ptr %t24, i64 %t25
   %t27 = load ptr, ptr %t26
-  %t28 = call ptr @type_new(ptr %t27)
-  store ptr %t28, ptr %t23
-  %t29 = load ptr, ptr %t1
-  %t30 = load ptr, ptr %t14
-  %t31 = load i64, ptr %t16
-  %t32 = getelementptr i8, ptr %t30, i64 %t31
+  %t28 = icmp ne ptr %t27, null
+  br i1 %t28, label %L4, label %L6
+L4:
+  %t29 = alloca ptr
+  %t30 = load ptr, ptr %t20
+  %t31 = load i64, ptr %t22
+  %t32 = getelementptr ptr, ptr %t30, i64 %t31
   %t33 = load ptr, ptr %t32
-  %t34 = load ptr, ptr %t23
-  call void @register_typedef(ptr %t29, ptr %t33, ptr %t34)
+  %t34 = call ptr @type_new(ptr %t33)
+  store ptr %t34, ptr %t29
+  %t35 = load ptr, ptr %t1
+  %t36 = load ptr, ptr %t18
+  %t37 = load i64, ptr %t22
+  %t38 = getelementptr ptr, ptr %t36, i64 %t37
+  %t39 = load ptr, ptr %t38
+  %t40 = load ptr, ptr %t29
+  call void @register_typedef(ptr %t35, ptr %t39, ptr %t40)
   br label %L5
 L5:
-  %t36 = load i64, ptr %t16
-  %t37 = add i64 %t36, 1
-  store i64 %t37, ptr %t16
+  %t42 = load i64, ptr %t22
+  %t43 = add i64 %t42, 1
+  store i64 %t43, ptr %t22
   br label %L3
 L6:
-  %t38 = load ptr, ptr %t1
-  ret ptr %t38
+  %t44 = load ptr, ptr %t1
+  ret ptr %t44
 L7:
   ret ptr null
 }
@@ -5029,43 +5439,71 @@ L0:
   %t10 = icmp ne i64 %t9, 0
   br i1 %t10, label %L1, label %L3
 L1:
-  %t11 = load ptr, ptr %t0
-  %t12 = load i64, ptr %t3
-  %t13 = getelementptr i8, ptr %t11, i64 %t12
-  %t14 = load ptr, ptr %t13
-  call void @free(ptr %t14)
-  br label %L2
-L2:
-  %t16 = load i64, ptr %t3
-  %t17 = add i64 %t16, 1
-  store i64 %t17, ptr %t3
-  br label %L0
-L3:
-  %t18 = alloca i64
-  %t19 = sext i32 0 to i64
-  store i64 %t19, ptr %t18
-  br label %L4
+  %t11 = alloca ptr
+  %t12 = load ptr, ptr %t0
+  %t13 = load i64, ptr %t3
+  %t14 = getelementptr ptr, ptr %t12, i64 %t13
+  %t15 = load ptr, ptr %t14
+  store ptr %t15, ptr %t11
+  %t16 = load ptr, ptr %t11
+  %t17 = icmp ne ptr %t16, null
+  br i1 %t17, label %L4, label %L6
 L4:
-  %t20 = load i64, ptr %t18
-  %t21 = load ptr, ptr %t0
-  %t23 = ptrtoint ptr %t21 to i64
-  %t22 = icmp slt i64 %t20, %t23
-  %t24 = zext i1 %t22 to i64
-  %t25 = icmp ne i64 %t24, 0
-  br i1 %t25, label %L5, label %L7
-L5:
-  %t26 = load ptr, ptr %t0
-  %t27 = load i64, ptr %t18
-  %t28 = getelementptr i8, ptr %t26, i64 %t27
-  %t29 = load ptr, ptr %t28
-  call void @free(ptr %t29)
+  %t18 = load ptr, ptr %t11
+  %t19 = load ptr, ptr %t18
+  call void @free(ptr %t19)
+  %t21 = load ptr, ptr %t11
+  call void @free(ptr %t21)
   br label %L6
 L6:
-  %t31 = load i64, ptr %t18
-  %t32 = add i64 %t31, 1
-  store i64 %t32, ptr %t18
-  br label %L4
+  br label %L2
+L2:
+  %t23 = load i64, ptr %t3
+  %t24 = add i64 %t23, 1
+  store i64 %t24, ptr %t3
+  br label %L0
+L3:
+  %t25 = load ptr, ptr %t0
+  call void @free(ptr %t25)
+  %t27 = alloca i64
+  %t28 = sext i32 0 to i64
+  store i64 %t28, ptr %t27
+  br label %L7
 L7:
+  %t29 = load i64, ptr %t27
+  %t30 = load ptr, ptr %t0
+  %t32 = ptrtoint ptr %t30 to i64
+  %t31 = icmp slt i64 %t29, %t32
+  %t33 = zext i1 %t31 to i64
+  %t34 = icmp ne i64 %t33, 0
+  br i1 %t34, label %L8, label %L10
+L8:
+  %t35 = alloca ptr
+  %t36 = load ptr, ptr %t0
+  %t37 = load i64, ptr %t27
+  %t38 = getelementptr ptr, ptr %t36, i64 %t37
+  %t39 = load ptr, ptr %t38
+  store ptr %t39, ptr %t35
+  %t40 = load ptr, ptr %t35
+  %t41 = icmp ne ptr %t40, null
+  br i1 %t41, label %L11, label %L13
+L11:
+  %t42 = load ptr, ptr %t35
+  %t43 = load ptr, ptr %t42
+  call void @free(ptr %t43)
+  %t45 = load ptr, ptr %t35
+  call void @free(ptr %t45)
+  br label %L13
+L13:
+  br label %L9
+L9:
+  %t47 = load i64, ptr %t27
+  %t48 = add i64 %t47, 1
+  store i64 %t48, ptr %t27
+  br label %L7
+L10:
+  %t49 = load ptr, ptr %t0
+  call void @free(ptr %t49)
   call void @free(ptr %t0)
   ret void
 }

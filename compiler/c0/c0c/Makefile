@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -O2 -Wall -Wextra
+CFLAGS ?= -O0 -g -Wall -Wextra
 
 SRCS = main.c lexer.c parser.c ast.c codegen.c macro.c
 OBJS = $(SRCS:.c=.o)

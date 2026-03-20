@@ -54,6 +54,7 @@ declare i32 @assert(i32)
 declare ptr @__c0c_stderr()
 declare ptr @__c0c_stdout()
 declare ptr @__c0c_stdin()
+declare ptr @__c0c_get_tbuf(i32)
 declare void @__c0c_emit(ptr, ptr, ...)
 
 
@@ -115,7 +116,7 @@ L2:
   %t22 = add i64 %t23, 1
   store i64 %t22, ptr %t0
   %t25 = ptrtoint ptr %t21 to i64
-  %t24 = getelementptr i8, ptr %t20, i64 %t25
+  %t24 = getelementptr ptr, ptr %t20, i64 %t25
   store ptr %t1, ptr %t24
   ret void
 }
@@ -147,9 +148,9 @@ L4:
 L5:
   %t13 = load ptr, ptr %t0
   %t14 = load i64, ptr %t5
-  %t15 = getelementptr i32, ptr %t13, i64 %t14
-  %t16 = load i64, ptr %t15
-  call void @node_free(i64 %t16)
+  %t15 = getelementptr ptr, ptr %t13, i64 %t14
+  %t16 = load ptr, ptr %t15
+  call void @node_free(ptr %t16)
   br label %L6
 L6:
   %t18 = load i64, ptr %t5
@@ -263,7 +264,7 @@ L7:
 L8:
   %t19 = load ptr, ptr %t0
   %t20 = load i64, ptr %t11
-  %t21 = getelementptr i8, ptr %t19, i64 %t20
+  %t21 = getelementptr ptr, ptr %t19, i64 %t20
   %t22 = load ptr, ptr %t21
   call void @free(ptr %t22)
   br label %L9
@@ -348,18 +349,24 @@ entry:
   %t4 = sext i32 13 to i64
   %t2 = icmp eq i64 %t3, %t4
   %t5 = zext i1 %t2 to i64
-  %t6 = load ptr, ptr %t0
-  %t8 = ptrtoint ptr %t6 to i64
-  %t9 = sext i32 14 to i64
-  %t7 = icmp eq i64 %t8, %t9
-  %t10 = zext i1 %t7 to i64
-  %t12 = icmp ne i64 %t5, 0
-  %t13 = icmp ne i64 %t10, 0
-  %t14 = or i1 %t12, %t13
-  %t15 = zext i1 %t14 to i64
-  %t16 = trunc i64 %t15 to i32
-  ret i32 %t16
+  %t6 = icmp ne i64 %t5, 0
+  br i1 %t6, label %L0, label %L1
 L0:
+  br label %L2
+L1:
+  %t7 = load ptr, ptr %t0
+  %t9 = ptrtoint ptr %t7 to i64
+  %t10 = sext i32 14 to i64
+  %t8 = icmp eq i64 %t9, %t10
+  %t11 = zext i1 %t8 to i64
+  %t12 = icmp ne i64 %t11, 0
+  %t13 = zext i1 %t12 to i64
+  br label %L2
+L2:
+  %t14 = phi i64 [ 1, %L0 ], [ %t13, %L1 ]
+  %t15 = trunc i64 %t14 to i32
+  ret i32 %t15
+L3:
   ret i32 0
 }
 
@@ -370,18 +377,24 @@ entry:
   %t4 = sext i32 15 to i64
   %t2 = icmp eq i64 %t3, %t4
   %t5 = zext i1 %t2 to i64
-  %t6 = load ptr, ptr %t0
-  %t8 = ptrtoint ptr %t6 to i64
-  %t9 = sext i32 16 to i64
-  %t7 = icmp eq i64 %t8, %t9
-  %t10 = zext i1 %t7 to i64
-  %t12 = icmp ne i64 %t5, 0
-  %t13 = icmp ne i64 %t10, 0
-  %t14 = or i1 %t12, %t13
-  %t15 = zext i1 %t14 to i64
-  %t16 = trunc i64 %t15 to i32
-  ret i32 %t16
+  %t6 = icmp ne i64 %t5, 0
+  br i1 %t6, label %L0, label %L1
 L0:
+  br label %L2
+L1:
+  %t7 = load ptr, ptr %t0
+  %t9 = ptrtoint ptr %t7 to i64
+  %t10 = sext i32 16 to i64
+  %t8 = icmp eq i64 %t9, %t10
+  %t11 = zext i1 %t8 to i64
+  %t12 = icmp ne i64 %t11, 0
+  %t13 = zext i1 %t12 to i64
+  br label %L2
+L2:
+  %t14 = phi i64 [ 1, %L0 ], [ %t13, %L1 ]
+  %t15 = trunc i64 %t14 to i32
+  ret i32 %t15
+L3:
   ret i32 0
 }
 

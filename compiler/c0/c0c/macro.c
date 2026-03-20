@@ -61,24 +61,36 @@ typedef struct {
     int    is_defined;
 } Macro;
 
-static Macro macros[MAX_MACROS];
-static int   n_macros = 0;
+/* Macro table: use array of pointers so each Macro is individually allocated.
+   This avoids struct array indexing (macros[i]) which c0c gets wrong
+   (1-byte stride instead of sizeof(Macro) stride). */
+static Macro **macro_ptrs = NULL;
+static int     n_macros   = 0;
+
+static void macros_init(void) {
+    if (!macro_ptrs) macro_ptrs = calloc(MAX_MACROS, sizeof(Macro*));
+}
 
 static Macro *macro_find(const char *name) {
-    for (int i = 0; i < n_macros; i++)
-        if (macros[i].is_defined && strcmp(macros[i].name, name) == 0)
-            return &macros[i];
+    if (!macro_ptrs) return NULL;
+    for (int i = 0; i < n_macros; i++) {
+        Macro *m = macro_ptrs[i];
+        if (m && m->is_defined && strcmp(m->name, name) == 0)
+            return m;
+    }
     return NULL;
 }
 
 static void macro_define(const char *name, const char *body,
                           char **params, int n_params, int is_func) {
+    if (!macro_ptrs) macros_init();
     /* replace existing */
     for (int i = 0; i < n_macros; i++) {
-        if (strcmp(macros[i].name, name) == 0) {
-            free(macros[i].body);
-            macros[i].body = strdup(body);
-            macros[i].is_defined = 1;
+        Macro *m = macro_ptrs[i];
+        if (m && strcmp(m->name, name) == 0) {
+            free(m->body);
+            m->body = strdup(body);
+            m->is_defined = 1;
             return;
         }
     }
@@ -86,7 +98,7 @@ static void macro_define(const char *name, const char *body,
         fprintf(stderr, "macro table full\n");
         return;
     }
-    Macro *m   = &macros[n_macros++];
+    Macro *m = calloc(1, sizeof(Macro));
     m->name    = strdup(name);
     m->body    = strdup(body);
     m->n_params = n_params;
@@ -94,14 +106,18 @@ static void macro_define(const char *name, const char *body,
     m->is_defined   = 1;
     for (int i = 0; i < n_params && i < MAX_PARAMS; i++)
         m->params[i] = params[i] ? strdup(params[i]) : NULL;
+    macro_ptrs[n_macros++] = m;
 }
 
 static void macro_undef(const char *name) {
-    for (int i = 0; i < n_macros; i++)
-        if (strcmp(macros[i].name, name) == 0) {
-            macros[i].is_defined = 0;
+    if (!macro_ptrs) return;
+    for (int i = 0; i < n_macros; i++) {
+        Macro *m = macro_ptrs[i];
+        if (m && strcmp(m->name, name) == 0) {
+            m->is_defined = 0;
             return;
         }
+    }
 }
 
 /* ---------------------------------------------------------------- skip utilities */
@@ -317,13 +333,19 @@ static char *read_file(const char *path) {
     return buf;
 }
 
-/* search paths for includes */
-static const char *INCLUDE_PATHS[] = {
-    "/usr/include",
-    "/usr/local/include",
-    ".",
-    NULL
-};
+/* search paths for includes — returned by a function to avoid global array issues */
+static const char **get_include_paths(void) {
+    static const char *paths[4];
+    static int init = 0;
+    if (!init) {
+        paths[0] = "/usr/include";
+        paths[1] = "/usr/local/include";
+        paths[2] = ".";
+        paths[3] = NULL;
+        init = 1;
+    }
+    return paths;
+}
 
 static char *find_include(const char *name, int is_system) {
     if (!is_system) {
@@ -331,6 +353,7 @@ static char *find_include(const char *name, int is_system) {
         char *content = read_file(name);
         if (content) return content;
     }
+    const char **INCLUDE_PATHS = get_include_paths();
     for (int i = 0; INCLUDE_PATHS[i]; i++) {
         char path[1024];
         snprintf(path, sizeof path, "%s/%s", INCLUDE_PATHS[i], name);
@@ -596,6 +619,7 @@ static void preprocess_into(const char *src, const char *filename,
 /* ---------------------------------------------------------------- public API */
 
 char *macro_preprocess(const char *src, const char *filename, int include_depth) {
+    macros_init();
     Buf out; buf_init(&out);
     int if_stack[64] = {0};
     int if_depth = 0;

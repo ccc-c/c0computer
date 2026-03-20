@@ -84,13 +84,21 @@ extern void __c0c_emit(FILE *out, const char *fmt, ...);
 
 #define EMIT_BUF_SIZE 8192  /* kept for reference */
 
-/* Convert our Type to LLVM IR type string (static buffer rotation) */
+/* Convert our Type to LLVM IR type string (static buffer rotation.
+   Use a global char pointer backed by a fixed array.
+   Named individually so c0c initializes each as a separate global. */
 #define N_TBUFS 8
-static char tbufs[N_TBUFS][256];
-static int  tbuf_idx = 0;
+#define TBUF_SIZE 256
+/* __c0c_get_tbuf: provided by c0c_compat.c, returns tbuf[i%8].
+   In c0c IR this becomes 'declare ptr @__c0c_get_tbuf(i32)' from the header. */
+#ifndef __C0C__
+extern char *__c0c_get_tbuf(int i);
+#endif
+static int   tbuf_idx = 0;
 
 static const char *llvm_type(const Type *t) {
-    char *buf = tbufs[tbuf_idx++ % N_TBUFS];
+    char *buf = __c0c_get_tbuf(tbuf_idx++);
+    if (!buf) buf = __c0c_get_tbuf(0);  /* safety fallback */
     if (!t) { strcpy(buf, "i32"); return buf; }
     switch (t->kind) {
     case TY_VOID:      strcpy(buf, "void");   break;
@@ -277,7 +285,8 @@ static char *emit_lvalue_addr(Codegen *cg, Node *n) {
         int r = new_reg(cg);
         Type *elem = (n->children[0]->type && n->children[0]->type->base)
                       ? n->children[0]->type->base : NULL;
-        const char *et = elem ? llvm_type(elem) : "i8";
+        /* Default to ptr element stride when type unknown — safer for pointer arrays */
+        const char *et = elem ? llvm_type(elem) : "ptr";
         /* ensure base is ptr */
         char base_r[64];
         if (val_is_ptr(base_v)) { strncpy(base_r, base_v.reg, 63); base_r[63] = '\0'; }
@@ -294,8 +303,21 @@ static char *emit_lvalue_addr(Codegen *cg, Node *n) {
         if (n->kind == ND_ARROW) base_v = emit_expr(cg, n->children[0]);
         else {
             char *addr = emit_lvalue_addr(cg, n->children[0]);
-            base_v = make_val(addr, default_ptr_type());
-            free(addr);
+            if (addr) {
+                base_v = make_val(addr, default_ptr_type());
+                free(addr);
+            } else {
+                /* rvalue base — use emit_expr to get the ptr value */
+                base_v = emit_expr(cg, n->children[0]);
+                if (!val_is_ptr(base_v)) {
+                    /* promote to ptr */
+                    int rp = new_reg(cg);
+                    char promoted[64]; promote_to_i64(cg, base_v, promoted, 64);
+                    __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rp, promoted);
+                    char tmp[32]; snprintf(tmp, 32, "%%t%d", rp);
+                    base_v = make_val(tmp, default_ptr_type());
+                }
+            }
         }
         /* We don't have full struct layout, use i8 GEP offset 0 as placeholder */
         char *buf = malloc(64);
@@ -450,8 +472,8 @@ static Val emit_expr(Codegen *cg, Node *n) {
         Type *ret_type = default_int_type();
 
         /* Collect args */
-        char **arg_regs  = malloc(n->n_children * sizeof *arg_regs);
-        Type **arg_types = malloc(n->n_children * sizeof *arg_types);
+        char **arg_regs  = malloc(n->n_children * 8);
+        Type **arg_types = malloc(n->n_children * 8);
         for (int i = 1; i < n->n_children; i++) {
             Val av = emit_expr(cg, n->children[i]);
             arg_regs[i]  = strdup(av.reg);
@@ -477,6 +499,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
                     "parser_new","lexer_new","codegen_new",
                     "macro_preprocess","read_file",
                     "__c0c_stderr","__c0c_stdout","__c0c_stdin",
+                    "__c0c_get_tbuf",
                     NULL
                 };
                 for (int pi = 0; ptr_funcs[pi]; pi++) {
@@ -563,6 +586,54 @@ static Val emit_expr(Codegen *cg, Node *n) {
     }
 
     case ND_BINOP: {
+        /* Short-circuit operators must be handled before evaluating both operands */
+        if (n->op == TOK_AND) {
+            Val lv = emit_expr(cg, n->children[0]);
+            int lTrue = new_label(cg), lFalse = new_label(cg), lEnd = new_label(cg);
+            char la[64]; promote_to_i64(cg, lv, la, 64);
+            int rA = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
+            __c0c_emit(cg->out, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rA, lTrue, lFalse);
+            __c0c_emit(cg->out, "L%d:\n", lTrue);
+            Val rv = emit_expr(cg, n->children[1]);
+            char lb[64]; promote_to_i64(cg, rv, lb, 64);
+            int rB = new_reg(cg), rBext = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
+            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rBext, rB);
+            __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
+            __c0c_emit(cg->out, "L%d:\n", lFalse);
+            __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
+            __c0c_emit(cg->out, "L%d:\n", lEnd);
+            int rZ = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = phi i64 [ %%t%d, %%L%d ], [ 0, %%L%d ]\n",
+                       rZ, rBext, lTrue, lFalse);
+            char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
+            return make_val(buf, default_i64_type());
+        }
+        if (n->op == TOK_OR) {
+            Val lv = emit_expr(cg, n->children[0]);
+            int lTrue = new_label(cg), lFalse = new_label(cg), lEnd = new_label(cg);
+            char la[64]; promote_to_i64(cg, lv, la, 64);
+            int rA = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
+            __c0c_emit(cg->out, "  br i1 %%t%d, label %%L%d, label %%L%d\n", rA, lTrue, lFalse);
+            __c0c_emit(cg->out, "L%d:\n", lTrue);
+            __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
+            __c0c_emit(cg->out, "L%d:\n", lFalse);
+            Val rv = emit_expr(cg, n->children[1]);
+            char lb[64]; promote_to_i64(cg, rv, lb, 64);
+            int rB = new_reg(cg), rBext = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
+            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rBext, rB);
+            __c0c_emit(cg->out, "  br label %%L%d\n", lEnd);
+            __c0c_emit(cg->out, "L%d:\n", lEnd);
+            int rZ = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = phi i64 [ 1, %%L%d ], [ %%t%d, %%L%d ]\n",
+                       rZ, lTrue, rBext, lFalse);
+            char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
+            return make_val(buf, default_i64_type());
+        }
+
         Val lv = emit_expr(cg, n->children[0]);
         Val rv = emit_expr(cg, n->children[1]);
         int r  = new_reg(cg);
@@ -601,31 +672,9 @@ static Val emit_expr(Codegen *cg, Node *n) {
         case TOK_GT:   op = fp ? "fcmp ogt" : "icmp sgt"; is_cmp = 1; break;
         case TOK_LEQ:  op = fp ? "fcmp ole" : "icmp sle"; is_cmp = 1; break;
         case TOK_GEQ:  op = fp ? "fcmp oge" : "icmp sge"; is_cmp = 1; break;
-        case TOK_AND: {
-            int rA = new_reg(cg), rB = new_reg(cg), rC = new_reg(cg);
-            /* use promote_to_i64 then icmp, handles ptr correctly */
-            char la[64], lb[64];
-            promote_to_i64(cg, lv, la, 64); promote_to_i64(cg, rv, lb, 64);
-            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
-            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
-            __c0c_emit(cg->out, "  %%t%d = and i1 %%t%d, %%t%d\n", rC, rA, rB);
-            int rZ = new_reg(cg);
-            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rZ, rC);
-            char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
-            return make_val(buf, default_i64_type());
-        }
-        case TOK_OR: {
-            int rA = new_reg(cg), rB = new_reg(cg), rC = new_reg(cg);
-            char la[64], lb[64];
-            promote_to_i64(cg, lv, la, 64); promote_to_i64(cg, rv, lb, 64);
-            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rA, la);
-            __c0c_emit(cg->out, "  %%t%d = icmp ne i64 %s, 0\n", rB, lb);
-            __c0c_emit(cg->out, "  %%t%d = or i1 %%t%d, %%t%d\n", rC, rA, rB);
-            int rZ = new_reg(cg);
-            __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rZ, rC);
-            char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
-            return make_val(buf, default_i64_type());
-        }
+        case TOK_AND: case TOK_OR:
+            /* handled above with short-circuit; should not reach here */
+            op = "add"; break;
         default:
             op = "add"; /* fallback */
         }
@@ -807,7 +856,26 @@ static Val emit_expr(Codegen *cg, Node *n) {
     case ND_INDEX: {
         Val base_v = emit_expr(cg, n->children[0]);
         Val idx_v  = emit_expr(cg, n->children[1]);
-        Type *elem = (base_v.type && base_v.type->base) ? base_v.type->base : default_int_type();
+        /* Element type: use base's element type if known.
+           If base is a ptr with unknown base, default to ptr (8-byte stride)
+           rather than i32 (4-byte stride) — safer for pointer arrays. */
+        Type *elem = (base_v.type && base_v.type->base) ? base_v.type->base : NULL;
+        /* Determine GEP element type and load type */
+        int elem_is_ptr = (elem && (elem->kind == TY_PTR || elem->kind == TY_ARRAY));
+        int elem_is_fp  = (elem && type_is_fp(elem));
+        const char *gep_et;
+        const char *load_t;
+        Type *ret_elem;
+        if (!elem) {
+            /* Unknown element type — use ptr stride (safer for pointer arrays) */
+            gep_et = "ptr"; load_t = "ptr"; ret_elem = default_ptr_type();
+        } else if (elem_is_ptr) {
+            gep_et = "ptr"; load_t = "ptr"; ret_elem = default_ptr_type();
+        } else if (elem_is_fp) {
+            gep_et = llvm_type(elem); load_t = llvm_type(elem); ret_elem = elem;
+        } else {
+            gep_et = "i64"; load_t = "i64"; ret_elem = default_i64_type();
+        }
         /* Ensure base is ptr and index is i64 */
         char base_r[64], idx_r[64];
         if (val_is_ptr(base_v)) strncpy(base_r, base_v.reg, 63);
@@ -816,20 +884,8 @@ static Val emit_expr(Codegen *cg, Node *n) {
         base_r[63] = '\0';
         int rG = new_reg(cg);
         __c0c_emit(cg->out, "  %%t%d = getelementptr %s, ptr %s, i64 %s\n",
-             rG, llvm_type(elem), base_r, idx_r);
+             rG, gep_et, base_r, idx_r);
         int rL = new_reg(cg);
-        /* Load as ptr if elem is pointer type, else as i64 — never i32 */
-        int elem_is_ptr = (elem && (elem->kind == TY_PTR || elem->kind == TY_ARRAY));
-        int elem_is_fp  = elem && type_is_fp(elem);
-        const char *load_t;
-        Type *ret_elem;
-        if (elem_is_ptr) {
-            load_t = "ptr"; ret_elem = default_ptr_type();
-        } else if (elem_is_fp) {
-            load_t = llvm_type(elem); ret_elem = elem;
-        } else {
-            load_t = "i64"; ret_elem = default_i64_type();
-        }
         __c0c_emit(cg->out, "  %%t%d = load %s, ptr %%t%d\n", rL, load_t, rG);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rL);
         return make_val(buf, ret_elem);
@@ -924,9 +980,13 @@ static Val emit_expr(Codegen *cg, Node *n) {
             bv = emit_expr(cg, n->children[0]);
         } else {
             char *a = emit_lvalue_addr(cg, n->children[0]);
-            /* lvalue addresses are always ptr type */
-            bv = make_val(a ? a : "null", default_ptr_type());
-            if (a) free(a);
+            if (a) {
+                bv = make_val(a, default_ptr_type());
+                free(a);
+            } else {
+                /* rvalue base (e.g. function call result) — use emit_expr */
+                bv = emit_expr(cg, n->children[0]);
+            }
         }
         /* Ensure base is ptr — if it's i64, convert via inttoptr */
         char base_ptr[64];
@@ -1439,7 +1499,7 @@ static void emit_global_var(Codegen *cg, Node *n) {
 /* ================================================================ Public API */
 
 Codegen *codegen_new(FILE *out, const char *source_filename) {
-    Codegen *cg = calloc(1, sizeof *cg);
+    Codegen *cg = calloc(1, sizeof(Codegen));
     if (!cg) { perror("calloc"); exit(1); }
     cg->out             = out;
     cg->source_filename = source_filename;
@@ -1514,6 +1574,7 @@ void codegen_emit(Codegen *cg, Node *tu) {
     __c0c_emit(cg->out, "declare ptr @__c0c_stderr()\n");
     __c0c_emit(cg->out, "declare ptr @__c0c_stdout()\n");
     __c0c_emit(cg->out, "declare ptr @__c0c_stdin()\n");
+    __c0c_emit(cg->out, "declare ptr @__c0c_get_tbuf(i32)\n");
     __c0c_emit(cg->out, "declare void @__c0c_emit(ptr, ptr, ...)\n");
     __c0c_emit(cg->out, "\n");
 
@@ -1529,6 +1590,7 @@ void codegen_emit(Codegen *cg, Node *tu) {
         "va_start","va_end","va_copy",
         "__c0c_va_start","__c0c_va_end","__c0c_va_copy",
         "__c0c_stderr","__c0c_stdout","__c0c_stdin",
+        "__c0c_emit","__c0c_get_tbuf",
         "stderr","stdout","stdin",
         NULL
     };
