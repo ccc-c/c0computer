@@ -78,11 +78,20 @@ static const char *reg_name(int r, char *buf, size_t sz) {
 }
 #define REGBUF(r) (reg_name((r), (char[32]){0}, 32))
 
+/* emit_buf: shared buffer — 8192 bytes, sized explicitly to avoid sizeof issues */
+#define EMIT_BUF_SIZE 8192
+static char emit_buf_data[EMIT_BUF_SIZE];
+static char *emit_buf_storage = emit_buf_data;
+
 static void emit(Codegen *cg, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    vfprintf(cg->out, fmt, ap);
+    int n = vsnprintf(emit_buf_storage, EMIT_BUF_SIZE, fmt, (&ap));
     va_end(ap);
+    if (n > 0 && n < EMIT_BUF_SIZE)
+        fwrite(emit_buf_storage, 1, n, cg->out);
+    else if (n >= EMIT_BUF_SIZE)
+        fwrite(emit_buf_storage, 1, EMIT_BUF_SIZE - 1, cg->out);
 }
 
 /* Convert our Type to LLVM IR type string (static buffer rotation) */
@@ -477,6 +486,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
                     "node_new","type_new","type_ptr","type_array",
                     "parser_new","lexer_new","codegen_new",
                     "macro_preprocess","read_file",
+                    "__c0c_stderr","__c0c_stdout","__c0c_stdin",
                     NULL
                 };
                 for (int pi = 0; ptr_funcs[pi]; pi++) {
@@ -494,6 +504,19 @@ static Val emit_expr(Codegen *cg, Node *n) {
                 for (int pi = 0; i64_funcs[pi]; pi++) {
                     if (strcmp(callee->sval, i64_funcs[pi]) == 0) {
                         ret_type = default_i64_type();
+                        break;
+                    }
+                }
+                /* functions returning void */
+                static Type t_void = { TY_VOID, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+                const char *void_funcs[] = {
+                    "__c0c_va_start","__c0c_va_end","__c0c_va_copy",
+                    "free","exit","perror","assert",
+                    NULL
+                };
+                for (int pi = 0; void_funcs[pi]; pi++) {
+                    if (strcmp(callee->sval, void_funcs[pi]) == 0) {
+                        ret_type = &t_void;
                         break;
                     }
                 }
@@ -1471,6 +1494,7 @@ void codegen_emit(Codegen *cg, Node *tu) {
     emit(cg, "declare i32 @sprintf(ptr, ptr, ...)\n");
     emit(cg, "declare i32 @snprintf(ptr, i64, ptr, ...)\n");
     emit(cg, "declare i32 @vfprintf(ptr, ptr, ptr)\n");
+    emit(cg, "declare i32 @vsnprintf(ptr, i64, ptr, ptr)\n");
     /* va_list intrinsics */
     emit(cg, "declare void @llvm.va_start(ptr)\n");
     emit(cg, "declare void @llvm.va_end(ptr)\n");
@@ -1478,6 +1502,23 @@ void codegen_emit(Codegen *cg, Node *tu) {
     emit(cg, "declare i32 @va_start(...)\n");
     emit(cg, "declare i32 @va_end(...)\n");
     emit(cg, "declare i32 @va_copy(...)\n");
+    /* __c0c_va_start/end: wrappers that use LLVM va intrinsics.
+       Called as __c0c_va_start((&ap)) so first arg is ptr to va_list storage. */
+    emit(cg, "define internal void @__c0c_va_start(ptr %%valist_ptr, ...) {\n");
+    emit(cg, "entry:\n");
+    emit(cg, "  call void @llvm.va_start(ptr %%valist_ptr)\n");
+    emit(cg, "  ret void\n");
+    emit(cg, "}\n");
+    emit(cg, "define internal void @__c0c_va_end(ptr %%valist_ptr) {\n");
+    emit(cg, "entry:\n");
+    emit(cg, "  call void @llvm.va_end(ptr %%valist_ptr)\n");
+    emit(cg, "  ret void\n");
+    emit(cg, "}\n");
+    emit(cg, "define internal void @__c0c_va_copy(ptr %%dst_ptr, ptr %%src_ptr) {\n");
+    emit(cg, "entry:\n");
+    emit(cg, "  call void @llvm.va_copy(ptr %%dst_ptr, ptr %%src_ptr)\n");
+    emit(cg, "  ret void\n");
+    emit(cg, "}\n");
     emit(cg, "declare ptr @fopen(ptr, ptr)\n");
     emit(cg, "declare i32 @fclose(ptr)\n");
     emit(cg, "declare i64 @fread(ptr, i64, i64, ptr)\n");
@@ -1502,21 +1543,67 @@ void codegen_emit(Codegen *cg, Node *tu) {
     emit(cg, "declare i32 @toupper(i32)\n");
     emit(cg, "declare i32 @tolower(i32)\n");
     emit(cg, "declare i32 @assert(i32)\n");
-    emit(cg, "@stderr = external global ptr\n");
-    emit(cg, "@stdout = external global ptr\n");
-    emit(cg, "@stdin  = external global ptr\n");
+    /* stderr/stdout/stdin platform globals.
+       macOS: __stderrp/__stdoutp/__stdinp
+       Linux: stderr/stdout/stdin
+       We declare both with extern_weak so missing ones become null. */
+    emit(cg, "@__stderrp = extern_weak global ptr\n");
+    emit(cg, "@__stdoutp = extern_weak global ptr\n");
+    emit(cg, "@__stdinp  = extern_weak global ptr\n");
+    emit(cg, "@stderr = extern_weak global ptr\n");
+    emit(cg, "@stdout = extern_weak global ptr\n");
+    emit(cg, "@stdin  = extern_weak global ptr\n");
+    /* Pick whichever is non-null at runtime */
+    emit(cg, "define internal ptr @__c0c_stderr() {\n");
+    emit(cg, "entry:\n");
+    emit(cg, "  %%a = load ptr, ptr @__stderrp\n");
+    emit(cg, "  %%anull = icmp eq ptr %%a, null\n");
+    emit(cg, "  br i1 %%anull, label %%try_linux, label %%done\n");
+    emit(cg, "try_linux:\n");
+    emit(cg, "  %%b = load ptr, ptr @stderr\n");
+    emit(cg, "  br label %%done\n");
+    emit(cg, "done:\n");
+    emit(cg, "  %%r = phi ptr [ %%a, %%entry ], [ %%b, %%try_linux ]\n");
+    emit(cg, "  ret ptr %%r\n");
+    emit(cg, "}\n");
+    emit(cg, "define internal ptr @__c0c_stdout() {\n");
+    emit(cg, "entry:\n");
+    emit(cg, "  %%a = load ptr, ptr @__stdoutp\n");
+    emit(cg, "  %%anull = icmp eq ptr %%a, null\n");
+    emit(cg, "  br i1 %%anull, label %%try_linux, label %%done\n");
+    emit(cg, "try_linux:\n");
+    emit(cg, "  %%b = load ptr, ptr @stdout\n");
+    emit(cg, "  br label %%done\n");
+    emit(cg, "done:\n");
+    emit(cg, "  %%r = phi ptr [ %%a, %%entry ], [ %%b, %%try_linux ]\n");
+    emit(cg, "  ret ptr %%r\n");
+    emit(cg, "}\n");
+    emit(cg, "define internal ptr @__c0c_stdin() {\n");
+    emit(cg, "entry:\n");
+    emit(cg, "  %%a = load ptr, ptr @__stdinp\n");
+    emit(cg, "  %%anull = icmp eq ptr %%a, null\n");
+    emit(cg, "  br i1 %%anull, label %%try_linux, label %%done\n");
+    emit(cg, "try_linux:\n");
+    emit(cg, "  %%b = load ptr, ptr @stdin\n");
+    emit(cg, "  br label %%done\n");
+    emit(cg, "done:\n");
+    emit(cg, "  %%r = phi ptr [ %%a, %%entry ], [ %%b, %%try_linux ]\n");
+    emit(cg, "  ret ptr %%r\n");
+    emit(cg, "}\n");
     emit(cg, "\n");
 
     /* Register stdlib in globals table so calls don't re-declare */
     const char *stdlib_names[] = {
         "malloc","calloc","realloc","free","strlen","strdup","strndup",
         "strcpy","strncpy","strcat","strchr","strstr","strcmp","strncmp",
-        "memcpy","memset","memcmp","printf","fprintf","sprintf","snprintf","vfprintf",
+        "memcpy","memset","memcmp","printf","fprintf","sprintf","snprintf","vfprintf","vsnprintf",
         "fopen","fclose","fread","fwrite","fseek","ftell","perror","exit",
         "getenv","atoi","atol","strtol","strtoll","atof",
         "isspace","isdigit","isalpha","isalnum","isxdigit","isupper","islower",
         "toupper","tolower","assert",
         "va_start","va_end","va_copy",
+        "__c0c_va_start","__c0c_va_end","__c0c_va_copy",
+        "__c0c_stderr","__c0c_stdout","__c0c_stdin",
         "stderr","stdout","stdin",
         NULL
     };
