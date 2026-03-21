@@ -52,72 +52,144 @@ static void buf_putc(Buf *b, char c) {
 
 /* ---------------------------------------------------------------- macro table */
 
-typedef struct {
-    char  *name;
-    char  *body;           /* replacement body (after expansion of ## etc.) */
-    char  *params[MAX_PARAMS];
-    int    n_params;
-    int    is_func_like;
-    int    is_defined;
-} Macro;
+/* Macro table: use parallel arrays instead of struct arrays.
+   c0c's simplified IR generates all struct field accesses at offset 0,
+   so structs with multiple fields get corrupted. Parallel arrays avoid this. */
+#define MACRO_NAME     0
+#define MACRO_BODY     1
+/* params stored separately per macro index */
 
-/* Macro table: use array of pointers so each Macro is individually allocated.
-   This avoids struct array indexing (macros[i]) which c0c gets wrong
-   (1-byte stride instead of sizeof(Macro) stride). */
-static Macro **macro_ptrs = NULL;
-static int     n_macros   = 0;
+static char **macro_names    = NULL;  /* macro_names[i] = name string */
+static char **macro_bodies   = NULL;  /* macro_bodies[i] = body string */
+static char **macro_params_0 = NULL;  /* param 0 for each macro */
+static char **macro_params_1 = NULL;
+static char **macro_params_2 = NULL;
+static char **macro_params_3 = NULL;
+static char **macro_params_4 = NULL;
+static char **macro_params_5 = NULL;
+static char **macro_params_6 = NULL;
+static char **macro_params_7 = NULL;
+static int   *macro_nparams  = NULL;  /* n_params per macro */
+static int   *macro_funclike = NULL;  /* is_func_like per macro */
+static int   *macro_defined  = NULL;  /* is_defined per macro */
+static int    n_macros       = 0;
 
 static void macros_init(void) {
-    if (!macro_ptrs) macro_ptrs = calloc(MAX_MACROS, sizeof(Macro*));
+    if (macro_names) return;
+    macro_names    = calloc(MAX_MACROS, sizeof(char*));
+    macro_bodies   = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_0 = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_1 = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_2 = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_3 = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_4 = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_5 = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_6 = calloc(MAX_MACROS, sizeof(char*));
+    macro_params_7 = calloc(MAX_MACROS, sizeof(char*));
+    macro_nparams  = calloc(MAX_MACROS, sizeof(int));
+    macro_funclike = calloc(MAX_MACROS, sizeof(int));
+    macro_defined  = calloc(MAX_MACROS, sizeof(int));
 }
 
-static Macro *macro_find(const char *name) {
-    if (!macro_ptrs) return NULL;
-    for (int i = 0; i < n_macros; i++) {
-        Macro *m = macro_ptrs[i];
-        if (m && m->is_defined && strcmp(m->name, name) == 0)
-            return m;
-    }
+/* Helper to set/get params by index — avoids params[MAX_PARAMS] struct array */
+static char *macro_get_param(int mi, int pi) {
+    if (pi == 0) return macro_params_0[mi];
+    if (pi == 1) return macro_params_1[mi];
+    if (pi == 2) return macro_params_2[mi];
+    if (pi == 3) return macro_params_3[mi];
+    if (pi == 4) return macro_params_4[mi];
+    if (pi == 5) return macro_params_5[mi];
+    if (pi == 6) return macro_params_6[mi];
+    if (pi == 7) return macro_params_7[mi];
     return NULL;
+}
+static void macro_set_param(int mi, int pi, char *v) {
+    if (pi == 0) macro_params_0[mi] = v;
+    else if (pi == 1) macro_params_1[mi] = v;
+    else if (pi == 2) macro_params_2[mi] = v;
+    else if (pi == 3) macro_params_3[mi] = v;
+    else if (pi == 4) macro_params_4[mi] = v;
+    else if (pi == 5) macro_params_5[mi] = v;
+    else if (pi == 6) macro_params_6[mi] = v;
+    else if (pi == 7) macro_params_7[mi] = v;
+}
+
+/* Find macro index by name, returns -1 if not found */
+static int macro_find_idx(const char *name) {
+    if (!macro_names) return -1;
+    for (int i = 0; i < n_macros; i++)
+        if (macro_defined[i] && macro_names[i] && strcmp(macro_names[i], name) == 0)
+            return i;
+    return -1;
+}
+
+/* Return body of named macro, or NULL if not defined */
+static const char *macro_find_body(const char *name) {
+    int i = macro_find_idx(name);
+    return (i >= 0) ? macro_bodies[i] : NULL;
 }
 
 static void macro_define(const char *name, const char *body,
                           char **params, int n_params, int is_func) {
-    if (!macro_ptrs) macros_init();
+    if (!macro_names) macros_init();
     /* replace existing */
-    for (int i = 0; i < n_macros; i++) {
-        Macro *m = macro_ptrs[i];
-        if (m && strcmp(m->name, name) == 0) {
-            free(m->body);
-            m->body = strdup(body);
-            m->is_defined = 1;
-            return;
+    int idx = macro_find_idx(name);
+    if (idx < 0) {
+        /* also check undefined slots */
+        for (int i = 0; i < n_macros; i++) {
+            if (macro_names[i] && strcmp(macro_names[i], name) == 0) {
+                idx = i; break;
+            }
         }
+    }
+    if (idx >= 0) {
+        free(macro_bodies[idx]);
+        macro_bodies[idx] = strdup(body);
+        macro_defined[idx] = 1;
+        return;
     }
     if (n_macros >= MAX_MACROS) {
         fprintf(stderr, "macro table full\n");
         return;
     }
-    Macro *m = calloc(1, sizeof(Macro));
-    m->name    = strdup(name);
-    m->body    = strdup(body);
-    m->n_params = n_params;
-    m->is_func_like = is_func;
-    m->is_defined   = 1;
+    idx = n_macros++;
+    macro_names[idx]    = strdup(name);
+    macro_bodies[idx]   = strdup(body);
+    macro_nparams[idx]  = n_params;
+    macro_funclike[idx] = is_func;
+    macro_defined[idx]  = 1;
     for (int i = 0; i < n_params && i < MAX_PARAMS; i++)
-        m->params[i] = params[i] ? strdup(params[i]) : NULL;
-    macro_ptrs[n_macros++] = m;
+        macro_set_param(idx, i, params[i] ? strdup(params[i]) : NULL);
 }
 
 static void macro_undef(const char *name) {
-    if (!macro_ptrs) return;
-    for (int i = 0; i < n_macros; i++) {
-        Macro *m = macro_ptrs[i];
-        if (m && strcmp(m->name, name) == 0) {
-            m->is_defined = 0;
-            return;
-        }
+    if (!macro_names) return;
+    int idx = macro_find_idx(name);
+    if (idx >= 0) macro_defined[idx] = 0;
+}
+
+/* Compatibility shim — old code used Macro* pointers */
+typedef struct {
+    const char *name;
+    const char *body;
+    int n_params;
+    int is_func_like;
+    int is_defined;
+    int idx;  /* index into parallel arrays */
+} MacroRef;
+
+static MacroRef macro_find_ref(const char *name) {
+    MacroRef r = {NULL, NULL, 0, 0, 0, -1};
+    int i = macro_find_idx(name);
+    if (i >= 0) {
+        r.name = macro_names[i];
+        r.body = macro_bodies[i];
+        r.n_params = macro_nparams[i];
+        r.is_func_like = macro_funclike[i];
+        r.is_defined = macro_defined[i];
+        r.idx = i;
     }
+    return r;
 }
 
 /* ---------------------------------------------------------------- skip utilities */
@@ -146,12 +218,17 @@ static const char *read_ident(const char *p, char *buf, size_t bufsz) {
    We do a single pass – good enough for self-compilation. */
 static void expand_text(const char *src, Buf *out, int depth);
 
-static void expand_func_macro(Macro *m, const char **src_ptr, Buf *out, int depth) {
+static void expand_func_macro(int mi, const char **src_ptr, Buf *out, int depth) {
+    const char *m_name      = macro_names[mi];
+    const char *m_body      = macro_bodies[mi];
+    int         m_n_params  = macro_nparams[mi];
+    int         m_is_vadic  = (m_n_params > 0 && macro_get_param(mi, m_n_params-1) &&
+                               strcmp(macro_get_param(mi, m_n_params-1), "...") == 0);
     const char *p = *src_ptr;
     p = skip_ws(p);
     if (*p != '(') {
         /* not a call, emit name as-is */
-        buf_append(out, m->name, strlen(m->name));
+        buf_append(out, m_name, strlen(m_name));
         return;
     }
     p++; /* skip '(' */
@@ -196,7 +273,7 @@ static void expand_func_macro(Macro *m, const char **src_ptr, Buf *out, int dept
     *src_ptr = p;
 
     /* substitute params in body */
-    const char *body = m->body;
+    const char *body = m_body;
     Buf expanded; buf_init(&expanded);
     while (*body) {
         /* Handle # stringification operator */
@@ -206,8 +283,9 @@ static void expand_func_macro(Macro *m, const char **src_ptr, Buf *out, int dept
             char param_name[256];
             const char *end = read_ident(body, param_name, sizeof param_name);
             int found = 0;
-            for (int i = 0; i < m->n_params && i < MAX_PARAMS; i++) {
-                if (m->params[i] && strcmp(m->params[i], param_name) == 0) {
+            for (int i = 0; i < m_n_params && i < MAX_PARAMS; i++) {
+                char *pn = macro_get_param(mi, i);
+                if (pn && strcmp(pn, param_name) == 0) {
                     buf_putc(&expanded, '"');
                     if (i < n_args && args[i]) {
                         const char *av = args[i];
@@ -237,15 +315,16 @@ static void expand_func_macro(Macro *m, const char **src_ptr, Buf *out, int dept
             int found = 0;
             /* handle __VA_ARGS__ */
             if (strcmp(ident, "__VA_ARGS__") == 0) {
-                for (int i = m->n_params; i < n_args; i++) {
-                    if (i > m->n_params) buf_putc(&expanded, ',');
+                for (int i = m_n_params; i < n_args; i++) {
+                    if (i > m_n_params) buf_putc(&expanded, ',');
                     if (args[i]) buf_append(&expanded, args[i], strlen(args[i]));
                 }
                 found = 1;
             }
             if (!found) {
-                for (int i = 0; i < m->n_params && i < MAX_PARAMS; i++) {
-                    if (m->params[i] && strcmp(m->params[i], ident) == 0) {
+                for (int i = 0; i < m_n_params && i < MAX_PARAMS; i++) {
+                    char *pn = macro_get_param(mi, i);
+                    if (pn && strcmp(pn, ident) == 0) {
                         if (i < n_args && args[i])
                             buf_append(&expanded, args[i], strlen(args[i]));
                         found = 1;
@@ -294,18 +373,18 @@ static void expand_text(const char *src, Buf *out, int depth) {
         if (isalpha((unsigned char)*p) || *p == '_') {
             char ident[256];
             const char *end = read_ident(p, ident, sizeof ident);
-            Macro *m = macro_find(ident);
-            if (m && m->is_func_like) {
+            int mi = macro_find_idx(ident);
+            if (mi >= 0 && macro_funclike[mi]) {
                 const char *q = end;
                 q = skip_ws(q);
                 if (*q == '(') {
                     p = end;
-                    expand_func_macro(m, &p, out, depth + 1);
+                    expand_func_macro(mi, &p, out, depth + 1);
                     continue;
                 }
             }
-            if (m && !m->is_func_like) {
-                expand_text(m->body, out, depth + 1);
+            if (mi >= 0 && !macro_funclike[mi]) {
+                expand_text(macro_bodies[mi], out, depth + 1);
                 p = end;
                 continue;
             }
@@ -382,13 +461,13 @@ static void process_directive(const char *line, const char *filename,
     /* ------ if / ifdef / ifndef / elif / else / endif ------ */
     if (strcmp(directive, "ifdef") == 0) {
         char name[256]; read_ident(p, name, sizeof name);
-        int val = (macro_find(name) != NULL);
+        int val = (macro_find_idx(name) >= 0);
         if (*if_depth < 32) if_stack[(*if_depth)++] = val;
         return;
     }
     if (strcmp(directive, "ifndef") == 0) {
         char name[256]; read_ident(p, name, sizeof name);
-        int val = (macro_find(name) == NULL);
+        int val = (macro_find_idx(name) < 0);
         if (*if_depth < 32) if_stack[(*if_depth)++] = val;
         return;
     }
@@ -401,7 +480,7 @@ static void process_directive(const char *line, const char *filename,
             p = skip_ws(p);
             char name[256]; const char *e = read_ident(p, name, sizeof name);
             (void)e;
-            val = (macro_find(name) != NULL);
+            val = (macro_find_idx(name) >= 0);
         } else {
             val = atoi(p) != 0;
         }
