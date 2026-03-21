@@ -406,6 +406,15 @@ class Tensor:
     def item(self):
         return self._data[0]
     
+    def tolist(self):
+        """將張量轉換為 Python 原生 list"""
+        flat = self.data
+        if isinstance(flat, list):
+            if len(flat) == 1 and isinstance(flat[0], list):
+                return flat[0]
+            return flat
+        return flat
+    
     def __repr__(self):
         return f"Tensor({self.data})"
 
