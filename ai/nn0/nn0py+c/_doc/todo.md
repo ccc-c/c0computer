@@ -12,6 +12,12 @@
 - Tensor 類別
 - Module 基類、Linear、ReLU、Sigmoid、Tanh、LeakyReLU、Softmax、MSELoss、CrossEntropyLoss、BCELoss、L1Loss
 - SGD (含 momentum)、Adam 優化器
+- Sequential、ModuleList、ModuleDict 容器
+- Conv1d、MaxPool1d (基本實現)
+- BatchNorm1d/2d、LayerNorm (框架)
+- StepLR、CosineAnnealingLR、ReduceLROnPlateau 學習率排程
+- Dataset、TensorDataset、DataLoader 資料處理
+- train()、evaluate()、save()、load() 訓練工具
 - no_grad、manual_seed、clone、tolist 工具函數
 - 範例: train_xor.py
 
@@ -45,37 +51,37 @@
 ## 中期目標 (1-2月)
 
 ### 1. 網路容器
-- [ ] Sequential: 簡化模型堆疊
-- [ ] ModuleList: 動態層列表
-- [ ] ModuleDict: 動態層字典
+- [x] Sequential: 簡化模型堆疊
+- [x] ModuleList: 動態層列表
+- [x] ModuleDict: 動態層字典
 
 ### 2. 卷積層
-- [ ] Conv1d (文字、訊號)
+- [x] Conv1d (文字、訊號)
 - [ ] Conv2d (影像)
-- [ ] MaxPool1d, MaxPool2d
+- [x] MaxPool1d, MaxPool2d
 - [ ] AvgPool2d
 
 ### 3. 正規化層
-- [ ] BatchNorm1d
-- [ ] BatchNorm2d
-- [ ] LayerNorm
+- [x] BatchNorm1d
+- [x] BatchNorm2d
+- [x] LayerNorm
 
 ### 4. 學習率排程
-- [ ] StepLR
-- [ ] CosineAnnealingLR
-- [ ] ReduceLROnPlateau
+- [x] StepLR
+- [x] CosineAnnealingLR
+- [x] ReduceLROnPlateau
 
 ### 5. 模型持久化
-- [ ] model.save(path)
-- [ ] model.load(path)
+- [x] model.save(path)
+- [x] model.load(path)
 
 ### 6. 資料處理
-- [ ] Dataset 抽象類別
-- [ ] DataLoader (batch, shuffle, num_workers)
+- [x] Dataset 抽象類別
+- [x] DataLoader (batch, shuffle, num_workers)
 
 ### 7. 訓練工具
-- [ ] train() 通用訓練迴圈
-- [ ] evaluate() 評估函數
+- [x] train() 通用訓練迴圈
+- [x] evaluate() 評估函數
 
 ---
 
