@@ -438,7 +438,10 @@ static Val emit_expr(Codegen *cg, Node *n) {
             } else if (l->type && type_is_fp(l->type)) {
                 load_t = llvm_type(l->type); ret_t = l->type;
             } else {
-                load_t = "i64"; ret_t = default_i64_type();
+                load_t = "i64";
+                /* Preserve original C type (TY_INT, TY_CHAR etc.) so varargs
+                   truncation works correctly for printf("%d", int_var) */
+                ret_t = (l->type) ? l->type : default_i64_type();
             }
             __c0c_emit(cg->out, "  %%t%d = load %s, ptr %s\n", r, load_t, l->llvm_name);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
@@ -454,7 +457,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
             } else if (type_is_fp(g->type)) {
                 load_t = llvm_type(g->type); ret_t = g->type;
             } else {
-                load_t = "i64"; ret_t = default_i64_type();
+                load_t = "i64"; ret_t = g->type ? g->type : default_i64_type();
             }
             __c0c_emit(cg->out, "  %%t%d = load %s, ptr @%s\n", r, load_t, n->sval);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
@@ -499,7 +502,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
                     "parser_new","lexer_new","codegen_new",
                     "macro_preprocess","read_file",
                     "__c0c_stderr","__c0c_stdout","__c0c_stdin",
-                    "__c0c_get_tbuf",
+                    "__c0c_get_tbuf","__c0c_get_td_name",
                     NULL
                 };
                 for (int pi = 0; ptr_funcs[pi]; pi++) {
@@ -512,6 +515,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
                 const char *i64_funcs[] = {
                     "strlen","strtol","strtoll","atol","atoll",
                     "ftell","fread","fwrite","fseek",
+                    "__c0c_get_td_kind",
                     NULL
                 };
                 for (int pi = 0; i64_funcs[pi]; pi++) {
@@ -540,23 +544,45 @@ static Val emit_expr(Codegen *cg, Node *n) {
             strncpy(callee_buf, cv.reg, sizeof callee_buf - 1);
         }
 
+        /* Is this a varargs function? printf/fprintf/sprintf/snprintf need i32 for int args */
+        int is_varargs_call = 0;
+        if (callee->kind == ND_IDENT) {
+            const char *va_funcs[] = {
+                "printf","fprintf","sprintf","snprintf","dprintf",
+                "vprintf","vfprintf","vsprintf","vsnprintf",
+                "__c0c_emit",
+                NULL
+            };
+            for (int pi = 0; va_funcs[pi]; pi++)
+                if (strcmp(callee->sval, va_funcs[pi]) == 0) { is_varargs_call = 1; break; }
+        }
+
+        /* For varargs calls on arm64/x86-64, integer args are passed as 64-bit.
+           Do NOT truncate to i32 — keep all integers as i64 for varargs.
+           The format string (%d vs %lld) is handled by printf internally. */
+
         int r = new_reg(cg);
         const char *rt = llvm_type(ret_type);
         int is_void = (ret_type->kind == TY_VOID);
 
-        if (is_void) __c0c_emit(cg->out, "  call void %s(", callee_buf);
-        else         __c0c_emit(cg->out, "  %%t%d = call %s %s(", r, rt, callee_buf);
+        if (is_void && is_varargs_call)
+            __c0c_emit(cg->out, "  call void (ptr, ...) %s(", callee_buf);
+        else if (is_void)
+            __c0c_emit(cg->out, "  call void %s(", callee_buf);
+        else if (is_varargs_call)
+            __c0c_emit(cg->out, "  %%t%d = call %s (ptr, ...) %s(", r, rt, callee_buf);
+        else
+            __c0c_emit(cg->out, "  %%t%d = call %s %s(", r, rt, callee_buf);
 
         for (int i = 1; i < n->n_children; i++) {
             if (i > 1) __c0c_emit(cg->out, ", ");
-            /* Use actual LLVM type: ptr for pointers, i64 for integers */
             const char *at;
             if (arg_types[i] && (arg_types[i]->kind == TY_PTR || arg_types[i]->kind == TY_ARRAY))
                 at = "ptr";
             else if (arg_types[i] && type_is_fp(arg_types[i]))
                 at = llvm_type(arg_types[i]);
             else
-                at = "i64";
+                at = "i64";  /* all integers as i64 — arm64 varargs promotes to 64-bit */
             __c0c_emit(cg->out, "%s %s", at, arg_regs[i]);
         }
         __c0c_emit(cg->out, ")\n");
@@ -1025,7 +1051,8 @@ static void emit_stmt(Codegen *cg, Node *n) {
 
     case ND_VAR_DECL: {
         Type *vt = n->var_type ? n->var_type : default_int_type();
-        /* Always allocate i64 for integers, ptr for pointers — consistent with loads */
+        /* Always allocate i64 for integers, ptr for pointers — consistent with loads.
+           But preserve the original C type in stored_vt for varargs type checking. */
         const char *lt;
         Type *stored_vt;
         if (vt->kind == TY_PTR || vt->kind == TY_ARRAY) {
@@ -1033,7 +1060,7 @@ static void emit_stmt(Codegen *cg, Node *n) {
         } else if (type_is_fp(vt)) {
             lt = llvm_type(vt); stored_vt = vt;
         } else {
-            lt = "i64"; stored_vt = default_i64_type();
+            lt = "i64"; stored_vt = vt;  /* keep original: TY_INT, TY_LONG, TY_CHAR etc. */
         }
         int r = new_reg(cg);
         __c0c_emit(cg->out, "  %%t%d = alloca %s\n", r, lt);
@@ -1518,8 +1545,8 @@ void codegen_emit(Codegen *cg, Node *tu) {
     /* ---- module header ---- */
     __c0c_emit(cg->out, "; ModuleID = '%s'\n", cg->source_filename);
     __c0c_emit(cg->out, "source_filename = \"%s\"\n", cg->source_filename);
-    __c0c_emit(cg->out, "target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128\"\n");
-    __c0c_emit(cg->out, "target triple = \"x86_64-unknown-linux-gnu\"\n\n");
+    __c0c_emit(cg->out, "target datalayout = \"e-m:o-i64:64-i128:128-n32:64-S128\"\n");
+    __c0c_emit(cg->out, "target triple = \"arm64-apple-macosx15.0.0\"\n\n");
 
     /* ---- standard library declarations ---- */
     __c0c_emit(cg->out, "; stdlib declarations\n");
@@ -1575,6 +1602,8 @@ void codegen_emit(Codegen *cg, Node *tu) {
     __c0c_emit(cg->out, "declare ptr @__c0c_stdout()\n");
     __c0c_emit(cg->out, "declare ptr @__c0c_stdin()\n");
     __c0c_emit(cg->out, "declare ptr @__c0c_get_tbuf(i32)\n");
+    __c0c_emit(cg->out, "declare ptr @__c0c_get_td_name(i64)\n");
+    __c0c_emit(cg->out, "declare i64 @__c0c_get_td_kind(i64)\n");
     __c0c_emit(cg->out, "declare void @__c0c_emit(ptr, ptr, ...)\n");
     __c0c_emit(cg->out, "\n");
 
@@ -1591,6 +1620,7 @@ void codegen_emit(Codegen *cg, Node *tu) {
         "__c0c_va_start","__c0c_va_end","__c0c_va_copy",
         "__c0c_stderr","__c0c_stdout","__c0c_stdin",
         "__c0c_emit","__c0c_get_tbuf",
+        "__c0c_get_td_name","__c0c_get_td_kind",
         "stderr","stdout","stdin",
         NULL
     };
