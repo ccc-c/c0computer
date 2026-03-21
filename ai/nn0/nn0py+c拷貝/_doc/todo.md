@@ -10,7 +10,9 @@
 
 ### Python 包裝層 (nn0.py, nn.py)
 - Tensor 類別
-- Module 基類、Linear、ReLU、Sigmoid、Tanh、LeakyReLU、Softmax、MSELoss、SGD
+- Module 基類、Linear、ReLU、Sigmoid、Tanh、LeakyReLU、Softmax、MSELoss、CrossEntropyLoss、BCELoss、L1Loss
+- SGD (含 momentum)、Adam 優化器
+- no_grad、manual_seed、clone、tolist 工具函數
 - 範例: train_xor.py
 
 ---
@@ -24,19 +26,19 @@
 - [x] Softmax: 現有 softmax() 整合為 Module
 
 ### 2. 損失函數增補
-- [ ] CrossEntropyLoss (整合現有 cross_entropy)
-- [ ] BCELoss (Binary Cross Entropy)
-- [ ] L1Loss
+- [x] CrossEntropyLoss (整合現有 cross_entropy)
+- [x] BCELoss (Binary Cross Entropy)
+- [x] L1Loss
 
 ### 3. 優化器增補
-- [ ] Adam: 自適應學習率
-- [ ] SGD with Momentum
+- [x] Adam: 自適應學習率
+- [x] SGD with Momentum
 
 ### 4. 工具函數
-- [ ] `no_grad()` 上下文管理器 (推論時停用梯度)
-- [ ] `manual_seed()` 亂數種子控制
-- [ ] Tensor.clone()
-- [ ] Tensor.tolist()
+- [x] `no_grad()` 上下文管理器 (推論時停用梯度)
+- [x] `manual_seed()` 亂數種子控制
+- [x] Tensor.clone()
+- [x] Tensor.tolist()
 
 ---
 

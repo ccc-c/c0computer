@@ -95,11 +95,44 @@ class MSELoss(Module):
         return (diff ** 2).mean()
 
 
+class CrossEntropyLoss(Module):
+    """交叉熵損失函數 (整合 Softmax + NLL)"""
+    def forward(self, pred, target):
+        softmax = Softmax()
+        prob = softmax(pred)
+        log_prob = (prob + 1e-8).log()
+        loss = -(log_prob * target).sum()
+        return loss
+
+
+class BCELoss(Module):
+    """二元交叉熵損失函數"""
+    def forward(self, pred, target):
+        eps = 1e-8
+        pred_clipped = pred * (1 - 2 * eps) + eps
+        loss = -(target * pred_clipped.log() + (1 - target) * (1 - pred_clipped).log())
+        return loss.mean()
+
+
+class L1Loss(Module):
+    """L1 損失函數 (平均絕對誤差)"""
+    def forward(self, pred, target):
+        diff = pred - target
+        return diff.abs().mean()
+
+
 class SGD:
     """隨機梯度下降優化器"""
-    def __init__(self, parameters, lr=0.01):
+    def __init__(self, parameters, lr=0.01, momentum=0.0):
         self.parameters = parameters
         self.lr = lr
+        self.momentum = momentum
+        self.momentums = {}
+        for p in parameters:
+            size = 1
+            for s in p.shape:
+                size *= s
+            self.momentums[id(p)] = [0.0] * size
 
     def step(self):
         for p in self.parameters:
@@ -114,9 +147,88 @@ class SGD:
             c_data = (ctypes.c_double * size).from_address(data_ptr)
             c_grad = (ctypes.c_double * size).from_address(grad_ptr)
             
-            for i in range(size):
-                c_data[i] -= self.lr * c_grad[i]
+            key = id(p)
+            if self.momentum > 0:
+                for i in range(size):
+                    self.momentums[key][i] = self.momentum * self.momentums[key][i] + c_grad[i]
+                    c_data[i] -= self.lr * self.momentums[key][i]
+            else:
+                for i in range(size):
+                    c_data[i] -= self.lr * c_grad[i]
 
     def zero_grad(self):
         for p in self.parameters:
             p.zero_grad()
+
+
+class Adam:
+    """Adam 自適應學習率優化器"""
+    def __init__(self, parameters, lr=0.001, betas=(0.9, 0.999), eps=1e-8):
+        self.parameters = parameters
+        self.lr = lr
+        self.beta1, self.beta2 = betas
+        self.eps = eps
+        self.m = {}
+        self.v = {}
+        self.t = 0
+        for p in parameters:
+            size = 1
+            for s in p.shape:
+                size *= s
+            self.m[id(p)] = [0.0] * size
+            self.v[id(p)] = [0.0] * size
+
+    def step(self):
+        self.t += 1
+        for p in self.parameters:
+            size = 1
+            for s in p.shape:
+                size *= s
+            
+            ptr = p._ensure_ptr()
+            data_ptr = ctypes.c_void_p.from_address(ptr).value
+            grad_ptr = ctypes.c_void_p.from_address(ptr + 8).value
+            
+            c_data = (ctypes.c_double * size).from_address(data_ptr)
+            c_grad = (ctypes.c_double * size).from_address(grad_ptr)
+            
+            key = id(p)
+            lr_t = self.lr * math.sqrt(1 - self.beta2 ** self.t) / (1 - self.beta1 ** self.t)
+            
+            for i in range(size):
+                self.m[key][i] = self.beta1 * self.m[key][i] + (1 - self.beta1) * c_grad[i]
+                self.v[key][i] = self.beta2 * self.v[key][i] + (1 - self.beta2) * c_grad[i] ** 2
+                c_data[i] -= lr_t * self.m[key][i] / (math.sqrt(self.v[key][i]) + self.eps)
+
+    def zero_grad(self):
+        for p in self.parameters:
+            p.zero_grad()
+
+
+_no_grad_mode = False
+
+def no_grad():
+    """上下文管理器，停用梯度計算"""
+    return _NoGradContext()
+
+class _NoGradContext:
+    def __enter__(self):
+        global _no_grad_mode
+        self.prev = _no_grad_mode
+        _no_grad_mode = True
+        return self
+    
+    def __exit__(self, *args):
+        global _no_grad_mode
+        _no_grad_mode = self.prev
+        return False
+
+
+def manual_seed(seed):
+    """設定亂數種子"""
+    random.seed(seed)
+
+
+def clone(tensor):
+    """複製張量"""
+    return Tensor(tensor.data, _managed=True)

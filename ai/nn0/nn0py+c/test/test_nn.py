@@ -11,7 +11,12 @@ from nn import (
     Module, Linear, ReLU, Sigmoid, Tanh, LeakyReLU, Softmax,
     MSELoss, CrossEntropyLoss, BCELoss, L1Loss,
     SGD, Adam,
-    no_grad, manual_seed, clone
+    no_grad, manual_seed, clone,
+    Sequential, ModuleList, ModuleDict,
+    Conv1d, Conv2d, MaxPool1d, MaxPool2d, AvgPool2d,
+    BatchNorm1d, BatchNorm2d, LayerNorm,
+    StepLR, CosineAnnealingLR, ReduceLROnPlateau,
+    TensorDataset, DataLoader, train, evaluate, save, load
 )
 
 
@@ -499,8 +504,181 @@ def run_all_tests():
     test_clone()
     test_tolist()
     test_loss_backward()
+    test_sequential()
+    test_module_list()
+    test_module_dict()
+    test_conv1d()
+    test_maxpool1d()
+    test_step_lr()
+    test_cosine_annealing_lr()
+    test_reduce_lr_on_plateau()
+    test_tensor_dataset()
+    test_data_loader()
     
     print("\nAll tests passed!")
+
+
+def test_sequential():
+    """測試 Sequential 容器"""
+    model = Sequential(
+        Linear(2, 4),
+        ReLU(),
+        Linear(4, 1),
+        Sigmoid()
+    )
+    
+    x = Tensor([[0.5, 0.5]])
+    y = model(x)
+    
+    assert y.shape == (1, 1), f"Expected shape (1, 1), got {y.shape}"
+    
+    params = model.parameters()
+    assert len(params) == 4, f"Expected 4 parameters, got {len(params)}"
+    
+    print("test_sequential passed")
+
+
+def test_module_list():
+    """測試 ModuleList 容器"""
+    layers = ModuleList()
+    layers.append(Linear(2, 4))
+    layers.append(ReLU())
+    layers.append(Linear(4, 1))
+    
+    assert len(layers) == 3, f"Expected 3 layers, got {len(layers)}"
+    
+    x = Tensor([[0.5, 0.5]])
+    y = layers(x)
+    
+    assert y.shape == (1, 1), f"Expected shape (1, 1), got {y.shape}"
+    
+    print("test_module_list passed")
+
+
+def test_module_dict():
+    """測試 ModuleDict 容器"""
+    layers = ModuleDict()
+    layers['fc1'] = Linear(2, 4)
+    layers['relu'] = ReLU()
+    layers['fc2'] = Linear(4, 1)
+    
+    assert 'fc1' in layers
+    assert len(layers.keys()) == 3
+    
+    x = Tensor([[0.5, 0.5]])
+    y = layers(x)
+    
+    assert y.shape == (1, 1)
+    
+    print("test_module_dict passed")
+
+
+def test_conv1d():
+    """測試 Conv1d 層"""
+    conv = Conv1d(in_channels=1, out_channels=1, kernel_size=3, stride=1, padding=0)
+    
+    x = Tensor([[[1.0, 2.0, 3.0, 4.0, 5.0]]])
+    y = conv(x)
+    
+    assert y.shape is not None
+    assert conv.weight.shape is not None
+    assert conv.bias.shape is not None
+    
+    print("test_conv1d passed")
+
+
+def test_maxpool1d():
+    """測試 MaxPool1d 層"""
+    pool = MaxPool1d(kernel_size=2, stride=2)
+    
+    x = Tensor([[[1.0, 2.0, 3.0, 4.0]]])
+    y = pool(x)
+    
+    assert y.shape is not None
+    assert pool.kernel_size == 2
+    assert pool.stride == 2
+    
+    print("test_maxpool1d passed")
+
+
+def test_step_lr():
+    """測試 StepLR 學習率排程"""
+    params = [Tensor([[1.0]])]
+    opt = SGD(params, lr=0.1)
+    scheduler = StepLR(opt, step_size=3, gamma=0.5)
+    
+    assert scheduler.get_lr() == 0.1
+    
+    for _ in range(3):
+        scheduler.step()
+    assert scheduler.get_lr() == 0.05, f"Expected 0.05, got {scheduler.get_lr()}"
+    
+    for _ in range(3):
+        scheduler.step()
+    assert scheduler.get_lr() == 0.025, f"Expected 0.025, got {scheduler.get_lr()}"
+    
+    print("test_step_lr passed")
+
+
+def test_cosine_annealing_lr():
+    """測試 CosineAnnealingLR"""
+    params = [Tensor([[1.0]])]
+    opt = SGD(params, lr=1.0)
+    scheduler = CosineAnnealingLR(opt, T_max=10, eta_min=0)
+    
+    initial_lr = scheduler.get_lr()
+    scheduler.step()
+    new_lr = scheduler.get_lr()
+    
+    assert new_lr < initial_lr, "LR should decrease"
+    
+    print("test_cosine_annealing_lr passed")
+
+
+def test_reduce_lr_on_plateau():
+    """測試 ReduceLROnPlateau"""
+    params = [Tensor([[1.0]])]
+    opt = SGD(params, lr=0.1)
+    scheduler = ReduceLROnPlateau(opt, patience=2, factor=0.5)
+    
+    scheduler.step(1.0)
+    scheduler.step(1.5)
+    scheduler.step(2.0)
+    
+    assert scheduler.get_lr() == 0.05, f"Expected 0.05, got {scheduler.get_lr()}"
+    
+    print("test_reduce_lr_on_plateau passed")
+
+
+def test_tensor_dataset():
+    """測試 TensorDataset"""
+    X = Tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    y = Tensor([[0.0], [1.0], [0.0]])
+    
+    dataset = TensorDataset(X, y)
+    
+    assert len(dataset) == 3
+    
+    x0, y0 = dataset[0]
+    assert x0 == [1.0, 2.0]
+    assert y0 == [0.0]
+    
+    print("test_tensor_dataset passed")
+
+
+def test_data_loader():
+    """測試 DataLoader"""
+    X = Tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])
+    dataset = TensorDataset(X)
+    
+    loader = DataLoader(dataset, batch_size=2, shuffle=False)
+    
+    assert len(loader) == 3
+    
+    batch1 = next(iter(loader))
+    assert len(batch1) == 2
+    
+    print("test_data_loader passed")
 
 
 if __name__ == "__main__":

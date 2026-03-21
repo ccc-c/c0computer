@@ -9,7 +9,9 @@ sys.path.insert(0, '..')
 from nn0 import Tensor
 from nn import (
     Module, Linear, ReLU, Sigmoid, Tanh, LeakyReLU, Softmax,
-    MSELoss, SGD
+    MSELoss, CrossEntropyLoss, BCELoss, L1Loss,
+    SGD, Adam,
+    no_grad, manual_seed, clone
 )
 
 
@@ -264,6 +266,214 @@ def test_activation_backward():
     print("test_activation_backward passed")
 
 
+def test_mse_loss():
+    """測試 MSE 損失函數"""
+    criterion = MSELoss()
+    
+    pred = Tensor([[1.0, 2.0, 3.0]])
+    target = Tensor([[1.0, 2.0, 3.0]])
+    loss = criterion(pred, target)
+    assert abs(loss.item() - 0.0) < 1e-9, "MSE should be 0 for identical tensors"
+    
+    pred = Tensor([[1.0]])
+    target = Tensor([[3.0]])
+    loss = criterion(pred, target)
+    assert abs(loss.item() - 4.0) < 1e-9, f"MSE should be 4.0, got {loss.item()}"
+    
+    pred = Tensor([[0.0, 0.0], [0.0, 0.0]])
+    target = Tensor([[1.0, 1.0], [1.0, 1.0]])
+    loss = criterion(pred, target)
+    assert abs(loss.item() - 1.0) < 1e-9, "MSE should be 1.0"
+    
+    print("test_mse_loss passed")
+
+
+def test_l1_loss():
+    """測試 L1 損失函數"""
+    criterion = L1Loss()
+    
+    pred = Tensor([[1.0, 2.0, 3.0]])
+    target = Tensor([[1.0, 2.0, 3.0]])
+    loss = criterion(pred, target)
+    assert abs(loss.item() - 0.0) < 1e-9, "L1 should be 0 for identical tensors"
+    
+    pred = Tensor([[1.0]])
+    target = Tensor([[4.0]])
+    loss = criterion(pred, target)
+    assert abs(loss.item() - 3.0) < 1e-9, f"L1 should be 3.0, got {loss.item()}"
+    
+    print("test_l1_loss passed")
+
+
+def test_bce_loss():
+    """測試 BCE 損失函數"""
+    criterion = BCELoss()
+    
+    pred = Tensor([[1.0]])
+    target = Tensor([[1.0]])
+    loss = criterion(pred, target)
+    assert abs(loss.item()) < 1e-6, "BCE should be ~0 for identical values"
+    
+    pred = Tensor([[0.0]])
+    target = Tensor([[0.0]])
+    loss = criterion(pred, target)
+    assert abs(loss.item()) < 1e-6, "BCE should be ~0 for identical values"
+    
+    pred = Tensor([[0.5]])
+    target = Tensor([[0.5]])
+    loss = criterion(pred, target)
+    expected = -(0.5 * math.log(0.5) + 0.5 * math.log(0.5))
+    assert abs(loss.item() - expected) < 1e-6, f"BCE(0.5) should be ~{expected}, got {loss.item()}"
+    
+    print("test_bce_loss passed")
+
+
+def test_cross_entropy_loss():
+    """測試 CrossEntropy 損失函數"""
+    criterion = CrossEntropyLoss()
+    
+    pred = Tensor([[2.0, 1.0, 0.0]])
+    target = Tensor([[1.0, 0.0, 0.0]])
+    loss = criterion(pred, target)
+    assert loss.item() > 0, "CrossEntropy should be positive"
+    
+    print("test_cross_entropy_loss passed")
+
+
+def test_sgd_optimizer():
+    """測試 SGD 優化器"""
+    random.seed(42)
+    
+    x = Tensor([[1.0, 2.0]])
+    weight = Tensor([[0.5, 0.3]])
+    
+    params = [weight]
+    opt = SGD(params, lr=0.1)
+    
+    initial = weight.data[0][0]
+    
+    for _ in range(100):
+        opt.zero_grad()
+        out = weight * x
+        loss = out.sum()
+        loss.backward()
+        opt.step()
+    
+    final = weight.data[0][0]
+    assert abs(final - initial + 0.1 * 100) < 0.1, "SGD should update weights"
+    
+    print("test_sgd_optimizer passed")
+
+
+def test_sgd_with_momentum():
+    """測試帶動量的 SGD"""
+    random.seed(42)
+    
+    weight = Tensor([[1.0]])
+    
+    params = [weight]
+    opt = SGD(params, lr=0.1, momentum=0.9)
+    
+    opt.zero_grad()
+    loss = weight.sum()
+    loss.backward()
+    opt.step()
+    
+    assert weight.data[0][0] == 0.9, "SGD momentum should accumulate"
+    
+    print("test_sgd_with_momentum passed")
+
+
+def test_adam_optimizer():
+    """測試 Adam 優化器"""
+    random.seed(42)
+    
+    x = Tensor([[1.0, 2.0]])
+    weight = Tensor([[0.5, 0.3]])
+    
+    params = [weight]
+    opt = Adam(params, lr=0.1)
+    
+    initial = weight.data[0][0]
+    
+    for _ in range(100):
+        opt.zero_grad()
+        out = weight * x
+        loss = out.sum()
+        loss.backward()
+        opt.step()
+    
+    final = weight.data[0][0]
+    assert abs(final - initial) > 0, "Adam should update weights"
+    
+    print("test_adam_optimizer passed")
+
+
+def test_no_grad():
+    """測試 no_grad 上下文管理器"""
+    x = Tensor([[1.0, 2.0]])
+    
+    with no_grad():
+        y = x * 2
+        loss = y.sum()
+        loss.backward()
+    
+    print("test_no_grad passed")
+
+
+def test_manual_seed():
+    """測試 manual_seed 函數"""
+    manual_seed(42)
+    a = random.random()
+    
+    manual_seed(42)
+    b = random.random()
+    
+    assert abs(a - b) < 1e-9, "Same seed should produce same random numbers"
+    
+    print("test_manual_seed passed")
+
+
+def test_clone():
+    """測試 clone 函數"""
+    x = Tensor([[1.0, 2.0, 3.0]])
+    y = clone(x)
+    
+    assert y.data == x.data, "Clone should have same data"
+    assert y is not x, "Clone should be a different object"
+    
+    print("test_clone passed")
+
+
+def test_tolist():
+    """測試 Tensor.tolist() 方法"""
+    x = Tensor([[1.0, 2.0, 3.0]])
+    lst = x.tolist()
+    assert isinstance(lst, list), "tolist() should return list"
+    assert lst == [1.0, 2.0, 3.0], f"tolist() should return [1.0, 2.0, 3.0], got {lst}"
+    
+    x2 = Tensor([[[1.0, 2.0], [3.0, 4.0]]])
+    lst2 = x2.tolist()
+    assert isinstance(lst2, list), "tolist() for 3D should return list"
+    
+    print("test_tolist passed")
+
+
+def test_loss_backward():
+    """測試損失函數的反向傳播"""
+    criterion = L1Loss()
+    
+    pred = Tensor([[2.0, 3.0]])
+    target = Tensor([[1.0, 2.0]])
+    
+    loss = criterion(pred, target)
+    loss.backward()
+    
+    assert pred.grad is not None, "Gradient should be computed"
+    
+    print("test_loss_backward passed")
+
+
 def run_all_tests():
     print("Running nn module tests...\n")
     
@@ -277,6 +487,18 @@ def run_all_tests():
     test_linear_with_activations()
     test_module_parameters()
     test_activation_backward()
+    test_mse_loss()
+    test_l1_loss()
+    test_bce_loss()
+    test_cross_entropy_loss()
+    test_sgd_optimizer()
+    test_sgd_with_momentum()
+    test_adam_optimizer()
+    test_no_grad()
+    test_manual_seed()
+    test_clone()
+    test_tolist()
+    test_loss_backward()
     
     print("\nAll tests passed!")
 
