@@ -57,9 +57,9 @@
 
 ### 2. 卷積層
 - [x] Conv1d (文字、訊號)
-- [ ] Conv2d (影像)
+- [x] Conv2d (影像)
 - [x] MaxPool1d, MaxPool2d
-- [ ] AvgPool2d
+- [x] AvgPool2d
 
 ### 3. 正規化層
 - [x] BatchNorm1d
@@ -133,3 +133,10 @@
 - 優先順序: 短期 > 中期 > 長期
 - 每個功能需附帶單元測試
 - 保持 API 與 PyTorch 相容性
+
+---
+
+## 已完成 (2024)
+- [x] 短期目標全部完成 ( activations, losses, optimizers, utilities )
+- [x] 中期目標大部分完成 ( containers, conv layers, pooling, normalization, LR schedulers, data loaders, training utilities )
+- [ ] 待完成: BatchNorm1d/2d 實際實現、Dropout、Padding layers

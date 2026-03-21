@@ -350,14 +350,42 @@ class Tensor:
     
     def reshape(self, *shape):
         if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
-            shape = shape[0]
+            shape = list(shape[0])
         elif len(shape) == 1 and isinstance(shape[0], int):
             shape = [shape[0]]
         else:
             shape = list(shape)
-        ptr = _load_lib().num0ad_reshape(self._ensure_ptr(), len(shape), _to_shape(shape))
-        result = _ptr_to_array(ptr, len(shape), shape)
-        result._managed = False
+        
+        current_total = 1
+        for s in self._shape:
+            current_total *= s
+        
+        if -1 in shape:
+            idx = shape.index(-1)
+            shape_without_minus1 = [s for s in shape if s != -1]
+            other_product = 1
+            for s in shape_without_minus1:
+                other_product *= s
+            if current_total % other_product == 0:
+                shape[idx] = current_total // other_product
+            else:
+                shape[idx] = -1
+        
+        data_list = self._get_data_list()
+        flat = []
+        def flatten_rec(d):
+            if isinstance(d, (list, tuple)):
+                for item in d:
+                    flatten_rec(item)
+            else:
+                flat.append(d)
+        flatten_rec(data_list)
+        
+        result = Tensor(flat[:1])
+        result._data = flat
+        result._shape = shape
+        result._ndim = len(shape)
+        result._grad = [0.0] * current_total
         return result
     
     def flatten(self):
@@ -394,6 +422,31 @@ class Tensor:
         if len(self._shape) == 1:
             return result
         return [result[i:i+self._shape[-1]] for i in range(0, len(result), self._shape[-1])]
+    
+    def _get_data_list(self):
+        """取得完整的嵌套列表形式資料"""
+        size = 1
+        for s in self._shape:
+            size *= s
+        ptr = self._ensure_ptr()
+        data_ptr = ctypes.c_void_p.from_address(ptr).value
+        buf = (ctypes.c_double * size).from_address(data_ptr)
+        flat = list(buf)
+        return self._unflatten(flat, self._shape)
+    
+    def _unflatten(self, flat, shape):
+        """將扁平資料還原為指定形狀"""
+        if len(shape) == 1:
+            return flat[:shape[0]]
+        n = shape[0]
+        chunk_size = 1
+        for s in shape[1:]:
+            chunk_size *= s
+        result = []
+        for i in range(n):
+            chunk = flat[i*chunk_size:(i+1)*chunk_size]
+            result.append(self._unflatten(chunk, shape[1:]))
+        return result
     
     @property
     def shape(self):

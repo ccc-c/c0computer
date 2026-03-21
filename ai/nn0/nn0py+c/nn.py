@@ -360,7 +360,42 @@ class Conv2d(Module):
         self.bias = Tensor(b_data)
     
     def forward(self, x):
-        return x
+        x_data = x._get_data_list()
+        w_data = self.weight._get_data_list()
+        b_data = self.bias._get_data_list()
+        
+        batch_size, in_ch, h, w = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+        kh, kw = self.kernel_size
+        sh, sw = self.stride
+        ph, pw = self.padding
+        
+        if ph > 0 or pw > 0:
+            padded_data = [[[[0.0 for _ in range(w + 2*pw)] for _ in range(h + 2*ph)] for _ in range(in_ch)] for _ in range(batch_size)]
+            for b in range(batch_size):
+                for c in range(in_ch):
+                    for i in range(h):
+                        for j in range(w):
+                            padded_data[b][c][i+ph][j+pw] = x_data[b][c][i][j]
+            x_data = padded_data
+            h += 2*ph
+            w += 2*pw
+        
+        out_h = (h - kh) // sh + 1
+        out_w = (w - kw) // sw + 1
+        out_data = [[[[0.0 for _ in range(out_w)] for _ in range(out_h)] for _ in range(self.out_channels)] for _ in range(batch_size)]
+        
+        for b in range(batch_size):
+            for oc in range(self.out_channels):
+                for i in range(0, out_h * sh, sh):
+                    for j in range(0, out_w * sw, sw):
+                        s = 0.0
+                        for ic in range(in_ch):
+                            for ki in range(kh):
+                                for kj in range(kw):
+                                    s += x_data[b][ic][i+ki][j+kj] * w_data[oc][ic][ki][kj]
+                        out_data[b][oc][i//sh][j//sw] = s + b_data[0][oc]
+        
+        return Tensor(out_data)
 
 
 class MaxPool1d(Module):
@@ -382,7 +417,28 @@ class MaxPool2d(Module):
         self.stride = stride if stride else self.kernel_size
     
     def forward(self, x):
-        return x
+        x_data = x._get_data_list()
+        batch_size, channels, h, w = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+        kh, kw = self.kernel_size
+        sh, sw = self.stride if isinstance(self.stride, tuple) else (self.stride, self.stride)
+        
+        out_h = (h - kh) // sh + 1
+        out_w = (w - kw) // sw + 1
+        out_data = [[[[0.0 for _ in range(out_w)] for _ in range(out_h)] for _ in range(channels)] for _ in range(batch_size)]
+        
+        for b in range(batch_size):
+            for c in range(channels):
+                for i in range(0, out_h * sh, sh):
+                    for j in range(0, out_w * sw, sw):
+                        max_val = float('-inf')
+                        for ki in range(kh):
+                            for kj in range(kw):
+                                val = x_data[b][c][i+ki][j+kj]
+                                if val > max_val:
+                                    max_val = val
+                        out_data[b][c][i//sh][j//sw] = max_val
+        
+        return Tensor(out_data)
 
 
 class AvgPool2d(Module):
@@ -393,7 +449,26 @@ class AvgPool2d(Module):
         self.stride = stride if stride else self.kernel_size
     
     def forward(self, x):
-        return x
+        x_data = x._get_data_list()
+        batch_size, channels, h, w = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+        kh, kw = self.kernel_size
+        sh, sw = self.stride if isinstance(self.stride, tuple) else (self.stride, self.stride)
+        
+        out_h = (h - kh) // sh + 1
+        out_w = (w - kw) // sw + 1
+        out_data = [[[[0.0 for _ in range(out_w)] for _ in range(out_h)] for _ in range(channels)] for _ in range(batch_size)]
+        
+        for b in range(batch_size):
+            for c in range(channels):
+                for i in range(0, out_h * sh, sh):
+                    for j in range(0, out_w * sw, sw):
+                        s = 0.0
+                        for ki in range(kh):
+                            for kj in range(kw):
+                                s += x_data[b][c][i+ki][j+kj]
+                        out_data[b][c][i//sh][j//sw] = s / (kh * kw)
+        
+        return Tensor(out_data)
 
 
 class BatchNorm1d(Module):

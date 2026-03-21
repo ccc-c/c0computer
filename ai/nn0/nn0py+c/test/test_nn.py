@@ -681,5 +681,74 @@ def test_data_loader():
     print("test_data_loader passed")
 
 
+def test_conv2d():
+    """測試 Conv2d 層"""
+    conv = Conv2d(1, 8, kernel_size=3, padding=1)
+    
+    x_data = [[[[1.0 for _ in range(8)] for _ in range(8)]]]
+    x = Tensor([x_data])
+    y = conv(x)
+    
+    assert y.shape[0] == 1
+    assert y.shape[1] == 8
+    assert y.shape[2] == 8
+    assert y.shape[3] == 8
+    
+    print("test_conv2d passed")
+
+
+def test_maxpool2d():
+    """測試 MaxPool2d 層"""
+    pool = MaxPool2d(kernel_size=2, stride=2)
+    
+    x_data = [[[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]]]
+    x = Tensor([[x_data]])
+    y = pool(x)
+    
+    assert y.shape[2] == 2
+    assert y.shape[3] == 2
+    
+    print("test_maxpool2d passed")
+
+
+def test_avgpool2d():
+    """測試 AvgPool2d 層"""
+    pool = AvgPool2d(kernel_size=2, stride=2)
+    
+    x = Tensor([[[[2.0, 2.0], [2.0, 2.0]]]])
+    y = pool(x)
+    
+    assert y.shape[2] == 1
+    assert y.shape[3] == 1
+    assert abs(y.data[0][0][0][0] - 2.0) < 1e-9
+    
+    print("test_avgpool2d passed")
+
+
+def test_cnn_forward():
+    """測試 CNN 前向傳播"""
+    class SimpleCNN(Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = Conv2d(1, 4, kernel_size=3, padding=1)
+            self.pool = MaxPool2d(kernel_size=2)
+            self.fc = Linear(4 * 14 * 14, 2)
+        
+        def forward(self, x):
+            x = self.conv(x)
+            x = self.pool(x)
+            x = x.reshape(x.shape[0], -1)
+            x = self.fc(x)
+            return x
+    
+    cnn = SimpleCNN()
+    x = Tensor([[[[1.0] * 28 for _ in range(28)]]])
+    y = cnn(x)
+    
+    assert y.shape == (1, 2)
+    
+    print("test_cnn_forward passed")
+
+
 if __name__ == "__main__":
     run_all_tests()
