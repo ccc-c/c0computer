@@ -46,7 +46,14 @@ def download_file(url, filepath):
         return
     print(f"下載: {url}")
     import urllib.request
-    urllib.request.urlretrieve(url, filepath)
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, context=ctx) as resp:
+        with open(filepath, 'wb') as f:
+            f.write(resp.read())
     print(f"下載完成: {filepath}")
 
 
@@ -168,7 +175,8 @@ def train_mnist():
             loss.backward()
             optimizer.step()
             
-            total_loss += loss.data
+            loss_val = loss.data[0][0] if isinstance(loss.data, list) else loss.data
+            total_loss += loss_val
             
             preds = outputs._get_data_list()
             for j, pred in enumerate(preds):

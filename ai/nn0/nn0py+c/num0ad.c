@@ -60,10 +60,11 @@ static int is_visited(Num0AD **visited, int count, Num0AD *node) {
 void num0ad_free_all(Num0AD *arr) {
     if (!arr) return;
     
-    Num0AD **visited = (Num0AD **)malloc(sizeof(Num0AD *) * 1000);
+    int capacity = 4096;
+    Num0AD **visited = (Num0AD **)malloc(sizeof(Num0AD *) * capacity);
     int visited_count = 0;
     
-    Num0AD **stack = (Num0AD **)malloc(sizeof(Num0AD *) * 1000);
+    Num0AD **stack = (Num0AD **)malloc(sizeof(Num0AD *) * capacity);
     int stack_top = 0;
     stack[stack_top++] = arr;
     
@@ -73,7 +74,7 @@ void num0ad_free_all(Num0AD *arr) {
         visited[visited_count++] = node;
         
         for (int i = 0; i < node->n_children; i++) {
-            if (node->children[i]) {
+            if (node->children[i] && stack_top < capacity - 1) {
                 stack[stack_top++] = node->children[i];
             }
         }
@@ -622,10 +623,11 @@ void num0ad_backward(Num0AD *out) {
     int size = num0ad_total_size(out);
     for (int i = 0; i < size; i++) out->grad[i] = 1.0;
     
-    Num0AD **visited = (Num0AD **)malloc(sizeof(Num0AD *) * 1000);
+    int capacity = 4096;
+    Num0AD **visited = (Num0AD **)malloc(sizeof(Num0AD *) * capacity);
     int visited_count = 0;
     
-    Num0AD **queue = (Num0AD **)malloc(sizeof(Num0AD *) * 1000);
+    Num0AD **queue = (Num0AD **)malloc(sizeof(Num0AD *) * capacity);
     int queue_front = 0, queue_back = 0;
     
     queue[queue_back++] = out;
@@ -648,7 +650,9 @@ void num0ad_backward(Num0AD *out) {
             }
             
             if (!contains(visited, visited_count, child) && child->n_children > 0) {
-                queue[queue_back++] = child;
+                if (queue_back < capacity - 1) {
+                    queue[queue_back++] = child;
+                }
             }
         }
     }

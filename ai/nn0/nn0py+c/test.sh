@@ -9,4 +9,4 @@ gcc -o test/test_num0ad test/test_num0ad.c num0ad.c -lm -O2
 PYTHONPATH=. python3 test/test_num0ad.py
 PYTHONPATH=. python3 test/test_nn0.py
 PYTHONPATH=. python3 test/test_nn.py
-
+PYTHONPATH=. python3 examples/test_mnist_cnn.py
