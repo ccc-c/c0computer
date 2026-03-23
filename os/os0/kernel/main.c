@@ -3,8 +3,20 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
+#include "time.h"
 
 volatile static int started = 0;
+
+static void
+printdate()
+{
+  struct timeval tv;
+  struct tm tm;
+  gettimeofday(&tv, NULL);
+  localtime_r(&tv.tv_sec, &tm);
+  printf("%04d/%02d/%02d %02d:%02d:%02d\n",
+    tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+}
 
 // start() jumps here in supervisor mode on all CPUs.
 void
@@ -28,13 +40,10 @@ main()
     iinit();         // inode table
     fileinit();      // file table
     virtio_disk_init(); // emulated hard disk
-    printf("calling netinit\n");
-    netinit();         // initialize network stack
-    printf("calling virtio_net_init\n");
-    virtio_net_init();  // emulated network device
-    printf("calling netrun\n");
-    netrun();          // start network
-    printf("done net init\n");
+    printdate();
+    netinit();       // network stack
+    virtio_net_init(); // emulated network card
+    netrun();        // start networking
     userinit();      // first user process
     __sync_synchronize();
     started = 1;

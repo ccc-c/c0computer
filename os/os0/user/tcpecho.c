@@ -39,13 +39,13 @@ main (int argc, char *argv[])
     addr = (unsigned char *)&peer.sin_addr;
     printf("accept: success, peer=%d.%d.%d.%d:%d\n", addr[0], addr[1], addr[2], addr[3], ntohs(peer.sin_port));
     while (1) {
-        ret = recv(acc, buf, sizeof(buf), 0);
+        ret = recv(acc, buf, sizeof(buf));
         if (ret <= 0) {
             printf("EOF\n");
             break;
         }
         printf("recv: %d bytes data received\n", ret);
-        send(acc, buf, ret, 0);
+        send(acc, buf, ret);
     }
     close(soc);  
     exit(0);

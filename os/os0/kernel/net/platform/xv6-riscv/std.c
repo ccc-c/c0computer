@@ -27,8 +27,27 @@ funlockfile(FILE *fp)
 size_t
 strftime(char *s, size_t max, const char *format, const struct tm *tm)
 {
-    (void)format;
+    (void)format; /* force HH:MM:SS */
     return snprintf(s, max, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
+}
+
+void
+timersub(struct timeval *a, struct timeval *b, struct timeval *res)
+{
+    res->tv_sec = a->tv_sec - b->tv_sec;
+    res->tv_usec = a->tv_usec - b->tv_usec;
+    if (res->tv_usec < 0) {
+        --res->tv_sec;
+        res->tv_usec += 1000*1000;
+    }
+    return;
+}
+
+void
+timerclear(struct timeval *tv)
+{
+    tv->tv_sec = 0;
+    tv->tv_usec = 0;
 }
 
 /*

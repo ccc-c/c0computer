@@ -1,6 +1,3 @@
-#ifndef _XV6_TYPES_H
-#define _XV6_TYPES_H
-
 typedef unsigned int   uint;
 typedef unsigned short ushort;
 typedef unsigned char  uchar;
@@ -10,26 +7,31 @@ typedef unsigned short uint16;
 typedef unsigned int  uint32;
 typedef unsigned long uint64;
 
-#ifndef _UINT8_T
-typedef unsigned char uint8_t;
-#endif
-#ifndef _UINT16_T
-typedef unsigned short uint16_t;
-#endif
-#ifndef _UINT32_T
-typedef unsigned int uint32_t;
-#endif
-#ifndef _UINT64_T
-typedef unsigned long uint64_t;
-#endif
-
-#ifndef _SIZE_T
-typedef unsigned long size_t;
-#endif
-#ifndef _SSIZE_T
-typedef long ssize_t;
-#endif
-
 typedef uint64 pde_t;
+
+typedef long time_t;
+
+#if defined(_STDIO_H)
+#define MKFS
+#endif
+
+#if !defined(MKFS)
+
+#define NULL ((void*)0)
+
+typedef char int8_t;
+typedef unsigned char uint8_t;
+typedef short int16_t;
+typedef unsigned short uint16_t;
+typedef int int32_t;
+typedef unsigned int uint32_t;
+typedef long int64_t;
+typedef unsigned long uint64_t;
+
+typedef int64_t ssize_t;
+typedef uint64_t size_t;
+
+typedef int64_t intptr_t;
+typedef uint64_t uintptr_t;
 
 #endif

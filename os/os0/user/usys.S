@@ -90,14 +90,14 @@ getpid:
  li a7, SYS_getpid
  ecall
  ret
-.global sys_sbrk
-sys_sbrk:
+.global sbrk
+sbrk:
  li a7, SYS_sbrk
  ecall
  ret
-.global pause
-pause:
- li a7, SYS_pause
+.global sleep
+sleep:
+ li a7, SYS_sleep
  ecall
  ret
 .global uptime
@@ -115,6 +115,21 @@ bind:
  li a7, SYS_bind
  ecall
  ret
+.global recvfrom
+recvfrom:
+ li a7, SYS_recvfrom
+ ecall
+ ret
+.global sendto
+sendto:
+ li a7, SYS_sendto
+ ecall
+ ret
+.global connect
+connect:
+ li a7, SYS_connect
+ ecall
+ ret
 .global listen
 listen:
  li a7, SYS_listen
@@ -125,9 +140,9 @@ accept:
  li a7, SYS_accept
  ecall
  ret
-.global connect
-connect:
- li a7, SYS_connect
+.global recv
+recv:
+ li a7, SYS_recv
  ecall
  ret
 .global send
@@ -135,18 +150,8 @@ send:
  li a7, SYS_send
  ecall
  ret
-.global recv
-recv:
- li a7, SYS_recv
- ecall
- ret
-.global sendto
-sendto:
- li a7, SYS_sendto
- ecall
- ret
-.global recvfrom
-recvfrom:
- li a7, SYS_recvfrom
+.global ioctl
+ioctl:
+ li a7, SYS_ioctl
  ecall
  ret

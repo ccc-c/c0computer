@@ -31,6 +31,8 @@ OBJS = \
   $K/sysfile.o \
   $K/kernelvec.o \
   $K/plic.o \
+  $K/rtc.o \
+  $K/time.o \
   $K/virtio_disk.o \
   $K/syssocket.o \
   $N/util.o \
@@ -55,8 +57,6 @@ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' 
 	then echo 'riscv64-unknown-elf-'; \
 	elif riscv64-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
 	then echo 'riscv64-elf-'; \
-	elif riscv64-none-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
-	then echo 'riscv64-none-elf-'; \
 	elif riscv64-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
 	then echo 'riscv64-linux-gnu-'; \
 	elif riscv64-unknown-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
@@ -68,7 +68,6 @@ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' 
 endif
 
 QEMU = qemu-system-riscv64
-MIN_QEMU_VERSION = 7.2
 
 CC = $(TOOLPREFIX)gcc
 AS = $(TOOLPREFIX)gas
@@ -76,11 +75,10 @@ LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
-CFLAGS = -Wall -Werror -Wno-unknown-attributes -O -fno-omit-frame-pointer -ggdb -gdwarf-2
-CFLAGS += -march=rv64gc
+CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
 CFLAGS += -MD
 CFLAGS += -mcmodel=medany
-CFLAGS += -ffreestanding
+# CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
 CFLAGS += -fno-common -nostdlib
 CFLAGS += -fno-builtin-strncpy -fno-builtin-strncmp -fno-builtin-strlen -fno-builtin-memset
 CFLAGS += -fno-builtin-memmove -fno-builtin-memcmp -fno-builtin-log -fno-builtin-bzero
@@ -101,21 +99,24 @@ endif
 
 LDFLAGS = -z max-page-size=4096
 
-$K/kernel: $(OBJS) $K/kernel.ld
+$K/kernel: $(OBJS) $K/kernel.ld $U/initcode
 	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) 
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
-$K/%.o: $K/%.S
-	$(CC) -march=rv64gc -g -c -o $@ $<
+$U/initcode: $U/initcode.S
+	$(CC) $(CFLAGS) -march=rv64g -nostdinc -I. -Ikernel -c $U/initcode.S -o $U/initcode.o
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o $U/initcode.out $U/initcode.o
+	$(OBJCOPY) -S -O binary $U/initcode.out $U/initcode
+	$(OBJDUMP) -S $U/initcode.o > $U/initcode.asm
 
-tags: $(OBJS)
-	etags kernel/*.S kernel/*.c
+tags: $(OBJS) _init
+	etags *.S *.c
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
-_%: %.o $(ULIB) $U/user.ld
-	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $< $(ULIB)
+_%: %.o $(ULIB)
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
 
@@ -132,7 +133,7 @@ $U/_forktest: $U/forktest.o $(ULIB)
 	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
 
 mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
-	gcc -Wno-unknown-attributes -I. -o mkfs/mkfs mkfs/mkfs.c
+	gcc -Werror -Wall -I. -o mkfs/mkfs mkfs/mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More
@@ -142,9 +143,12 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 
 UPROGS=\
 	$U/_cat\
+	$U/_curl\
 	$U/_echo\
 	$U/_forktest\
 	$U/_grep\
+	$U/_httpd\
+	$U/_ifconfig\
 	$U/_init\
 	$U/_kill\
 	$U/_ln\
@@ -159,22 +163,17 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-	$U/_ping\
-	$U/_httpd\
-	$U/_curl\
-	$U/_telnet\
-	$U/_telnetd\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
 
--include kernel/*.d user/*.d $N/*.d $P/*.d
+-include $K/*.d $U/*.d $N/*.d $P/*.d
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*/*.o */*.d */*.asm */*.sym \
 	$N/*.o $N/*.d $P/*.o $P/*.d \
-	$K/kernel fs.img \
+	$U/initcode $U/initcode.out $K/kernel fs.img \
 	mkfs/mkfs .gdbinit \
         $U/usys.S \
 	$(UPROGS)
@@ -189,22 +188,15 @@ ifndef CPUS
 CPUS := 3
 endif
 
+TAPDEV=tap0
+TAPADDR=192.0.2.1/24
+
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-#QEMUOPTS += -netdev tap,ifname=$(TAPDEV),id=en0
-#QEMUOPTS += -device virtio-net-device,netdev=en0,csum=off,gso=off,guest_csum=off,bus=virtio-mmio-bus.1
-
-QEMUOPTS_NET = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
-QEMUOPTS_NET += -global virtio-mmio.force-legacy=false
-QEMUOPTS_NET += -drive file=fs.img,if=none,format=raw,id=x0
-QEMUOPTS_NET += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-QEMUOPTS_NET += -netdev user,id=en0,hostfwd=tcp::18081-:80,hostfwd=tcp::12325-:23,hostfwd=tcp::12324-:22
-QEMUOPTS_NET += -device virtio-net-device,netdev=en0,bus=virtio-mmio-bus.1
-
-TAPDEV=tap0
-TAPADDR=192.0.2.1/24
+QEMUOPTS += -netdev tap,ifname=$(TAPDEV),id=en0
+QEMUOPTS += -device virtio-net-device,netdev=en0,csum=off,gso=off,guest_csum=off,bus=virtio-mmio-bus.1
 
 tap:
 	@ip addr show $(TAPDEV) 2>/dev/null || (echo "Create '$(TAPDEV)'"; \
@@ -215,11 +207,8 @@ tap:
 		ip addr show $(TAPDEV); \
 	)
 
-qemu: check-qemu-version $K/kernel fs.img
+qemu: $K/kernel fs.img tap
 	$(QEMU) $(QEMUOPTS)
-
-qemu-net: check-qemu-version $K/kernel fs.img
-	$(QEMU) $(QEMUOPTS_NET)
 
 .gdbinit: .gdbinit.tmpl-riscv
 	sed "s/:1234/:$(GDBPORT)/" < $^ > $@
@@ -228,12 +217,3 @@ qemu-gdb: $K/kernel .gdbinit fs.img
 	@echo "*** Now run 'gdb' in another window." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
 
-print-gdbport:
-	@echo $(GDBPORT)
-
-QEMU_VERSION := $(shell $(QEMU) --version | head -n 1 | sed -E 's/^QEMU emulator version ([0-9]+\.[0-9]+)\..*/\1/')
-check-qemu-version:
-	@if [ "$(shell echo "$(QEMU_VERSION) >= $(MIN_QEMU_VERSION)" | bc)" -eq 0 ]; then \
-		echo "ERROR: Need qemu version >= $(MIN_QEMU_VERSION)"; \
-		exit 1; \
-	fi

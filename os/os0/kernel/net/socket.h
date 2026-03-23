@@ -47,20 +47,3 @@ struct ifreq {
         char           *ifr_data;
     };
 };
-
-// Socket function declarations
-int socket(int domain, int type, int protocol);
-int bind(int sockfd, const struct sockaddr *addr, int addrlen);
-int listen(int sockfd, int backlog);
-int accept(int sockfd, struct sockaddr *addr, int *addrlen);
-int connect(int sockfd, const struct sockaddr *addr, int addrlen);
-int send(int sockfd, const void *buf, int len, int flags);
-int recv(int sockfd, void *buf, int len, int flags);
-int sendto(int sockfd, const void *buf, int len, int flags, const struct sockaddr *dest_addr, int addrlen);
-int recvfrom(int sockfd, void *buf, int len, int flags, struct sockaddr *src_addr, int *addrlen);
-
-// Network byte order functions
-unsigned short htons(unsigned short hostshort);
-unsigned short ntohs(unsigned short netshort);
-unsigned long htonl(unsigned long hostlong);
-unsigned long ntohl(unsigned long netlong);

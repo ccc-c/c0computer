@@ -5,11 +5,15 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "softirq.h"
 
 struct spinlock tickslock;
 uint ticks;
 
-extern char trampoline[], uservec[];
+struct spinlock pendinglock;
+uint64 pending;
+
+extern char trampoline[], uservec[], userret[];
 
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
@@ -20,6 +24,7 @@ void
 trapinit(void)
 {
   initlock(&tickslock, "time");
+  initlock(&pendinglock, "softirq");
 }
 
 // set up to take exceptions and traps while in the kernel.
@@ -31,10 +36,9 @@ trapinithart(void)
 
 //
 // handle an interrupt, exception, or system call from user space.
-// called from, and returns to, trampoline.S
-// return value is user satp for trampoline.S to switch to.
+// called from trampoline.S
 //
-uint64
+void
 usertrap(void)
 {
   int which_dev = 0;
@@ -44,7 +48,7 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);  //DOC: kernelvec
+  w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
   
@@ -55,7 +59,7 @@ usertrap(void)
     // system call
 
     if(killed(p))
-      kexit(-1);
+      exit(-1);
 
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
@@ -68,9 +72,6 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if((r_scause() == 15 || r_scause() == 13) &&
-            vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
-    // page fault on lazily-allocated page
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
@@ -78,32 +79,26 @@ usertrap(void)
   }
 
   if(killed(p))
-    kexit(-1);
+    exit(-1);
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
 
-  prepare_return();
-
-  // the user page table to switch to, for trampoline.S
-  uint64 satp = MAKE_SATP(p->pagetable);
-
-  // return to trampoline.S; satp value in a0.
-  return satp;
+  usertrapret();
 }
 
 //
-// set up trapframe and control registers for a return to user space
+// return to user space
 //
 void
-prepare_return(void)
+usertrapret(void)
 {
   struct proc *p = myproc();
 
   // we're about to switch the destination of traps from
-  // kerneltrap() to usertrap(). because a trap from kernel
-  // code to usertrap would be a disaster, turn off interrupts.
+  // kerneltrap() to usertrap(), so turn off interrupts until
+  // we're back in user space, where usertrap() is correct.
   intr_off();
 
   // send syscalls, interrupts, and exceptions to uservec in trampoline.S
@@ -128,6 +123,15 @@ prepare_return(void)
 
   // set S Exception Program Counter to the saved user pc.
   w_sepc(p->trapframe->epc);
+
+  // tell trampoline.S the user page table to switch to.
+  uint64 satp = MAKE_SATP(p->pagetable);
+
+  // jump to userret in trampoline.S at the top of memory, which 
+  // switches to the user page table, restores user registers,
+  // and switches to user mode with sret.
+  uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
+  ((void (*)(uint64))trampoline_userret)(satp);
 }
 
 // interrupts and exceptions from kernel code go here via kernelvec,
@@ -169,12 +173,31 @@ clockintr()
     ticks++;
     wakeup(&ticks);
     release(&tickslock);
+    net_timer_handler();
   }
 
   // ask for the next timer interrupt. this also clears
   // the interrupt request. 1000000 is about a tenth
   // of a second.
   w_stimecmp(r_time() + 1000000);
+}
+
+void
+softintr()
+{
+  acquire(&pendinglock);
+  uint64 irqs = pending;
+  pending = 0;
+  release(&pendinglock);
+
+  if(irqs & SOFT_IRQ_NET_RX) {
+    net_softirq_handler();
+  }
+  if(irqs & SOFT_IRQ_NET_EVENT) {
+    net_event_handler();
+  }
+
+  w_sip(r_sip() & ~SIP_SSIP);
 }
 
 // check if it's an external interrupt or software interrupt,
@@ -209,6 +232,10 @@ devintr()
     if(irq)
       plic_complete(irq);
 
+    return 1;
+  } else if(scause == 0x8000000000000001L){
+    // software interrupt.
+    softintr();
     return 1;
   } else if(scause == 0x8000000000000005L){
     // timer interrupt.

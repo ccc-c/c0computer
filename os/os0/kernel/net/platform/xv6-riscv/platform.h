@@ -42,7 +42,7 @@ memory_free(void *ptr)
 
 typedef struct spinlock mutex_t;
 
-#define MUTEX_INITIALIZER {0, 0, 0}
+#define MUTEX_INITIALIZER {0}
 
 static inline int
 mutex_init(mutex_t *mutex)
@@ -74,11 +74,13 @@ mutex_unlock(mutex_t *mutex)
 #define INTR_IRQ_SOFTIRQ SOFT_IRQ_NET_RX
 #define INTR_IRQ_EVENT SOFT_IRQ_NET_EVENT
 
-/* Stub implementations - these need kernel integration */
 static inline int
 intr_raise_irq(unsigned int irq)
 {
-    /* TODO: integrate with kernel's softirq mechanism */
+    acquire(&pendinglock);
+    pending |= irq;
+    release(&pendinglock);
+    w_sip(r_sip() | SIP_SSIP);
     return 0;
 }
 

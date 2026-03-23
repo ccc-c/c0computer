@@ -2,102 +2,85 @@
 #include "user/user.h"
 #include "kernel/net/socket.h"
 
-char *html_response = 
-    "HTTP/1.0 200 OK\r\n"
+static char HTTP_RESPONSE[] = 
+    "HTTP/1.1 200 OK\r\n"
     "Content-Type: text/html\r\n"
-    "Connection: close\r\n"
+    "Content-Length: 13\r\n"
     "\r\n"
-    "<html>\n"
-    "<head><title>xv6 HTTP Server</title></head>\n"
-    "<body>\n"
-    "<h1>Welcome to xv6!</h1>\n"
-    "<p>This page is served by xv6-riscv with TCP/IP networking.</p>\n"
-    "<hr>\n"
-    "<p>Server running on QEMU virtio-net</p>\n"
-    "</body>\n"
-    "</html>\n";
+    "<h1>Hello!</h1>";
 
-char *not_found_response = 
-    "HTTP/1.0 404 Not Found\r\n"
-    "Content-Type: text/html\r\n"
-    "Connection: close\r\n"
+static char HTTP_RESPONSE_404[] = 
+    "HTTP/1.1 404 Not Found\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 9\r\n"
     "\r\n"
-    "<html><body><h1>404 Not Found</h1></body></html>\n";
+    "Not Found";
 
-char recvbuf[1024];
-
-int
-parse_request(char *buf, int len)
+int main(int argc, char *argv[])
 {
-    if (len < 4)
-        return 0;
-    if (strncmp(buf, "GET", 3) == 0)
-        return 1;
-    return 0;
-}
-
-int
-main(int argc, char *argv[])
-{
-    int soc, client_sock;
-    struct sockaddr_in server_addr, client_addr;
-    int client_addr_len;
-    int ret;
-    int port = 80;
+    int soc, acc, peerlen;
+    struct sockaddr_in self, peer;
+    unsigned char *addr;
+    char buf[2048];
+    int port = 8080;
 
     if (argc > 1) {
         port = atoi(argv[1]);
     }
 
-    printf("HTTP Server starting on port %d\n", port);
-
+    printf("Starting HTTP Server on port %d\n", port);
+    
     soc = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (soc < 0) {
-        printf("httpd: socket failed\n");
+    if (soc == -1) {
+        printf("socket: failure\n");
         exit(1);
     }
-
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(port);
-
-    if (bind(soc, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        printf("httpd: bind failed\n");
+    printf("socket: success, soc=%d\n", soc);
+    
+    self.sin_family = AF_INET;
+    self.sin_addr.s_addr = INADDR_ANY;
+    self.sin_port = htons(port);
+    
+    if (bind(soc, (struct sockaddr *)&self, sizeof(self)) == -1) {
+        printf("bind: failure\n");
         close(soc);
         exit(1);
     }
-
-    if (listen(soc, 5) < 0) {
-        printf("httpd: listen failed\n");
-        close(soc);
-        exit(1);
-    }
-
-    printf("HTTP Server listening on port %d\n", port);
+    
+    addr = (unsigned char *)&self.sin_addr;
+    printf("bind: success, http://%d.%d.%d.%d:%d\n", 
+           addr[0], addr[1], addr[2], addr[3], ntohs(self.sin_port));
+    
+    listen(soc, 5);
+    printf("waiting for connection...\n");
 
     while (1) {
-        client_addr_len = sizeof(client_addr);
-        client_sock = accept(soc, (struct sockaddr *)&client_addr, &client_addr_len);
-        
-        if (client_sock < 0) {
-            printf("httpd: accept failed\n");
+        peerlen = sizeof(peer);
+        acc = accept(soc, (struct sockaddr *)&peer, &peerlen);
+        if (acc == -1) {
+            printf("accept: failure\n");
             continue;
         }
-
-        ret = recv(client_sock, recvbuf, sizeof(recvbuf) - 1, 0);
+        
+        addr = (unsigned char *)&peer.sin_addr;
+        printf("accept: from %d.%d.%d.%d:%d\n", 
+               addr[0], addr[1], addr[2], addr[3], ntohs(peer.sin_port));
+        
+        int ret = recv(acc, buf, sizeof(buf) - 1);
         if (ret > 0) {
-            recvbuf[ret] = '\0';
+            buf[ret] = '\0';
+            printf("recv: %d bytes\n", ret);
             
-            if (parse_request(recvbuf, ret)) {
-                send(client_sock, html_response, strlen(html_response), 0);
+            if (buf[0] == 'G' && buf[1] == 'E' && buf[2] == 'T' && buf[3] == ' ') {
+                send(acc, HTTP_RESPONSE, strlen(HTTP_RESPONSE));
             } else {
-                send(client_sock, not_found_response, strlen(not_found_response), 0);
+                send(acc, HTTP_RESPONSE_404, strlen(HTTP_RESPONSE_404));
             }
         }
-
-        close(client_sock);
+        
+        close(acc);
     }
-
+    
     close(soc);
     exit(0);
 }

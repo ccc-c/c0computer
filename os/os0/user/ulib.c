@@ -1,20 +1,18 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "kernel/fcntl.h"
-#include "kernel/riscv.h"
-#include "kernel/vm.h"
+#include "kernel/net/socket.h"
 #include "user/user.h"
 
 //
 // wrapper so that it's OK if main() does not call exit().
 //
 void
-start(int argc, char **argv)
+start()
 {
-  int r;
-  extern int main(int argc, char **argv);
-  r = main(argc, argv);
-  exit(r);
+  extern int main();
+  main();
+  exit(0);
 }
 
 char*
@@ -34,41 +32,6 @@ strcmp(const char *p, const char *q)
   while(*p && *p == *q)
     p++, q++;
   return (uchar)*p - (uchar)*q;
-}
-
-int
-strncmp(const char *p, const char *q, uint n)
-{
-  while(n > 0 && *p && *p == *q) {
-    p++, q++, n--;
-  }
-  if (n == 0)
-    return 0;
-  return (uchar)*p - (uchar)*q;
-}
-
-char*
-strcat(char *dst, const char *src)
-{
-  char *p = dst;
-  while(*p) p++;
-  while((*p++ = *src++) != 0);
-  return dst;
-}
-
-char*
-strncpy(char *dst, const char *src, int n)
-{
-  char *p = dst;
-  while(n > 0 && *src) {
-    *p++ = *src++;
-    n--;
-  }
-  while(n > 0) {
-    *p++ = 0;
-    n--;
-  }
-  return dst;
 }
 
 uint
@@ -184,44 +147,141 @@ memcpy(void *dst, const void *src, uint n)
   return memmove(dst, src, n);
 }
 
-char *
-sbrk(int n) {
-  return sys_sbrk(n, SBRK_EAGER);
-}
+#ifndef __BIG_ENDIAN
+#define __BIG_ENDIAN 4321
+#endif
+#ifndef __LITTLE_ENDIAN
+#define __LITTLE_ENDIAN 1234
+#endif
 
-char *
-sbrklazy(int n) {
-  return sys_sbrk(n, SBRK_LAZY);
-}
+static int endian;
 
-// Byte order conversion functions
-unsigned short
-htons(unsigned short hostshort)
+static int
+byteorder(void)
 {
-  return ((hostshort >> 8) & 0xff) | ((hostshort & 0xff) << 8);
+    uint32_t x = 0x00000001;
+
+    return *(uint8_t *)&x ? __LITTLE_ENDIAN : __BIG_ENDIAN;
 }
 
-unsigned short
-ntohs(unsigned short netshort)
+static uint16_t
+byteswap16(uint16_t v)
 {
-  return ((netshort >> 8) & 0xff) | ((netshort & 0xff) << 8);
+    return (v & 0x00ff) << 8 | (v & 0xff00 ) >> 8;
 }
 
-unsigned long
-htonl(unsigned long hostlong)
+static uint32_t
+byteswap32(uint32_t v)
 {
-  return ((hostlong >> 24) & 0xff) |
-         ((hostlong >> 8) & 0xff00) |
-         ((hostlong & 0xff00) << 8) |
-         ((hostlong & 0xff) << 24);
+    return (v & 0x000000ff) << 24 | (v & 0x0000ff00) << 8 | (v & 0x00ff0000) >> 8 | (v & 0xff000000) >> 24;
 }
 
-unsigned long
-ntohl(unsigned long netlong)
+uint16_t
+htons(uint16_t h)
 {
-  return ((netlong >> 24) & 0xff) |
-         ((netlong >> 8) & 0xff00) |
-         ((netlong & 0xff00) << 8) |
-         ((netlong & 0xff) << 24);
+    if (!endian) {
+        endian = byteorder();
+    }
+    return endian == __LITTLE_ENDIAN ? byteswap16(h) : h;
 }
 
+uint16_t
+ntohs(uint16_t n)
+{
+    if (!endian) {
+        endian = byteorder();
+    }
+    return endian == __LITTLE_ENDIAN ? byteswap16(n) : n;
+}
+
+uint32_t
+htonl(uint32_t h)
+{
+    if (!endian) {
+        endian = byteorder();
+    }
+    return endian == __LITTLE_ENDIAN ? byteswap32(h) : h;
+}
+
+uint32_t
+ntohl(uint32_t n)
+{
+    if (!endian) {
+        endian = byteorder();
+    }
+    return endian == __LITTLE_ENDIAN ? byteswap32(n) : n;
+}
+
+long
+strtol(const char *s, char **endptr, int base)
+{
+    int neg = 0;
+    long val = 0;
+
+    // gobble initial whitespace
+    while (*s == ' ' || *s == '\t')
+        s++;
+
+    // plus/minus sign
+    if (*s == '+')
+        s++;
+    else if (*s == '-')
+        s++, neg = 1;
+
+    // hex or octal base prefix
+    if ((base == 0 || base == 16) && (s[0] == '0' && s[1] == 'x'))
+        s += 2, base = 16;
+    else if (base == 0 && s[0] == '0')
+        s++, base = 8;
+    else if (base == 0)
+        base = 10;
+
+    // digits
+    while (1) {
+        int dig;
+
+        if (*s >= '0' && *s <= '9')
+            dig = *s - '0';
+        else if (*s >= 'a' && *s <= 'z')
+            dig = *s - 'a' + 10;
+        else if (*s >= 'A' && *s <= 'Z')
+            dig = *s - 'A' + 10;
+        else
+            break;
+        if (dig >= base)
+            break;
+        s++, val = (val * base) + dig;
+        // we don't properly detect overflow!
+    }
+
+    if (endptr)
+        *endptr = (char *) s;
+    return (neg ? -val : val);
+}
+
+int
+inet_pton (int family, const char *p, void *n) {
+    char *sp, *ep;
+    int idx;
+    long ret;
+
+    if (family != AF_INET) {
+        return -1;
+    }
+    sp = (char *)p;
+    for (idx = 0; idx < 4; idx++) {
+        ret = strtol(sp, &ep, 10);
+        if (ret < 0 || ret > 255) {
+            return -1;
+        }
+        if (ep == sp) {
+            return -1;
+        }
+        if ((idx == 3 && *ep != '\0') || (idx != 3 && *ep != '.')) {
+            return -1;
+        }
+        ((uint8_t *)n)[idx] = ret;
+        sp = ep + 1;
+    }
+    return 0;
+}

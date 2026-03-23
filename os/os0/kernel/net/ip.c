@@ -146,6 +146,10 @@ static struct ip_route *
 ip_route_add(ip_addr_t network, ip_addr_t netmask, ip_addr_t nexthop, struct ip_iface *iface)
 {
     struct ip_route *route;
+    char addr1[IP_ADDR_STR_LEN];
+    char addr2[IP_ADDR_STR_LEN];
+    char addr3[IP_ADDR_STR_LEN];
+    char addr4[IP_ADDR_STR_LEN];
 
     route = memory_alloc(sizeof(*route));
     if (!route) {
@@ -158,6 +162,13 @@ ip_route_add(ip_addr_t network, ip_addr_t netmask, ip_addr_t nexthop, struct ip_
     route->iface = iface;
     route->next = routes;
     routes = route;
+    infof("route added: network=%s, netmask=%s, nexthop=%s, iface=%s dev=%s",
+        ip_addr_ntop(route->network, addr1, sizeof(addr1)),
+        ip_addr_ntop(route->netmask, addr2, sizeof(addr2)),
+        ip_addr_ntop(route->nexthop, addr3, sizeof(addr3)),
+        ip_addr_ntop(route->iface->unicast, addr4, sizeof(addr4)),
+        NET_IFACE(iface)->dev->name
+    );
     return route;
 }
 
@@ -234,6 +245,10 @@ ip_iface_alloc(const char *unicast, const char *netmask)
 int
 ip_iface_register(struct net_device *dev, struct ip_iface *iface)
 {
+    char addr1[IP_ADDR_STR_LEN];
+    char addr2[IP_ADDR_STR_LEN];
+    char addr3[IP_ADDR_STR_LEN];
+
     if (net_device_add_iface(dev, NET_IFACE(iface)) == -1) {
         errorf("net_device_add_iface() failure");
         return -1;
@@ -244,6 +259,10 @@ ip_iface_register(struct net_device *dev, struct ip_iface *iface)
     }
     iface->next = ifaces;
     ifaces = iface;
+    infof("registered: dev=%s, unicast=%s, netmask=%s, broadcast=%s", dev->name,
+        ip_addr_ntop(iface->unicast, addr1, sizeof(addr1)),
+        ip_addr_ntop(iface->netmask, addr2, sizeof(addr2)),
+        ip_addr_ntop(iface->broadcast, addr3, sizeof(addr3)));
     return 0;
 }
 
@@ -298,7 +317,7 @@ ip_protocol_register(uint8_t type, void (*handler)(const uint8_t *data, size_t l
     entry->handler = handler;
     entry->next = protocols;
     protocols = entry;
-    // infof("registered, type=%u", entry->type);
+    infof("registered, type=%u", entry->type);
     return 0;
 }
 

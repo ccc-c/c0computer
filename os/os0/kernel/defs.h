@@ -1,5 +1,3 @@
-#include <stdarg.h>
-
 struct buf;
 struct context;
 struct file;
@@ -10,9 +8,10 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct timeval;
+struct tm;
 struct socket;
 struct sockaddr;
-struct sockaddr_in;
 
 // bio.c
 void            binit(void);
@@ -27,13 +26,8 @@ void            consoleinit(void);
 void            consoleintr(int);
 void            consputc(int);
 
-// printfmt.c
-void            vprintfmt(void (*)(int, void*), void*, const char*, void*);
-int             vsnprintf(char*, size_t, const char*, va_list);
-int             snprintf(char*, size_t, const char*, ...);
-
 // exec.c
-int             kexec(char*, char**);
+int             exec(char*, char**);
 
 // file.c
 struct file*    filealloc(void);
@@ -43,8 +37,6 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
-int             fdalloc(struct file *f);
-int             argfd(int n, int *pfd, struct file **pf);
 
 // fs.c
 void            fsinit(int);
@@ -65,7 +57,11 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
-void            ireclaim(int);
+
+// ramdisk.c
+void            ramdiskinit(void);
+void            ramdiskintr(void);
+void            ramdiskrw(struct buf*);
 
 // kalloc.c
 void*           kalloc(void);
@@ -85,34 +81,44 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-int             printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
+int            printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
+// printfmt.c
+void            vprintfmt(void (*)(int, void*), void*, const char*, void*);
+void            printfmt(void (*)(int, void*), void*, const char*, ...);
+int             vsnprintf(char*, int, const char*, void*);
+int             snprintf(char*, int, const char*, ...);
+
 // proc.c
 int             cpuid(void);
-void            kexit(int);
-int             kfork(void);
+void            exit(int);
+int             fork(void);
 int             growproc(int);
 void            proc_mapstacks(pagetable_t);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
-int             kkill(int);
+int             kill(int);
 int             killed(struct proc*);
 void            setkilled(struct proc*);
 struct cpu*     mycpu(void);
+struct cpu*     getmycpu(void);
 struct proc*    myproc();
 void            procinit(void);
 void            scheduler(void) __attribute__((noreturn));
 void            sched(void);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
-int             kwait(uint64);
+int             wait(uint64);
 void            wakeup(void*);
 void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+
+// rtc.c
+uint64          rtcread(void);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -137,6 +143,7 @@ void*           memmove(void*, const void*, uint);
 void*           memset(void*, int, uint);
 char*           safestrcpy(char*, const char*, int);
 int             strlen(const char*);
+int             strnlen(const char*, uint);
 int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
 
@@ -148,17 +155,29 @@ int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
 
+// sysfile.c
+int             argfd(int, int*, struct file**);
+int             fdalloc(struct file*);
+
+// time.c
+time_t          time(time_t*);
+int             gettimeofday(struct timeval*, void*);
+time_t          mktime(struct tm*);
+struct tm*      localtime_r(const time_t*, struct tm*);
+
 // trap.c
 extern uint     ticks;
+extern uint64   pending;
 void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
-void            prepare_return(void);
+extern struct spinlock pendinglock;
+void            usertrapret(void);
 
 // uart.c
 void            uartinit(void);
 void            uartintr(void);
-void            uartwrite(char [], int);
+void            uartputc(int);
 void            uartputc_sync(int);
 int             uartgetc(void);
 
@@ -168,6 +187,7 @@ void            kvminithart(void);
 void            kvmmap(pagetable_t, uint64, uint64, uint64, int);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
 pagetable_t     uvmcreate(void);
+void            uvmfirst(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64, int);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
@@ -179,8 +199,6 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
-int             ismapped(pagetable_t, uint64);
-uint64          vmfault(pagetable_t, uint64, int);
 
 // plic.c
 void            plicinit(void);
@@ -193,15 +211,14 @@ void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
-// virtio_net.c
-void            virtio_net_init(void);
-void            virtio_net_intr(void);
-
-// net.c
+// net/net.c
 void            netinit(void);
 void            netrun(void);
+int             net_timer_handler(void);
+int             net_softirq_handler(void);
+int             net_event_handler(void);
 
-// socket.c
+// net/socket.c
 struct file *   socket_alloc(int, int, int);
 int             socket_close(struct socket*);
 int             socket_bind(struct socket*, struct sockaddr*, int);
@@ -213,6 +230,10 @@ struct file *   socket_accept(struct socket*, struct sockaddr*, int*);
 int             socket_read(struct socket*, char*, int);
 int             socket_write(struct socket*, char*, int);
 int             socket_ioctl(struct socket*, int, void*);
+
+// net/platform/xv6-riscv/virtio_net.c
+void            virtio_net_init(void);
+void            virtio_net_intr(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

@@ -31,7 +31,7 @@ main (int argc, char *argv[])
     printf("waiting for message...\n");
     while (1) {
         peerlen = sizeof(peer);
-        ret = recvfrom(soc, buf, sizeof(buf), 0, (struct sockaddr *)&peer, &peerlen);
+        ret = recvfrom(soc, buf, sizeof(buf), (struct sockaddr *)&peer, &peerlen);
         if (ret <= 0) {
             printf("EOF\n");
             break;
@@ -43,7 +43,7 @@ main (int argc, char *argv[])
         addr = (unsigned char *)&peer.sin_addr.s_addr;
         printf("recvfrom: %d bytes data received, peer=%d.%d.%d.%d:%d\n",
             ret, addr[0], addr[1], addr[2], addr[3], ntohs(peer.sin_port));
-        sendto(soc, buf, ret, 0, (struct sockaddr *)&peer, peerlen);
+        sendto(soc, buf, ret, (struct sockaddr *)&peer, peerlen);
     }
     close(soc);  
     exit(0);

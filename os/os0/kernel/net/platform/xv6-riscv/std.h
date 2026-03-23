@@ -2,9 +2,8 @@
 #define STD_H
 
 #include <stdarg.h>
-#include <stddef.h>
 
-/* uint is defined in kernel/types.h which is included in platform.h before std.h */
+#include "time.h"
 
 #define UINT16_MAX 65535
 
@@ -36,78 +35,22 @@ extern int
 vfprintf(FILE *fp, const char *fmt, va_list ap);
 
 /*
- * Time - provide stub structures
+ * Time
  */
 
 struct timespec {
-    long tv_sec;
-    long tv_nsec;
+    /* dummy */
 };
-
-struct timeval {
-    long tv_sec;
-    long tv_usec;
-};
-
-struct tm {
-    int tm_sec;
-    int tm_min;
-    int tm_hour;
-    int tm_mday;
-    int tm_mon;
-    int tm_year;
-    int tm_wday;
-    int tm_yday;
-    int tm_isdst;
-};
-
-#define timercmp(a, b, cmp) \
-    ((a)->tv_sec == (b)->tv_sec ? (a)->tv_usec cmp (b)->tv_usec : (a)->tv_sec cmp (b)->tv_sec)
-
-/* Additional types */
-typedef unsigned int uint;
-typedef long ssize_t;
-typedef unsigned long uintptr_t;
-typedef unsigned long uint64_t;
-
-/* Stub time functions - not available in kernel */
-typedef unsigned long time_t;
-
-static inline int gettimeofday(struct timeval *tv, void *tz)
-{
-    if (tv) {
-        tv->tv_sec = 0;
-        tv->tv_usec = 0;
-    }
-    return 0;
-}
-
-static inline void timersub(struct timeval *a, struct timeval *b, struct timeval *res)
-{
-    if (res) {
-        res->tv_sec = 0;
-        res->tv_usec = 0;
-    }
-}
-
-static inline void timerclear(struct timeval *tv)
-{
-    if (tv) {
-        tv->tv_sec = 0;
-        tv->tv_usec = 0;
-    }
-}
-
-static inline struct tm *localtime_r(long *timep, struct tm *result)
-{
-    if (result && timep) {
-        memset(result, 0, sizeof(*result));
-    }
-    return result;
-}
 
 extern size_t
 strftime(char *s, size_t max, const char *format, const struct tm *tm);
+extern void
+timersub(struct timeval *a, struct timeval *b, struct timeval *res);
+extern void
+timerclear(struct timeval *tv);
+
+#define timercmp(a, b, cmp) \
+    ((a)->tv_sec == (b)->tv_sec ? (a)->tv_usec cmp (b)->tv_usec : (a)->tv_sec cmp (b)->tv_sec)
 
 /*
  * Random
@@ -124,8 +67,6 @@ random(void);
 
 extern void *
 memcpy(void *dst, const void *src, uint n);
-extern void *
-memset(void *s, int c, uint n);
 extern long
 strtol(const char *s, char **endptr, int base);
 extern char *

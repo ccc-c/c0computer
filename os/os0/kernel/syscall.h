@@ -11,7 +11,7 @@
 #define SYS_dup    10
 #define SYS_getpid 11
 #define SYS_sbrk   12
-#define SYS_pause  13
+#define SYS_sleep  13
 #define SYS_uptime 14
 #define SYS_open   15
 #define SYS_write  16
@@ -22,10 +22,11 @@
 #define SYS_close  21
 #define SYS_socket 22
 #define SYS_bind   23
-#define SYS_listen 24
-#define SYS_accept 25
+#define SYS_recvfrom 24
+#define SYS_sendto 25
 #define SYS_connect 26
-#define SYS_send   27
-#define SYS_recv   28
-#define SYS_sendto 29
-#define SYS_recvfrom 30
+#define SYS_listen 27
+#define SYS_accept 28
+#define SYS_recv   29
+#define SYS_send   30
+#define SYS_ioctl  31
