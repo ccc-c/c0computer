@@ -61,14 +61,48 @@ int main(int argc, char *argv[])
 - HTTP GET 請求構建
 - 伺服器回應接收與顯示
 
+### 3.2.3 Telnet 伺服器 (telnetd.c)
+
+```c
+// 簡化的 Telnet 伺服器
+int main(int argc, char *argv[])
+{
+    int soc = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    
+    // 監聽 port 23
+    bind(soc, ...);
+    listen(soc, 5);
+    
+    while (1) {
+        int acc = accept(soc, ...);
+        
+        // 發送歡迎訊息
+        send(acc, "Welcome!...\r\n");
+        
+        // 接收客戶端輸入
+        while (recv(acc, buf, sizeof(buf)) > 0) {
+            // 處理命令輸入
+        }
+        close(acc);
+    }
+}
+```
+
+功能包括：
+- TCP 連線監聽 (預設 port 23)
+- 歡迎訊息顯示
+- 簡單的命令處理
+- 客戶端連線管理
+
 ## 3.3 程式碼結構
 
 ```
 user/
 ├── httpd.c          # HTTP 伺服器 (新)
-├── curl.c          # HTTP 客戶端 (新)
-├── udpecho.c       # UDP Echo (原有)
-└── tcpecho.c       # TCP Echo (原有)
+├── curl.c           # HTTP 客戶端 (新)
+├── telnetd.c        # Telnet 伺服器 (新)
+├── udpecho.c        # UDP Echo (原有)
+└── tcpecho.c        # TCP Echo (原有)
 ```
 
 ## 3.4 編譯方式
@@ -80,6 +114,7 @@ UPROGS=\
     ...
     $U/_httpd\
     $U/_curl\
+    $U/_telnetd\
     ...
 ```
 
@@ -107,6 +142,22 @@ curl 192.0.2.2 8080
 ```bash
 # 在主機端執行
 curl http://192.0.2.2:8080
+```
+
+### 啟動 Telnet 伺服器
+```bash
+# 在 xv6 中執行 (預設 port 23)
+ifconfig net0 192.0.2.2/24
+telnetd
+
+# 指定其他 port
+telnetd 8023
+```
+
+### 從主機連線 Telnet
+```bash
+# 在主機端執行
+telnet 192.0.2.2
 ```
 
 ## 3.6 技術要點
