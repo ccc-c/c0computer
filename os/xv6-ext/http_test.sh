@@ -3,7 +3,7 @@
 xv6_DIR="$(cd "$(dirname "$0")" && pwd)"
 TMUX_SESSION="xv6-http-test"
 
-echo "=== xv6-riscv-net HTTP 測試 ==="
+echo "=== xv6-ext HTTP 測試 ==="
 
 # 0. 清理舊程序
 echo "[0/4] 清理舊的程序..."

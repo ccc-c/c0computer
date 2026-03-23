@@ -3,7 +3,7 @@
 xv6_DIR="$(cd "$(dirname "$0")" && pwd)"
 TMUX_SESSION="xv6-net-test"
 
-echo "=== xv6-riscv-net 網路自動測試 ==="
+echo "=== xv6-ext 網路自動測試 ==="
 
 # 0. 清理可能存在的 qemu 程序
 echo "[0/6] 清理舊的程序..."
