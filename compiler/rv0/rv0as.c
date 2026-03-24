@@ -88,7 +88,7 @@ uint32_t enc_R4(int op, int f3, int rd, int rs1, int rs2, int rs3) {
     return (rs3 << 27) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op;
 }
 // FP R-type (2 operands): opcode(7) | f7 | rs2 | rs1 | f3 | rd | opcode2
-uint32_t enc_FP_R(int op, int f7, int rs2, int rs1, int f3, int rd) {
+uint32_t enc_FP_R(int op, int f7, int rd, int rs1, int rs2, int f3) {
     return (f7 << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op;
 }
 // FP I-type: opcode(7) | imm[11:0] | rs1 | f3 | rd | opcode2
@@ -238,6 +238,12 @@ void assemble(char lines[][256], int line_count) {
         // RV64I 比較指令
         else if (strcmp(mnem, "slt") == 0) inst = enc_R(0x33, 2, 0, get_reg(op1), get_reg(op2), get_reg(op3));
         else if (strcmp(mnem, "sltu") == 0) inst = enc_R(0x33, 3, 0, get_reg(op1), get_reg(op2), get_reg(op3));
+        else if (strcmp(mnem, "seqz") == 0) inst = enc_I(0x13, 3, get_reg(op1), get_reg(op2), 1); // sltiu rd, rs, 1
+        else if (strcmp(mnem, "snez") == 0) inst = enc_R(0x33, 3, 0, get_reg(op1), 0, get_reg(op2)); // sltu rd, x0, rs
+        else if (strcmp(mnem, "not") == 0) inst = enc_I(0x13, 4, get_reg(op1), get_reg(op2), -1); // xori rd, rs, -1
+        else if (strcmp(mnem, "neg") == 0) inst = enc_R(0x33, 0, 0x20, get_reg(op1), 0, get_reg(op2)); // sub rd, x0, rs
+        else if (strcmp(mnem, "nop") == 0) inst = enc_I(0x13, 0, 0, 0, 0); // addi x0, x0, 0
+        else if (strcmp(mnem, "jr") == 0) inst = enc_I(0x67, 0, 0, get_reg(op1), 0); // jalr x0, 0(rs)
         
         // RV64I I-type 立即數版本
         else if (strcmp(mnem, "andi") == 0) inst = enc_I(0x13, 7, get_reg(op1), get_reg(op2), parse_imm(op3));

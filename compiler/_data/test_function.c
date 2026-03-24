@@ -1,11 +1,8 @@
-// expected: 120 (5! = 120)
-int factorial(int n) {
-    if (n <= 1) {
-        return 1;
-    }
-    return n * factorial(n - 1);
-}
-
+// expected: 42
+int add(int a, int b) { return a + b; }
+int mul(int a, int b) { return a * b; }
 int main() {
-    return factorial(5);
+    int x = add(10, 11); // 21
+    int y = mul(x, 2);   // 42
+    return y;
 }

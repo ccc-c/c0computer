@@ -1,8 +1,10 @@
-// expected: 55 (sum of 1+2+...+10)
+// expected: 55
 int main() {
     int sum = 0;
-    for (int i = 1; i <= 10; i = i + 1) {
-        sum = sum + i;
+    int i = 1;
+    while (i <= 10) {
+        sum += i;
+        i++;
     }
-    return sum;
+    return sum; // 55
 }

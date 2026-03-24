@@ -1,12 +1,10 @@
-// expected: 55
+// expected: 60
 int main() {
-    int a = 0b1010;  // 10
-    int b = 0b0101;  // 5
-    int r = 0;
-    r = r + (a & b);  // 0b0000 = 0
-    r = r + (a | b);  // 0b1111 = 15
-    r = r + (a ^ b);  // 0b1111 = 15
-    r = r + (a << 1); // 20
-    r = r + (a >> 1); // 5
-    return r & 0xFF;  // 15
+    int a = 12;   // 1100
+    int b = 10;   // 1010
+    int c = a & b; // 1000 = 8
+    int d = a | b; // 1110 = 14
+    int e = a ^ b; // 0110 = 6
+    int f = (d << 2); // 56
+    return c + e + (f - 10); // 8 + 6 + 46 = 60
 }

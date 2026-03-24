@@ -1,19 +1,12 @@
-// expected: 3
+// expected: 4
 int main() {
-    int x = 2;
+    int v = 3;
     int r = 0;
-    switch (x) {
-        case 1:
-            r = 1;
-            break;
-        case 2:
-            r = 3;
-            break;
-        case 3:
-            r = 5;
-            break;
-        default:
-            r = 0;
+    switch (v) {
+        case 1: r = 1; break;
+        case 2: r = 2; break;
+        case 3: r = 4; break;
+        default: r = 9; break;
     }
     return r;
 }

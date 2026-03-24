@@ -84,21 +84,14 @@ int main(int argc, char **argv) {
     Elf64_Shdr *shdrs = (Elf64_Shdr*)(map + ehdr->e_shoff);
     char *shstrtab = (char*)(map + shdrs[ehdr->e_shstrndx].sh_offset);
     
-    // 如果沒有指定 entry point，嘗試從 ELF header 取得
+    // 如果沒有指定 entry point，先保留，等符號表載入後再決定
     if (entry_point == 0xFFFFFFFFFFFFFFFF) {
-        uint64_t elf_entry = ehdr->e_entry;
-        // 只有當 ELF entry 不是 0 時才使用
-        if (elf_entry != 0) {
-            entry_point = elf_entry;
-        } else {
-            // 預設設為 0x0 (大多數情況下 main 在 offset 0)
-            // 如果遇到 fact.c 這類前面有其他函數的狀況，使用 -e 0x6c 指定
-            entry_point = 0x0;
-        }
+        entry_point = 0;
     }
     
     int rela_text_idx = -1;
     int symtab_idx = -1;
+    int strtab_idx = -1;
     uint64_t rodata_addr = 0x10000000; // Load .rodata at fixed address
 
     for (int i = 0; i < ehdr->e_shnum; i++) {
@@ -111,6 +104,30 @@ int main(int argc, char **argv) {
             rela_text_idx = i;
         } else if (shdrs[i].sh_type == SHT_SYMTAB) {
             symtab_idx = i;
+            strtab_idx = shdrs[i].sh_link;
+        }
+    }
+
+    // 若 entry 尚未指定，嘗試從 ELF entry 或符號表找到 main
+    if (entry_point == 0) {
+        uint64_t elf_entry = ehdr->e_entry;
+        if (elf_entry != 0) {
+            entry_point = elf_entry;
+        } else if (symtab_idx != -1 && strtab_idx != -1) {
+            Elf64_Sym *syms = (Elf64_Sym*)(map + shdrs[symtab_idx].sh_offset);
+            int sym_count = shdrs[symtab_idx].sh_size / sizeof(Elf64_Sym);
+            const char *strtab = (const char*)(map + shdrs[strtab_idx].sh_offset);
+            for (int i = 0; i < sym_count; i++) {
+                const char *name = strtab + syms[i].st_name;
+                if (name && strcmp(name, "main") == 0) {
+                    entry_point = syms[i].st_value;
+                    break;
+                }
+            }
+        }
+        // 預設設為 0x0
+        if (entry_point == 0) {
+            entry_point = 0x0;
         }
     }
 
@@ -201,7 +218,7 @@ int main(int argc, char **argv) {
                 else if (f3 == 6) X[rd] = X[rs1] | imm_i; // ori
                 else if (f3 == 4) X[rd] = X[rs1] ^ imm_i; // xori
                 else if (f3 == 2) X[rd] = ((int64_t)X[rs1] < (int64_t)imm_i) ? 1 : 0; // slti
-                else if (f3 == 3) X[rd] = (X[rs1] < (uint64_t)(uint32_t)imm_i) ? 1 : 0; // sltiu
+                else if (f3 == 3) X[rd] = ((uint64_t)X[rs1] < (uint64_t)(uint32_t)imm_i) ? 1 : 0; // sltiu
                 break;
             case 0x1B: // OP-IMM-32 (addiw, slli, srli, srai)
                 if (f3 == 0) X[rd] = (int32_t)(X[rs1] + imm_i);       // addiw
@@ -220,7 +237,7 @@ int main(int argc, char **argv) {
                 else if (f3 == 6 && f7 == 0) X[rd] = X[rs1] | X[rs2]; // or
                 else if (f3 == 4 && f7 == 0) X[rd] = X[rs1] ^ X[rs2]; // xor
                 else if (f3 == 2 && f7 == 0) X[rd] = ((int64_t)X[rs1] < (int64_t)X[rs2]) ? 1 : 0; // slt
-                else if (f3 == 3 && f7 == 0) X[rd] = (X[rs1] < X[rs2]) ? 1 : 0; // sltu
+                else if (f3 == 3 && f7 == 0) X[rd] = ((uint64_t)X[rs1] < (uint64_t)X[rs2]) ? 1 : 0; // sltu
                 else if (f3 == 0 && f7 == 5) X[rd] = (X[rs2] != 0) ? (X[rs1] / X[rs2]) : -1; // div
                 else if (f3 == 0 && f7 == 6) X[rd] = (X[rs2] != 0) ? (X[rs1] / X[rs2]) : 0xFFFFFFFFFFFFFFFF; // divu
                 else if (f3 == 0 && f7 == 7) X[rd] = (X[rs2] != 0) ? (X[rs1] % X[rs2]) : X[rs1]; // rem
@@ -505,6 +522,53 @@ case 0x63: // BRANCH 完整版
                     }
                 }
                 break;
+            case 0x47: // OP-FP (double precision arithmetic)
+                {
+                    int rs3 = (inst >> 27) & 0x1F;
+                    (void)rs3;
+                    if (f7 == 0x00) { // FADD.D
+                        F[rd] = F[rs1] + F[rs2];
+                    } else if (f7 == 0x04) { // FSUB.D
+                        F[rd] = F[rs1] - F[rs2];
+                    } else if (f7 == 0x08) { // FMUL.D
+                        F[rd] = F[rs1] * F[rs2];
+                    } else if (f7 == 0x0C) { // FDIV.D
+                        if (F[rs2] != 0.0) F[rd] = F[rs1] / F[rs2];
+                        else F[rd] = 0.0;
+                    } else if (f7 == 0x2C) { // FSQRT.D
+                        F[rd] = sqrt(F[rs2]);
+                    }
+                }
+                break;
+            case 0x57: // OP-FP (double precision compare/convert/move)
+                {
+                    int rs3 = (inst >> 27) & 0x1F;
+                    (void)rs3;
+                    if (f7 == 0x20 && f3 == 2) { // FEQ.D
+                        X[rd] = (F[rs1] == F[rs2]) ? 1 : 0;
+                    } else if (f7 == 0x21 && f3 == 2) { // FLT.D
+                        X[rd] = (F[rs1] < F[rs2]) ? 1 : 0;
+                    } else if (f7 == 0x22 && f3 == 2) { // FLE.D
+                        X[rd] = (F[rs1] <= F[rs2]) ? 1 : 0;
+                    } else if (f7 == 0x60) { // FCVT.W.D
+                        X[rd] = (int32_t)F[rs1];
+                    } else if (f7 == 0x61) { // FCVT.WU.D
+                        X[rd] = (uint32_t)F[rs1];
+                    } else if (f7 == 0x68 && rs2 == 0) { // FCVT.D.W
+                        F[rd] = (double)(int32_t)X[rs1];
+                    } else if (f7 == 0x69 && rs2 == 0) { // FCVT.D.WU
+                        F[rd] = (double)(uint32_t)X[rs1];
+                    } else if (f7 == 0x70 && rs2 == 0) { // FMV.X.D
+                        X[rd] = *(int64_t*)&F[rs1];
+                    } else if (f7 == 0x78 && rs2 == 0) { // FMV.D.X
+                        F[rd] = *(double*)&X[rs1];
+                    } else if (f7 == 0x20) { // FCVT.D.S
+                        F[rd] = (double)(float)F[rs1];
+                    } else if (f7 == 0x21) { // FCVT.S.D
+                        F[rd] = (double)(float)F[rs1];
+                    }
+                }
+                break;
             case 0x43: // OP-FP single precision
                 {
                     int rs3 = (inst >> 27) & 0x1F;
@@ -550,31 +614,31 @@ case 0x63: // BRANCH 完整版
                 break;
             default:
                 if (opcode == 0x73) { // ECALL
-                    // 简单的系统调用处理
-                    // a7 = 系统调用号, a0-a5 = 参数
-                    // 1 = write, 2 = exit
+                    // a7 = syscall no, a0-a5 = args (Linux RV64)
                     long long syscall = X[17]; // a7
-                    if (syscall == 1) { // write
+                    if (syscall == 64 || syscall == 1) { // write (64 on Linux, 1 legacy)
                         int fd = (int)X[10]; // a0
-                        char *buf = (char*)(RAM + X[11]); // a1
+                        uint64_t addr = X[11]; // a1
                         size_t count = (size_t)X[12]; // a2
-                        if (fd == 1 || fd == 2) {
-                            write(fd, buf, count);
+                        if (addr + count > RAM_SIZE) {
+                            printf("Memory Read Fault (ECALL write)\n");
+                            goto end;
                         }
-                    } else if (syscall == 2) { // exit
-                        printf("Program exited with code %lld\n", (long long)X[10]);
-                        goto end;
-                    } else if (syscall == 93) { // exit (new)
+                        if (fd == 1 || fd == 2) {
+                            write(fd, RAM + addr, count);
+                        }
+                    } else if (syscall == 93 || syscall == 94 || syscall == 2) { // exit/exit_group
                         printf("Program exited with code %lld\n", (long long)X[10]);
                         goto end;
                     }
-                    X[10] = 0; // 返回值
+                    X[10] = 0; // return 0 by default
                     break;
                 }
                 printf("Fault: Unknown Opcode 0x%x at PC=0x%llx\n", opcode, (unsigned long long)PC);
                 goto end;
         }
         PC = next_pc;
+        X[0] = 0; // enforce x0 is always zero
         steps++;
     }
 
