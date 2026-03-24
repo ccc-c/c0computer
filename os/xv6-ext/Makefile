@@ -1,3 +1,13 @@
+#
+# Network options:
+#   NET=tap  (default) full network via tap0, requires sudo
+#   NET=user user-mode network, no sudo, limited host<->guest
+#   NET=none no network device
+#
+# Example: make qemu NET=user 
+#   在 imac 非管理員沒開 tap 時，用這個，網路功能會稍微不同
+#   它不需要 sudo，通常可以讓 guest 連到外面，但 host↔guest 的 ping/連線方式會不同，功能不完全等價。
+
 K=kernel
 U=user
 N=$K/net
@@ -161,6 +171,7 @@ UPROGS=\
 	$U/_tcpecho\
 	$U/_udpecho\
 	$U/_usertests\
+	$U/_vim\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
@@ -189,6 +200,8 @@ ifndef CPUS
 CPUS := 3
 endif
 
+NET ?= tap
+
 TAPDEV=tap0
 TAPADDR=192.0.2.1/24
 
@@ -196,8 +209,18 @@ QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nogr
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+
+ifeq ($(NET),tap)
 QEMUOPTS += -netdev tap,ifname=$(TAPDEV),id=en0
 QEMUOPTS += -device virtio-net-device,netdev=en0,csum=off,gso=off,guest_csum=off,bus=virtio-mmio-bus.1
+endif
+ifeq ($(NET),user)
+QEMUOPTS += -netdev user,id=en0
+QEMUOPTS += -device virtio-net-device,netdev=en0,csum=off,gso=off,guest_csum=off,bus=virtio-mmio-bus.1
+endif
+ifeq ($(NET),none)
+QEMUOPTS += -net none
+endif
 
 tap:
 	@ip addr show $(TAPDEV) 2>/dev/null || (echo "Create '$(TAPDEV)'"; \
@@ -208,7 +231,7 @@ tap:
 		ip addr show $(TAPDEV); \
 	)
 
-qemu: $K/kernel fs.img tap
+qemu: $K/kernel fs.img $(if $(filter tap,$(NET)),tap)
 	$(QEMU) $(QEMUOPTS)
 
 .gdbinit: .gdbinit.tmpl-riscv
@@ -217,4 +240,3 @@ qemu: $K/kernel fs.img tap
 qemu-gdb: $K/kernel .gdbinit fs.img
 	@echo "*** Now run 'gdb' in another window." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
-

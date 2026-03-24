@@ -52,6 +52,27 @@ struct {
   uint e;  // Edit index
 } cons;
 
+static int console_raw = 0;
+static int console_echo = 1;
+
+// Set console mode. raw/echo: 0 disable, 1 enable, -1 keep.
+// Returns previous mode as bitmask: bit0=raw, bit1=echo.
+int
+consolemode(int raw, int echo)
+{
+  int prev;
+
+  acquire(&cons.lock);
+  prev = (console_raw ? 1 : 0) | (console_echo ? 2 : 0);
+  if(raw >= 0)
+    console_raw = raw ? 1 : 0;
+  if(echo >= 0)
+    console_echo = echo ? 1 : 0;
+  release(&cons.lock);
+
+  return prev;
+}
+
 //
 // user write()s to the console go here.
 //
@@ -98,27 +119,38 @@ consoleread(int user_dst, uint64 dst, int n)
 
     c = cons.buf[cons.r++ % INPUT_BUF_SIZE];
 
-    if(c == C('D')){  // end-of-file
-      if(n < target){
-        // Save ^D for next time, to make sure
-        // caller gets a 0-byte result.
-        cons.r--;
+    if(console_raw){
+      // copy the input byte to the user-space buffer.
+      cbuf = c;
+      if(either_copyout(user_dst, dst, &cbuf, 1) == -1)
+        break;
+      dst++;
+      --n;
+      if(cons.r == cons.w)
+        break;
+    } else {
+      if(c == C('D')){  // end-of-file
+        if(n < target){
+          // Save ^D for next time, to make sure
+          // caller gets a 0-byte result.
+          cons.r--;
+        }
+        break;
       }
-      break;
-    }
 
-    // copy the input byte to the user-space buffer.
-    cbuf = c;
-    if(either_copyout(user_dst, dst, &cbuf, 1) == -1)
-      break;
+      // copy the input byte to the user-space buffer.
+      cbuf = c;
+      if(either_copyout(user_dst, dst, &cbuf, 1) == -1)
+        break;
 
-    dst++;
-    --n;
+      dst++;
+      --n;
 
-    if(c == '\n'){
-      // a whole line has arrived, return to
-      // the user-level read().
-      break;
+      if(c == '\n'){
+        // a whole line has arrived, return to
+        // the user-level read().
+        break;
+      }
     }
   }
   release(&cons.lock);
@@ -136,6 +168,19 @@ void
 consoleintr(int c)
 {
   acquire(&cons.lock);
+
+  if(console_raw){
+    if(c != 0 && cons.e-cons.r < INPUT_BUF_SIZE){
+      c = (c == '\r') ? '\n' : c;
+      if(console_echo)
+        consputc(c);
+      cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;
+      cons.w = cons.e;
+      wakeup(&cons.r);
+    }
+    release(&cons.lock);
+    return;
+  }
 
   switch(c){
   case C('P'):  // Print process list.

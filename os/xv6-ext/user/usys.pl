@@ -46,3 +46,4 @@ entry("accept");
 entry("recv");
 entry("send");
 entry("ioctl");
+entry("consolemode");

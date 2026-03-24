@@ -30,3 +30,4 @@
 #define SYS_recv   29
 #define SYS_send   30
 #define SYS_ioctl  31
+#define SYS_consolemode 32

@@ -111,6 +111,7 @@ extern uint64 sys_accept(void);
 extern uint64 sys_recv(void);
 extern uint64 sys_send(void);
 extern uint64 sys_ioctl(void);
+extern uint64 sys_consolemode(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -146,6 +147,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_recv]    sys_recv,
 [SYS_send]    sys_send,
 [SYS_ioctl]   sys_ioctl,
+[SYS_consolemode] sys_consolemode,
 };
 
 void

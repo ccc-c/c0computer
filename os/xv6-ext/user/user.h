@@ -34,6 +34,7 @@ int accept(int, struct sockaddr*, int*);
 int recv(int, char*, int);
 int send(int, char*, int);
 int ioctl(int, int, void*);
+int consolemode(int, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

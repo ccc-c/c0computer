@@ -298,6 +298,8 @@ static SDL_Rect back_btn = {5, 5, 30, 20};
 static SDL_Rect forward_btn = {40, 5, 30, 20};
 static SDL_Rect edit_btn = {75, 5, 40, 20};
 SDL_Rect done_btn = {WINDOW_WIDTH - 60, 5, 50, 20};
+static SDL_Rect go_btn = {WINDOW_WIDTH - 40, 30, 35, 22};
+static SDL_Rect url_bar_rect = {5, 30, WINDOW_WIDTH - 50, 22};
 
 void draw_nav_bar(App* app) {
     SDL_SetRenderDrawColor(app->ren, 220, 220, 220, 255);
@@ -331,6 +333,57 @@ void draw_nav_bar(App* app) {
     SDL_RenderCopy(app->ren, edit_tex, NULL, &edit_dst);
     SDL_FreeSurface(edit_surf);
     SDL_DestroyTexture(edit_tex);
+    
+    // --- URL bar (second row) ---
+    SDL_SetRenderDrawColor(app->ren, 255, 255, 255, 255);
+    SDL_RenderFillRect(app->ren, &url_bar_rect);
+    if (app->url_bar_focused) {
+        SDL_SetRenderDrawColor(app->ren, 60, 120, 200, 255);
+    } else {
+        SDL_SetRenderDrawColor(app->ren, 160, 160, 160, 255);
+    }
+    SDL_RenderDrawRect(app->ren, &url_bar_rect);
+    
+    if (app->url_bar[0] != '\0') {
+        SDL_Color black = {0, 0, 0, 255};
+        SDL_Surface* url_surf = TTF_RenderUTF8_Blended(app->font, app->url_bar, black);
+        if (url_surf) {
+            SDL_Texture* url_tex = SDL_CreateTextureFromSurface(app->ren, url_surf);
+            SDL_Rect url_dst = {url_bar_rect.x + 4, url_bar_rect.y + 3, url_surf->w, url_surf->h};
+            if (url_dst.w > url_bar_rect.w - 8) url_dst.w = url_bar_rect.w - 8;
+            SDL_RenderCopy(app->ren, url_tex, NULL, &url_dst);
+            SDL_FreeSurface(url_surf);
+            SDL_DestroyTexture(url_tex);
+        }
+    }
+    
+    if (app->url_bar_focused) {
+        int cursor_x = url_bar_rect.x + 4;
+        if (app->url_bar[0] != '\0') {
+            char tmp[MAX_PATH] = {0};
+            strncpy(tmp, app->url_bar, app->url_bar_cursor);
+            tmp[app->url_bar_cursor] = '\0';
+            int w, h;
+            TTF_SizeUTF8(app->font, tmp, &w, &h);
+            cursor_x += w;
+        }
+        SDL_SetRenderDrawColor(app->ren, 0, 0, 0, 255);
+        SDL_RenderDrawLine(app->ren, cursor_x, url_bar_rect.y + 3, cursor_x, url_bar_rect.y + 19);
+    }
+    
+    // Go button
+    SDL_SetRenderDrawColor(app->ren, 80, 160, 230, 255);
+    SDL_RenderFillRect(app->ren, &go_btn);
+    SDL_SetRenderDrawColor(app->ren, 50, 120, 190, 255);
+    SDL_RenderDrawRect(app->ren, &go_btn);
+    
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Surface* go_surf = TTF_RenderUTF8_Blended(app->font, "Go", white);
+    SDL_Texture* go_tex = SDL_CreateTextureFromSurface(app->ren, go_surf);
+    SDL_Rect go_dst = {go_btn.x + 8, go_btn.y + 3, go_surf->w, go_surf->h};
+    SDL_RenderCopy(app->ren, go_tex, NULL, &go_dst);
+    SDL_FreeSurface(go_surf);
+    SDL_DestroyTexture(go_tex);
 }
 
 int is_nav_button_click(App* app, int x, int y) {
@@ -359,6 +412,163 @@ int is_done_button_click(int x, int y) {
         return 1;
     }
     return 0;
+}
+
+int is_go_button_click(int x, int y) {
+    return (x >= go_btn.x && x <= go_btn.x + go_btn.w &&
+            y >= go_btn.y && y <= go_btn.y + go_btn.h);
+}
+
+int is_url_bar_click(int x, int y) {
+    return (x >= url_bar_rect.x && x <= url_bar_rect.x + url_bar_rect.w &&
+            y >= url_bar_rect.y && y <= url_bar_rect.y + url_bar_rect.h);
+}
+
+static int is_markdown_path(const char* path) {
+    if (!path) return 0;
+    int len = strlen(path);
+    if (len >= 3 && strcasecmp(path + len - 3, ".md") == 0) return 1;
+    if (len >= 9 && strcasecmp(path + len - 9, ".markdown") == 0) return 1;
+    const char* q = strchr(path, '?');
+    if (q) {
+        int plen = q - path;
+        if (plen >= 3 && strncasecmp(q - 3, ".md", 3) == 0) return 1;
+    }
+    return 0;
+}
+
+void navigate_url_bar(App* app) {
+    if (app->url_bar[0] == '\0') return;
+    
+    if (is_url(app->url_bar)) {
+        if (!is_markdown_path(app->url_bar)) {
+            if (app->content) free(app->content);
+            app->content = strdup("本網頁非 markdown，無法顯示");
+            memset(app->current_file, 0, MAX_PATH);
+            strcpy(app->current_file, app->url_bar);
+            app->scroll_y = 0;
+            app->is_url = 1;
+            strcpy(app->current_dir, "");
+            rerender(app);
+            return;
+        }
+        load_url(app, app->url_bar);
+        history_push(app, app->url_bar, 1);
+    } else {
+        load_file(app, app->url_bar);
+    }
+}
+
+static char keysym_to_char(SDL_Keycode sym, int shift) {
+    if (sym >= SDLK_a && sym <= SDLK_z) {
+        return shift ? (char)(sym - 32) : (char)sym;
+    }
+    if (sym >= SDLK_0 && sym <= SDLK_9) {
+        if (shift) {
+            const char map[] = ")!@#$%^&*(";
+            return map[sym - SDLK_0];
+        }
+        return (char)sym;
+    }
+    if (!shift) {
+        switch (sym) {
+            case SDLK_SPACE: return ' ';
+            case SDLK_PERIOD: return '.';
+            case SDLK_SLASH: return '/';
+            case SDLK_MINUS: return '-';
+            case SDLK_EQUALS: return '=';
+            case SDLK_SEMICOLON: return ';';
+            case SDLK_QUOTE: return '\'';
+            case SDLK_COMMA: return ',';
+            case SDLK_LEFTBRACKET: return '[';
+            case SDLK_RIGHTBRACKET: return ']';
+            case SDLK_BACKSLASH: return '\\';
+            case SDLK_BACKQUOTE: return '`';
+        }
+    } else {
+        switch (sym) {
+            case SDLK_PERIOD: return '>';
+            case SDLK_SLASH: return '?';
+            case SDLK_MINUS: return '_';
+            case SDLK_EQUALS: return '+';
+            case SDLK_SEMICOLON: return ':';
+            case SDLK_QUOTE: return '"';
+            case SDLK_COMMA: return '<';
+            case SDLK_LEFTBRACKET: return '{';
+            case SDLK_RIGHTBRACKET: return '}';
+            case SDLK_BACKSLASH: return '|';
+            case SDLK_BACKQUOTE: return '~';
+        }
+    }
+    return 0;
+}
+
+static void url_bar_insert_char(App* app, char c) {
+    int cur_len = strlen(app->url_bar);
+    if (cur_len + 1 < MAX_PATH - 1) {
+        memmove(app->url_bar + app->url_bar_cursor + 1,
+                app->url_bar + app->url_bar_cursor,
+                cur_len - app->url_bar_cursor + 1);
+        app->url_bar[app->url_bar_cursor] = c;
+        app->url_bar_cursor++;
+    }
+}
+
+void url_bar_handle_key(App* app, SDL_Event* e) {
+    if (e->type != SDL_KEYDOWN) return;
+
+    int sym = e->key.keysym.sym;
+    int shift = e->key.keysym.mod & KMOD_SHIFT;
+
+    if (sym == SDLK_RETURN) {
+        navigate_url_bar(app);
+        app->url_bar_focused = 0;
+        return;
+    }
+    if (sym == SDLK_ESCAPE) {
+        app->url_bar_focused = 0;
+        return;
+    }
+    if (sym == SDLK_BACKSPACE) {
+        if (app->url_bar_cursor > 0) {
+            int len = strlen(app->url_bar);
+            app->url_bar_cursor--;
+            memmove(app->url_bar + app->url_bar_cursor,
+                    app->url_bar + app->url_bar_cursor + 1,
+                    len - app->url_bar_cursor);
+        }
+        return;
+    }
+    if (sym == SDLK_LEFT) {
+        if (app->url_bar_cursor > 0) app->url_bar_cursor--;
+        return;
+    }
+    if (sym == SDLK_RIGHT) {
+        int len = strlen(app->url_bar);
+        if (app->url_bar_cursor < len) app->url_bar_cursor++;
+        return;
+    }
+    if (sym == SDLK_v && (e->key.keysym.mod & (KMOD_GUI | KMOD_CTRL))) {
+        char* clipboard = SDL_GetClipboardText();
+        if (clipboard) {
+            int clen = strlen(clipboard);
+            int cur_len = strlen(app->url_bar);
+            if (cur_len + clen < MAX_PATH - 1) {
+                memmove(app->url_bar + app->url_bar_cursor + clen,
+                        app->url_bar + app->url_bar_cursor,
+                        cur_len - app->url_bar_cursor + 1);
+                memcpy(app->url_bar + app->url_bar_cursor, clipboard, clen);
+                app->url_bar_cursor += clen;
+            }
+            SDL_free(clipboard);
+        }
+        return;
+    }
+
+    char c = keysym_to_char(sym, shift);
+    if (c != 0) {
+        url_bar_insert_char(app, c);
+    }
 }
 
 void enter_edit_mode(App* app, int type) {
@@ -412,17 +622,16 @@ void set_cursor_from_mouse(App* app, int mouse_x, int mouse_y) {
     }
     
     int len = strlen(app->edit_buf);
-    int target_screen_y = mouse_y;
+    int target_screen_y = mouse_y + app->edit_scroll_y;
     int y = top_margin + 5;
     
-    int logical_line = 0;
     int i = 0;
-    int screen_line = 0;
     
     while (i < len) {
         int line_start = i;
         int x = left_margin + 5;
         int pos_in_line = 0;
+        int on_this_line = (y <= target_screen_y && target_screen_y < y + line_height);
         
         while (i < len && app->edit_buf[i] != '\n') {
             int char_len = utf8_char_len_at(app->edit_buf, i);
@@ -438,13 +647,11 @@ void set_cursor_from_mouse(App* app, int mouse_x, int mouse_y) {
                 break;
             }
             
-            if (y <= target_screen_y && target_screen_y < y + line_height) {
+            if (on_this_line) {
                 if (mouse_x < x + char_w / 2) {
                     app->edit_cursor = i;
-                } else {
-                    app->edit_cursor = i + char_len;
+                    return;
                 }
-                return;
             }
             
             x += char_w;
@@ -452,22 +659,16 @@ void set_cursor_from_mouse(App* app, int mouse_x, int mouse_y) {
             pos_in_line++;
         }
         
-        if (y <= target_screen_y && target_screen_y < y + line_height) {
-            if (mouse_x >= x) {
-                app->edit_cursor = i;
-            } else {
-                app->edit_cursor = line_start;
-            }
+        if (on_this_line) {
+            app->edit_cursor = i;
             return;
         }
         
         y += line_height;
         
-        if (app->edit_buf[i] == '\n') {
+        if (i < len && app->edit_buf[i] == '\n') {
             i++;
         }
-        
-        screen_line++;
         
         if (y > target_screen_y) {
             app->edit_cursor = i;
@@ -476,6 +677,69 @@ void set_cursor_from_mouse(App* app, int mouse_x, int mouse_y) {
     }
     
     app->edit_cursor = len;
+}
+
+static void ensure_cursor_visible(App* app) {
+    int top_margin = NAV_BAR_HEIGHT + 10;
+    int left_margin = app->margin;
+    int right_margin = WINDOW_WIDTH - app->margin;
+    int bottom_margin = WINDOW_HEIGHT - app->margin;
+    int line_height = TTF_FontHeight(app->font) + 4;
+    
+    int len = strlen(app->edit_buf);
+    int cursor_pos = app->edit_cursor;
+    if (cursor_pos > len) cursor_pos = len;
+    
+    int y = top_margin + 5;
+    int i = 0;
+    int cursor_y = y;
+    int found = 0;
+    
+    while (i < len) {
+        int line_start = i;
+        int x = left_margin + 5;
+        
+        while (i < len && app->edit_buf[i] != '\n') {
+            int char_len = utf8_char_len_at(app->edit_buf, i);
+            char tmp[5] = {0};
+            for (int k = 0; k < char_len && i + k < len; k++)
+                tmp[k] = app->edit_buf[i + k];
+            int char_w, char_h;
+            TTF_SizeUTF8(app->font, tmp, &char_w, &char_h);
+            
+            if (x + char_w > right_margin - 5) {
+                break;
+            }
+            x += char_w;
+            i += char_len;
+        }
+        
+        if (!found && cursor_pos >= line_start && cursor_pos <= i) {
+            cursor_y = y;
+            found = 1;
+            break;
+        }
+        
+        y += line_height;
+        
+        if (i < len && app->edit_buf[i] == '\n') {
+            i++;
+        }
+    }
+    
+    if (!found) {
+        cursor_y = y;
+    }
+    
+    int screen_y = cursor_y - app->edit_scroll_y;
+    
+    if (screen_y + line_height > bottom_margin) {
+        app->edit_scroll_y = cursor_y + line_height - bottom_margin;
+    }
+    if (screen_y < top_margin + 5) {
+        app->edit_scroll_y = cursor_y - (top_margin + 5);
+    }
+    if (app->edit_scroll_y < 0) app->edit_scroll_y = 0;
 }
 
 void draw_edit_mode(App* app) {
@@ -550,10 +814,13 @@ void draw_edit_mode(App* app) {
         SDL_SetRenderDrawColor(app->ren, 0, 0, 0, 255);
         SDL_RenderDrawLine(app->ren, cursor_x, top_margin + 32, cursor_x, top_margin + 53);
     } else {
+        ensure_cursor_visible(app);
+        
         int len = strlen(app->edit_buf);
         int cursor_buf_pos = app->edit_cursor;
         if (cursor_buf_pos > len) cursor_buf_pos = len;
         
+        int sy = app->edit_scroll_y;
         int y = top_margin + 5;
         int i = 0;
         int rendered_up_to = 0;
@@ -561,6 +828,7 @@ void draw_edit_mode(App* app) {
         while (i < len) {
             int x = left_margin + 5;
             int line_start = i;
+            int screen_y = y - sy;
             
             while (i < len && app->edit_buf[i] != '\n') {
                 int char_len = utf8_char_len_at(app->edit_buf, i);
@@ -576,14 +844,16 @@ void draw_edit_mode(App* app) {
                     break;
                 }
                 
-                SDL_Color black = {0, 0, 0, 255};
-                SDL_Surface* surf = TTF_RenderUTF8_Blended(app->font, tmp, black);
-                if (surf) {
-                    SDL_Texture* tex = SDL_CreateTextureFromSurface(app->ren, surf);
-                    SDL_Rect dst = {x, y, surf->w, surf->h};
-                    SDL_RenderCopy(app->ren, tex, NULL, &dst);
-                    SDL_DestroyTexture(tex);
-                    SDL_FreeSurface(surf);
+                if (screen_y >= top_margin - line_height && screen_y <= bottom_margin) {
+                    SDL_Color black = {0, 0, 0, 255};
+                    SDL_Surface* surf = TTF_RenderUTF8_Blended(app->font, tmp, black);
+                    if (surf) {
+                        SDL_Texture* tex = SDL_CreateTextureFromSurface(app->ren, surf);
+                        SDL_Rect dst = {x, screen_y, surf->w, surf->h};
+                        SDL_RenderCopy(app->ren, tex, NULL, &dst);
+                        SDL_DestroyTexture(tex);
+                        SDL_FreeSurface(surf);
+                    }
                 }
                 
                 x += char_w;
@@ -593,12 +863,12 @@ void draw_edit_mode(App* app) {
             rendered_up_to = i;
             y += line_height;
             
-            if (app->edit_buf[i] == '\n') {
+            if (i < len && app->edit_buf[i] == '\n') {
                 i++;
                 rendered_up_to = i;
             }
             
-            if (y > bottom_margin) break;
+            if (y - sy > bottom_margin) break;
             
             if (cursor_buf_pos <= rendered_up_to && cursor_buf_pos >= line_start) {
                 int cx = left_margin + 5;
@@ -613,8 +883,9 @@ void draw_edit_mode(App* app) {
                     cx += cw;
                     j += char_len;
                 }
+                int cursor_sy = y - sy;
                 SDL_SetRenderDrawColor(app->ren, 0, 100, 200, 255);
-                SDL_RenderDrawLine(app->ren, cx, y - line_height + 1, cx, y - 3);
+                SDL_RenderDrawLine(app->ren, cx, cursor_sy - line_height + 1, cx, cursor_sy - 3);
             }
         }
         
@@ -631,8 +902,9 @@ void draw_edit_mode(App* app) {
                 cx += cw;
                 j += char_len;
             }
+            int cursor_sy = y - sy;
             SDL_SetRenderDrawColor(app->ren, 0, 100, 200, 255);
-            SDL_RenderDrawLine(app->ren, cx, y - line_height + 1, cx, y - 3);
+            SDL_RenderDrawLine(app->ren, cx, cursor_sy - line_height + 1, cx, cursor_sy - 3);
         }
     }
     
