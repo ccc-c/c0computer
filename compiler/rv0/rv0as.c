@@ -278,9 +278,9 @@ void assemble(char lines[][256], int line_count) {
         else if (strcmp(mnem, "fsqrt.s") == 0) inst = enc_FP_R(0x43, 0, get_freg(op1), 0, get_freg(op2), 0x2C);
         
         // 比較指令
-        else if (strcmp(mnem, "feq.s") == 0) inst = enc_FP_R(0x53, 2, get_reg(op1), get_freg(op2), get_freg(op3), 0);
-        else if (strcmp(mnem, "flt.s") == 0) inst = enc_FP_R(0x53, 2, get_reg(op1), get_freg(op2), get_freg(op3), 1);
-        else if (strcmp(mnem, "fle.s") == 0) inst = enc_FP_R(0x53, 2, get_reg(op1), get_freg(op2), get_freg(op3), 2);
+        else if (strcmp(mnem, "feq.s") == 0) inst = enc_FP_R(0x53, 0x50, get_reg(op1), get_freg(op2), get_freg(op3), 2);
+        else if (strcmp(mnem, "flt.s") == 0) inst = enc_FP_R(0x53, 0x50, get_reg(op1), get_freg(op2), get_freg(op3), 1);
+        else if (strcmp(mnem, "fle.s") == 0) inst = enc_FP_R(0x53, 0x50, get_reg(op1), get_freg(op2), get_freg(op3), 0);
         
         // ==================== RV64D 浮點數指令 ====================
         // FLD/FSD (雙精度載入/儲存)
@@ -295,9 +295,9 @@ void assemble(char lines[][256], int line_count) {
         else if (strcmp(mnem, "fsqrt.d") == 0) inst = enc_FP_R(0x47, 0, get_freg(op1), 0, get_freg(op2), 0x2C);
         
         // 比較指令
-        else if (strcmp(mnem, "feq.d") == 0) inst = enc_FP_R(0x57, 2, get_reg(op1), get_freg(op2), get_freg(op3), 0);
-        else if (strcmp(mnem, "flt.d") == 0) inst = enc_FP_R(0x57, 2, get_reg(op1), get_freg(op2), get_freg(op3), 1);
-        else if (strcmp(mnem, "fle.d") == 0) inst = enc_FP_R(0x57, 2, get_reg(op1), get_freg(op2), get_freg(op3), 2);
+        else if (strcmp(mnem, "feq.d") == 0) inst = enc_FP_R(0x53, 0x51, get_reg(op1), get_freg(op2), get_freg(op3), 2);
+        else if (strcmp(mnem, "flt.d") == 0) inst = enc_FP_R(0x53, 0x51, get_reg(op1), get_freg(op2), get_freg(op3), 1);
+        else if (strcmp(mnem, "fle.d") == 0) inst = enc_FP_R(0x53, 0x51, get_reg(op1), get_freg(op2), get_freg(op3), 0);
         
         // 轉換指令 - 修正參數順序並處理 rounding mode
         else if (strcmp(mnem, "fcvt.w.s") == 0) inst = enc_FP_R(0x43, 0x60, get_rounding_mode(op3), get_freg(op2), 0, get_reg(op1));  // FCVT.W.S

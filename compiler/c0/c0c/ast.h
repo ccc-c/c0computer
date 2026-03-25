@@ -35,6 +35,9 @@ struct Type {
     int       variadic;
     /* STRUCT/UNION/ENUM */
     char     *tag;
+    /* STRUCT/UNION members */
+    Type    **members;
+    int       n_members;
     /* TYPEDEF_REF */
     char     *name;
 };

@@ -81,6 +81,7 @@ static Block *get_block(Function *fn, const char *name){
     for(int i=0;i<fn->n_blocks;i++) if(!strcmp(fn->blocks[i].name,name)) return &fn->blocks[i];
     Block *b=&fn->blocks[fn->n_blocks++];
     strncpy(b->name,name,MAX_NAME-1); b->n_instrs=0;
+    fprintf(stderr, "DEBUG: Created block %s in function %s (n_blocks now %d)\n", name, fn->name, fn->n_blocks);
     return b;
 }
 
@@ -90,8 +91,11 @@ void parse_ll(FILE *fp){
     Function *cur_fn=NULL;
     Block    *cur_blk=NULL;
     Instr    *pending_switch=NULL;
+    int line_num = 0;
 
     while(fgets(line,sizeof line,fp)){
+        line_num++;
+        if (line_num % 20 == 0) fprintf(stderr, "Parsing line %d...\n", line_num);
         rstrip(line);
         char *p=line; p=skip_ws(p);
         if(!*p||*p==';') continue;
@@ -167,7 +171,7 @@ void parse_ll(FILE *fp){
         if(!strcmp(tok,"alloca")){
             ins.op=OP_ALLOCA;
             char t[MAX_NAME]; p=read_token(p,t,sizeof t);
-            if (!strcmp(t,"ptr")) ins.alloca_is_ptr = 1;
+            ins.alloca_size = 8;
             cur_blk->instrs[cur_blk->n_instrs++]=ins;
             continue;
         }

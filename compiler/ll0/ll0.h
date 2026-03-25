@@ -5,8 +5,8 @@
 #include <stdint.h>
 
 #define MAX_FUNCTIONS   64
-#define MAX_BLOCKS      128
-#define MAX_INSTRS      512
+#define MAX_BLOCKS      32
+#define MAX_INSTRS      64
 #define MAX_ARGS        16
 #define MAX_LINE        1024
 #define MAX_NAME        128
@@ -64,6 +64,7 @@ typedef struct {
     char   switch_labels[MAX_CASES][MAX_NAME];
     char   switch_default[MAX_NAME];
     int    gep_elem_size;
+    int    alloca_size;
     int    alloca_is_ptr;
     char   true_label[MAX_NAME];
     char   false_label[MAX_NAME];

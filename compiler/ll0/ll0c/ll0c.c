@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PROLOGUE_SIZE 256
+#define PROLOGUE_SIZE 1024
 
 typedef struct {
     char name[MAX_NAME];
@@ -17,6 +17,10 @@ static int curr_offset = -24;
 static void reset_varmap() {
     n_vars = 0;
     curr_offset = -24;
+    if (curr_offset < -8192) {
+        fprintf(stderr, "Warning: stack overflow detected\n");
+        curr_offset = -8192;
+    }
 }
 
 static int get_offset(const char *name) {
@@ -86,7 +90,9 @@ static int block_id(Function *fn, const char *name){
 }
 
 static void compile_function(FILE *out, Function *fn) {
+    fprintf(stderr, "DEBUG: compile_function called for %s\n", fn->name);
     reset_varmap();
+    fprintf(stderr, "DEBUG: reset_varmap done\n");
 
     fprintf(out, "\n.global %s\n", fn->name);
     fprintf(out, "%s:\n", fn->name);
@@ -94,6 +100,8 @@ static void compile_function(FILE *out, Function *fn) {
     fprintf(out, "    sd ra, %d(sp)\n", PROLOGUE_SIZE - 8);
     fprintf(out, "    sd s0, %d(sp)\n", PROLOGUE_SIZE - 16);
     fprintf(out, "    addi s0, sp, %d\n", PROLOGUE_SIZE);
+
+    fprintf(stderr, "Compiling function %s with %d args, %d blocks\n", fn->name, fn->n_args, fn->n_blocks);
 
     for (int i = 0; i < fn->n_args; i++) {
         int off = get_offset(fn->arg_names[i]);
@@ -111,12 +119,10 @@ static void compile_function(FILE *out, Function *fn) {
                 case OP_ALLOCA: {
                     int ptr_off = get_offset(ins->dst);
                     int mem_off = curr_offset;
-                    curr_offset -= 8;
+                    int size = ins->alloca_size > 0 ? ins->alloca_size : 8;
+                    curr_offset -= size;
                     fprintf(out, "    addi t0, s0, %d\n", mem_off);
                     fprintf(out, "    sd t0, %d(s0)\n", ptr_off);
-                    if (ins->alloca_is_ptr) {
-                        fprintf(out, "    sd t0, %d(s0)\n", mem_off);
-                    }
                     break;
                 }
                 case OP_STORE: {
@@ -419,6 +425,7 @@ int main(int argc, char **argv) {
     }
     parse_ll(in_fp);
     fclose(in_fp);
+    fprintf(stderr, "DEBUG: Parse complete, n_functions=%d\n", n_functions);
 
     FILE *out_fp = fopen(out_filename, "w");
     if (!out_fp) {
@@ -427,7 +434,9 @@ int main(int argc, char **argv) {
     }
 
     fprintf(out_fp, ".text\n");
+    fprintf(stderr, "DEBUG: Starting function compilation loop, n_functions=%d\n", n_functions);
     for (int i = 0; i < n_functions; i++) {
+        fprintf(stderr, "DEBUG: About to compile function %d: %s\n", i, functions[i].name);
         compile_function(out_fp, &functions[i]);
     }
     

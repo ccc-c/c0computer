@@ -7,7 +7,7 @@
 	.type	factorial,@function
 factorial:                              # @factorial
 .Lfunc_begin0:
-	.file	0 "/Users/Shared/ccc/c0computer/compiler/rv0" "fact.c" md5 0xe20b4ef92ee2b11b2a97d2dc5edf7b2d
+	.file	0 "/Users/Shared/ccc/forai/compiler/rv0" "fact.c" md5 0xe20b4ef92ee2b11b2a97d2dc5edf7b2d
 	.loc	0 4 0                           # fact.c:4:0
 	.cfi_sections .debug_frame
 	.cfi_startproc
@@ -309,21 +309,21 @@ main:                                   # @main
 .Linfo_string1:
 	.asciz	"fact.c"                        # string offset=30
 .Linfo_string2:
-	.asciz	"/Users/Shared/ccc/c0computer/compiler/rv0" # string offset=37
+	.asciz	"/Users/Shared/ccc/forai/compiler/rv0" # string offset=37
 .Linfo_string3:
-	.asciz	"factorial"                     # string offset=79
+	.asciz	"factorial"                     # string offset=74
 .Linfo_string4:
-	.asciz	"long long"                     # string offset=89
+	.asciz	"long long"                     # string offset=84
 .Linfo_string5:
-	.asciz	"main"                          # string offset=99
+	.asciz	"main"                          # string offset=94
 .Linfo_string6:
-	.asciz	"int"                           # string offset=104
+	.asciz	"int"                           # string offset=99
 .Linfo_string7:
-	.asciz	"n"                             # string offset=108
+	.asciz	"n"                             # string offset=103
 .Linfo_string8:
-	.asciz	"number"                        # string offset=110
+	.asciz	"number"                        # string offset=105
 .Linfo_string9:
-	.asciz	"result"                        # string offset=117
+	.asciz	"result"                        # string offset=112
 	.section	.debug_str_offsets,"",@progbits
 	.word	.Linfo_string0
 	.word	.Linfo_string1

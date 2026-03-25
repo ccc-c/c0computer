@@ -8,6 +8,7 @@
 
 #define MAX_TYPEDEFS 512
 #define MAX_ENUM_CONSTS 1024
+#define MAX_STRUCT_DEFS 256
 
 typedef struct {
     char *name;
@@ -19,13 +20,20 @@ typedef struct {
     long long value;
 } EnumConst;
 
+typedef struct {
+    char *name;
+    Type *type;
+} StructEntry;
+
 struct Parser {
     Lexer         *lexer;
     Token          cur;
-    TypedefEntry **typedefs;       /* pointer array — avoids struct array stride issues */
+    TypedefEntry **typedefs;
     int            n_typedefs;
-    EnumConst    **enum_consts;    /* pointer array */
+    EnumConst    **enum_consts;
     int            n_enum_consts;
+    StructEntry  **structs;
+    int            n_structs;
 };
 
 static void register_enum_const(Parser *p, const char *name, long long val) {
@@ -45,6 +53,23 @@ static int lookup_enum_const(Parser *p, const char *name, long long *out) {
         }
     }
     return 0;
+}
+
+static void register_struct(Parser *p, const char *name, Type *t) {
+    if (p->n_structs >= MAX_STRUCT_DEFS) return;
+    StructEntry *se = calloc(1, sizeof(StructEntry));
+    se->name = strdup(name);
+    se->type = t;
+    p->structs[p->n_structs++] = se;
+}
+
+static Type *lookup_struct(Parser *p, const char *name) {
+    for (int i = p->n_structs - 1; i >= 0; i--) {
+        StructEntry *se = p->structs[i];
+        if (se && strcmp(se->name, name) == 0)
+            return se->type;
+    }
+    return NULL;
 }
 
 static void p_error(Parser *p, const char *msg) {
@@ -193,16 +218,28 @@ static Type *parse_struct_union(Parser *p) {
     Type *t   = type_new(is_union ? TY_UNION : TY_STRUCT);
     t->tag    = tag;
 
-    /* optional body – we skip it for now (just track the tag) */
+    /* parse body */
     if (check(p, TOK_LBRACE)) {
         advance(p);
-        int depth = 1;
-        while (!check(p, TOK_EOF) && depth > 0) {
-            if      (check(p, TOK_LBRACE)) depth++;
-            else if (check(p, TOK_RBRACE)) depth--;
-            advance(p);
+        while (!check(p, TOK_RBRACE) && !check(p, TOK_EOF)) {
+            int dummy_td = 0, dummy_st = 0, dummy_ex = 0;
+            Type *mtype = parse_type_specifier(p, &dummy_td, &dummy_st, &dummy_ex);
+            if (!mtype) { advance(p); continue; }
+            char *mname = NULL;
+            mtype = parse_declarator(p, mtype, &mname);
+            if (mname) {
+                t->members = realloc(t->members, (t->n_members + 1) * sizeof(Type*));
+                t->params = realloc(t->params, (t->n_members + 1) * sizeof(Param));
+                t->members[t->n_members] = mtype;
+                t->params[t->n_members].name = mname;
+                t->params[t->n_members].type = mtype;
+                t->n_members++;
+            }
+            expect(p, TOK_SEMICOLON);
         }
+        expect(p, TOK_RBRACE);
     }
+    if (tag) register_struct(p, tag, t);
     return t;
 }
 
@@ -308,6 +345,13 @@ static Type *parse_type_specifier(Parser *p, int *is_typedef_out,
                 /* clone reference */
                 direct = type_new(TY_TYPEDEF_REF);
                 direct->name = strdup(p->cur.text);
+                base_set = 1;
+                advance(p);
+                goto parse_type_done;
+            }
+            Type *st = lookup_struct(p, p->cur.text);
+            if (st) {
+                direct = st;
                 base_set = 1;
                 advance(p);
                 goto parse_type_done;
@@ -1065,6 +1109,7 @@ Parser *parser_new(Lexer *lexer) {
     /* Allocate pointer arrays for typedef and enum tables */
     p->typedefs    = calloc(MAX_TYPEDEFS,    sizeof(TypedefEntry*));
     p->enum_consts = calloc(MAX_ENUM_CONSTS, sizeof(EnumConst*));
+    p->structs     = calloc(MAX_STRUCT_DEFS, sizeof(StructEntry*));
 
     /* pre-register common standard typedefs so system headers don't need to be parsed.
        Use separate arrays to avoid struct array stride issues in self-hosted IR. */
@@ -1095,6 +1140,11 @@ void parser_free(Parser *p) {
         if (ec) { free(ec->name); free(ec); }
     }
     free(p->enum_consts);
+    for (int i = 0; i < p->n_structs; i++) {
+        StructEntry *se = p->structs[i];
+        if (se) { free(se->name); free(se); }
+    }
+    free(p->structs);
     free(p);
 }
 

@@ -109,16 +109,21 @@ int main(int argc, char **argv) {
     }
 
     // 若 entry 尚未指定，嘗試從 ELF entry 或符號表找到 main
+    fprintf(stderr, "DEBUG: entry_point initially = %llu, elf_entry = %llu\n", (unsigned long long)entry_point, (unsigned long long)ehdr->e_entry);
     if (entry_point == 0) {
         uint64_t elf_entry = ehdr->e_entry;
+        fprintf(stderr, "DEBUG: elf_entry = %llu, symtab_idx=%d, strtab_idx=%d\n", (unsigned long long)elf_entry, symtab_idx, strtab_idx);
         if (elf_entry != 0) {
             entry_point = elf_entry;
+            fprintf(stderr, "DEBUG: using elf_entry, entry_point now = %llu\n", (unsigned long long)entry_point);
         } else if (symtab_idx != -1 && strtab_idx != -1) {
             Elf64_Sym *syms = (Elf64_Sym*)(map + shdrs[symtab_idx].sh_offset);
             int sym_count = shdrs[symtab_idx].sh_size / sizeof(Elf64_Sym);
             const char *strtab = (const char*)(map + shdrs[strtab_idx].sh_offset);
+            fprintf(stderr, "DEBUG: sym_count = %d\n", sym_count);
             for (int i = 0; i < sym_count; i++) {
                 const char *name = strtab + syms[i].st_name;
+                fprintf(stderr, "DEBUG: symbol %d: name='%s', st_value=%llu\n", i, name ? name : "(null)", (unsigned long long)syms[i].st_value);
                 if (name && strcmp(name, "main") == 0) {
                     entry_point = syms[i].st_value;
                     break;
@@ -212,19 +217,26 @@ int main(int argc, char **argv) {
         uint64_t next_pc = PC + 4;
         
         switch (opcode) {
-            case 0x13: // OP-IMM (addi, andi, ori, xori, slti, sltiu)
+            case 0x13: // OP-IMM (addi, andi, ori, xori, slti, sltiu, slli)
                 if (f3 == 0) X[rd] = X[rs1] + imm_i; // addi
                 else if (f3 == 7) X[rd] = X[rs1] & imm_i; // andi
                 else if (f3 == 6) X[rd] = X[rs1] | imm_i; // ori
                 else if (f3 == 4) X[rd] = X[rs1] ^ imm_i; // xori
                 else if (f3 == 2) X[rd] = ((int64_t)X[rs1] < (int64_t)imm_i) ? 1 : 0; // slti
                 else if (f3 == 3) X[rd] = ((uint64_t)X[rs1] < (uint64_t)(uint32_t)imm_i) ? 1 : 0; // sltiu
+                else if (f3 == 1) {
+                    uint32_t shamt = (inst >> 20) & 0x3F;
+                    X[rd] = X[rs1] << shamt;
+                }
                 break;
             case 0x1B: // OP-IMM-32 (addiw, slli, srli, srai)
-                if (f3 == 0) X[rd] = (int32_t)(X[rs1] + imm_i);       // addiw
-                else if (f3 == 1) X[rd] = (int32_t)(X[rs1] << (imm_i & 0x1F)); // slliW
-                else if (f3 == 5 && (imm_i & 0x1000)) X[rd] = (int32_t)X[rs1] >> (imm_i & 0x1F); // sraiw
-                else if (f3 == 5) X[rd] = (uint32_t)(X[rs1] >> (imm_i & 0x1F)); // srliw
+                {
+                    uint32_t shamt = (inst >> 20) & 0x3F; // 6-bit shift amount for RV64
+                    if (f3 == 0) X[rd] = (int32_t)(X[rs1] + imm_i);       // addiw
+                    else if (f3 == 1) X[rd] = X[rs1] << shamt; // SLLI (for RV64, handles both 32 and 64-bit)
+                    else if (f3 == 5 && (imm_i & 0x1000)) X[rd] = (int32_t)X[rs1] >> (shamt & 0x1F); // sraiw
+                    else if (f3 == 5) X[rd] = (uint32_t)(X[rs1] >> (shamt & 0x1F)); // srliw
+                }
                 break;
             case 0x33: // OP (add, mul, sub, sll, srl, sra, and, or, xor, slt, sltu, div, rem, mulh, mulhsu, mulhu)
                 if (f3 == 0 && f7 == 0) X[rd] = X[rs1] + X[rs2];       // add
@@ -497,13 +509,16 @@ case 0x63: // BRANCH 完整版
                         else F[rd] = 0.0;
                     } else if (f7 == 0x2C) { // FSQRT.D
                         F[rd] = sqrt(F[rs2]);
+                    } else if ((f7 == 0x51 || f7 == 0x50) && (f3 >= 0 && f3 <= 2)) {
+                        // f7=0x51 for double precision, f7=0x50 for single precision
+                        if (f3 == 0) {
+                            X[rd] = (F[rs1] <= F[rs2]) ? 1 : 0; // FLE.D/S
+                        } else if (f3 == 1) {
+                            X[rd] = (F[rs1] < F[rs2]) ? 1 : 0; // FLT.D/S
+                        } else if (f3 == 2) {
+                            X[rd] = (F[rs1] == F[rs2]) ? 1 : 0; // FEQ.D/S
+                        }
                     } else if (f7 == 0x20 && f3 == 2) { // FEQ.D
-                        X[rd] = (F[rs1] == F[rs2]) ? 1 : 0;
-                    } else if (f7 == 0x21 && f3 == 2) { // FLT.D
-                        X[rd] = (F[rs1] < F[rs2]) ? 1 : 0;
-                    } else if (f7 == 0x22 && f3 == 2) { // FLE.D
-                        X[rd] = (F[rs1] <= F[rs2]) ? 1 : 0;
-                    } else if (f7 == 0x60) { // FCVT.W.D (any rounding mode)
                         X[rd] = (int32_t)F[rs1];
                     } else if (f7 == 0x61) { // FCVT.WU.D (any rounding mode)
                         X[rd] = (uint32_t)F[rs1];

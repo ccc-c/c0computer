@@ -245,6 +245,7 @@ static int promote_to_i64(Codegen *cg, Val v, char *out_reg, size_t out_sz);
 static Type *default_int_type(void);
 static Type *default_i64_type(void);
 static Type *default_ptr_type(void);
+static Type *default_fp_type(void);
 
 static Val make_val(const char *reg, Type *type) {
     Val v;
@@ -307,10 +308,8 @@ static char *emit_lvalue_addr(Codegen *cg, Node *n) {
                 base_v = make_val(addr, default_ptr_type());
                 free(addr);
             } else {
-                /* rvalue base — use emit_expr to get the ptr value */
                 base_v = emit_expr(cg, n->children[0]);
                 if (!val_is_ptr(base_v)) {
-                    /* promote to ptr */
                     int rp = new_reg(cg);
                     char promoted[64]; promote_to_i64(cg, base_v, promoted, 64);
                     __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rp, promoted);
@@ -319,25 +318,45 @@ static char *emit_lvalue_addr(Codegen *cg, Node *n) {
                 }
             }
         }
-        /* We don't have full struct layout, use i8 GEP offset 0 as placeholder */
-        char *buf = malloc(64);
-        snprintf(buf, 64, "%s", base_v.reg);
-        return buf;
+        char *memname = n->sval;
+        Type *basety = n->children[0] ? n->children[0]->type : NULL;
+        long offset = 0;
+        if (basety && (basety->kind == TY_STRUCT || basety->kind == TY_UNION) && basety->params) {
+            for (int i = 0; i < basety->n_members; i++) {
+                if (basety->params[i].name && strcmp(basety->params[i].name, memname) == 0) {
+                    break;
+                }
+                if (basety->members && basety->members[i]) {
+                    offset += type_size(basety->members[i]);
+                }
+            }
+        }
+        {
+            int r = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = getelementptr i8, ptr %s, i64 %ld\n", r, base_v.reg, offset);
+            char *buf = malloc(32);
+            snprintf(buf, 32, "%%t%d", r);
+            return buf;
+        }
     }
     return NULL;
 }
 
 static Type *default_int_type(void) {
-    static Type t_int = { TY_INT, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+    static Type t_int = { .kind = TY_INT, .is_const = 0, .is_volatile = 0, .base = NULL, .array_size = -1, .ret = NULL, .params = NULL, .param_count = 0, .variadic = 0, .tag = NULL, .members = NULL, .n_members = 0, .name = NULL };
     return &t_int;
 }
 static Type *default_i64_type(void) {
-    static Type t_i64 = { TY_LONG, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+    static Type t_i64 = { .kind = TY_LONG, .is_const = 0, .is_volatile = 0, .base = NULL, .array_size = -1, .ret = NULL, .params = NULL, .param_count = 0, .variadic = 0, .tag = NULL, .members = NULL, .n_members = 0, .name = NULL };
     return &t_i64;
 }
 static Type *default_ptr_type(void) {
-    static Type t_ptr  = { TY_PTR, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+    static Type t_ptr = { .kind = TY_PTR, .is_const = 0, .is_volatile = 0, .base = NULL, .array_size = -1, .ret = NULL, .params = NULL, .param_count = 0, .variadic = 0, .tag = NULL, .members = NULL, .n_members = 0, .name = NULL };
     return &t_ptr;
+}
+static Type *default_fp_type(void) {
+    static Type t_double = { .kind = TY_DOUBLE, .is_const = 0, .is_volatile = 0, .base = NULL, .array_size = -1, .ret = NULL, .params = NULL, .param_count = 0, .variadic = 0, .tag = NULL, .members = NULL, .n_members = 0, .name = NULL };
+    return &t_double;
 }
 /* Return the effective LLVM type for a Val — used to decide sext/truncation */
 static int val_is_64bit(Val v) {
@@ -378,6 +397,8 @@ static int emit_cond(Codegen *cg, Val cv) {
     int r = new_reg(cg);
     if (val_is_ptr(cv)) {
         __c0c_emit(cg->out, "  %%t%d = icmp ne ptr %s, null\n", r, cv.reg);
+    } else if (type_is_fp(cv.type)) {
+        __c0c_emit(cg->out, "  %%t%d = fcmp one double %s, 0.0\n", r, cv.reg);
     } else {
         char promoted[64];
         promote_to_i64(cg, cv, promoted, 64);
@@ -404,14 +425,14 @@ static Val emit_expr(Codegen *cg, Node *n) {
         int r = new_reg(cg);
         __c0c_emit(cg->out, "  %%t%d = fadd double 0.0, %g\n", r, n->fval);
         char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
-        static Type t_double = { TY_DOUBLE, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+        static Type t_double = { .kind = TY_DOUBLE, .is_const = 0, .is_volatile = 0, .base = NULL, .array_size = -1, .ret = NULL, .params = NULL, .param_count = 0, .variadic = 0, .tag = NULL, .members = NULL, .n_members = 0, .name = NULL };
         return make_val(buf, &t_double);
     }
 
     case ND_CHAR_LIT: {
         char buf[32];
         snprintf(buf, sizeof buf, "%lld", n->ival);
-        static Type t_char = { TY_CHAR, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+        static Type t_char = { .kind = TY_CHAR, .is_const = 0, .is_volatile = 0, .base = NULL, .array_size = -1, .ret = NULL, .params = NULL, .param_count = 0, .variadic = 0, .tag = NULL, .members = NULL, .n_members = 0, .name = NULL };
         return make_val(buf, &t_char);
     }
 
@@ -525,7 +546,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
                     }
                 }
                 /* functions returning void */
-                static Type t_void = { TY_VOID, 0, 0, NULL, -1, NULL, NULL, 0, 0, NULL, NULL };
+                static Type t_void = { .kind = TY_VOID, .is_const = 0, .is_volatile = 0, .base = NULL, .array_size = -1, .ret = NULL, .params = NULL, .param_count = 0, .variadic = 0, .tag = NULL, .members = NULL, .n_members = 0, .name = NULL };
                 const char *void_funcs[] = {
                     "__c0c_va_start","__c0c_va_end","__c0c_va_copy",
                     "__c0c_emit",
@@ -670,17 +691,30 @@ static Val emit_expr(Codegen *cg, Node *n) {
         /* For pointer arithmetic: convert ptrs to i64 first, then do arithmetic */
         char lreg[64], rreg[64];
         lreg[0] = '\0'; rreg[0] = '\0';
+        int is_cmp = 0;
+        switch (n->op) {
+        case TOK_EQ: case TOK_NEQ:
+        case TOK_LT: case TOK_GT: case TOK_LEQ: case TOK_GEQ:
+            is_cmp = 1; break;
+        default: break;
+        }
         if (!fp) {
             promote_to_i64(cg, lv, lreg, 64);
             promote_to_i64(cg, rv, rreg, 64);
             lt = "i64";
         } else {
             strncpy(lreg, lv.reg, 63); lreg[63] = '\0';
-            strncpy(rreg, rv.reg, 63); rreg[63] = '\0';
+            /* For fp comparison with integer, need to convert int to double */
+            if (is_cmp && rv.type && !type_is_fp(rv.type)) {
+                int rconv = new_reg(cg);
+                __c0c_emit(cg->out, "  %%t%d = sitofp i64 %s to double\n", rconv, rv.reg);
+                snprintf(rreg, 64, "%%t%d", rconv);
+            } else {
+                strncpy(rreg, rv.reg, 63); rreg[63] = '\0';
+            }
         }
 
         const char *op = NULL;
-        int is_cmp = 0;
         switch (n->op) {
         case TOK_PLUS:    op = fp ? "fadd" : (is_ptr ? "getelementptr" : "add");  break;
         case TOK_MINUS:   op = fp ? "fsub" : "sub";   break;
@@ -712,6 +746,7 @@ static Val emit_expr(Codegen *cg, Node *n) {
             __c0c_emit(cg->out, "  %%t%d = getelementptr i8, ptr %%t%d, i64 %s\n", r, rptr, rreg);
         } else if (is_cmp) {
             __c0c_emit(cg->out, "  %%t%d = %s %s %s, %s\n", r, op, lt, lreg, rreg);
+            /* fcmp already returns i1, just zext to i64 */
             int rZ = new_reg(cg);
             __c0c_emit(cg->out, "  %%t%d = zext i1 %%t%d to i64\n", rZ, r);
             char buf[32]; snprintf(buf, sizeof buf, "%%t%d", rZ);
@@ -726,6 +761,8 @@ static Val emit_expr(Codegen *cg, Node *n) {
             return make_val(buf, default_ptr_type());
         if (is_ptr)  /* ptr - ptr, ptr * int etc: all i64 */
             return make_val(buf, default_i64_type());
+        if (fp)
+            return make_val(buf, default_fp_type());
         return make_val(buf, default_i64_type());
     }
 
@@ -1000,7 +1037,6 @@ static Val emit_expr(Codegen *cg, Node *n) {
 
     case ND_MEMBER:
     case ND_ARROW: {
-        /* Simplified struct member access: load from base ptr. */
         Val bv;
         if (n->kind == ND_ARROW) {
             bv = emit_expr(cg, n->children[0]);
@@ -1010,11 +1046,9 @@ static Val emit_expr(Codegen *cg, Node *n) {
                 bv = make_val(a, default_ptr_type());
                 free(a);
             } else {
-                /* rvalue base (e.g. function call result) — use emit_expr */
                 bv = emit_expr(cg, n->children[0]);
             }
         }
-        /* Ensure base is ptr — if it's i64, convert via inttoptr */
         char base_ptr[64];
         if (val_is_ptr(bv)) {
             strncpy(base_ptr, bv.reg, 63); base_ptr[63] = '\0';
@@ -1024,10 +1058,31 @@ static Val emit_expr(Codegen *cg, Node *n) {
             __c0c_emit(cg->out, "  %%t%d = inttoptr i64 %s to ptr\n", rp, promoted);
             snprintf(base_ptr, 64, "%%t%d", rp);
         }
-        int r = new_reg(cg);
-        __c0c_emit(cg->out, "  %%t%d = load ptr, ptr %s\n", r, base_ptr);
-        char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r);
-        return make_val(buf, default_ptr_type());
+        char *memname = n->sval;
+        Type *basety = n->children[0] ? n->children[0]->type : NULL;
+        long offset = 0;
+        if (basety && (basety->kind == TY_STRUCT || basety->kind == TY_UNION) && basety->params) {
+            for (int i = 0; i < basety->n_members; i++) {
+                if (basety->params[i].name && strcmp(basety->params[i].name, memname) == 0) {
+                    break;
+                }
+                if (basety->members && basety->members[i]) {
+                    offset += type_size(basety->members[i]);
+                }
+            }
+        }
+        {
+            int r = new_reg(cg);
+            if (offset > 0) {
+                __c0c_emit(cg->out, "  %%t%d = getelementptr i8, ptr %s, i64 %ld\n", r, base_ptr, offset);
+            } else {
+                __c0c_emit(cg->out, "  %%t%d = getelementptr i8, ptr %s, i64 0\n", r, base_ptr);
+            }
+            int r2 = new_reg(cg);
+            __c0c_emit(cg->out, "  %%t%d = load i64, ptr %%t%d\n", r2, r);
+            char buf[32]; snprintf(buf, sizeof buf, "%%t%d", r2);
+            return make_val(buf, default_i64_type());
+        }
     }
 
     default:
@@ -1051,16 +1106,29 @@ static void emit_stmt(Codegen *cg, Node *n) {
 
     case ND_VAR_DECL: {
         Type *vt = n->var_type ? n->var_type : default_int_type();
-        /* Always allocate i64 for integers, ptr for pointers — consistent with loads.
-           But preserve the original C type in stored_vt for varargs type checking. */
         const char *lt;
         Type *stored_vt;
-        if (vt->kind == TY_PTR || vt->kind == TY_ARRAY) {
+        if (vt->kind == TY_ARRAY && vt->base && (vt->base->kind == TY_STRUCT || vt->base->kind == TY_UNION)) {
+            int elem_sz = type_size(vt->base);
+            int total_sz = (int)vt->array_size * elem_sz;
+            if (total_sz <= 0) total_sz = 8;
+            char size_buf[32];
+            snprintf(size_buf, sizeof(size_buf), "[%d x i8]", total_sz);
+            lt = size_buf;
+            stored_vt = default_ptr_type();
+        } else if (vt->kind == TY_STRUCT || vt->kind == TY_UNION) {
+            int sz = type_size(vt);
+            if (sz <= 0) sz = 8;
+            char size_buf[32];
+            snprintf(size_buf, sizeof(size_buf), "[%d x i8]", sz);
+            lt = size_buf;
+            stored_vt = vt;
+        } else if (vt->kind == TY_PTR || vt->kind == TY_ARRAY) {
             lt = "ptr"; stored_vt = default_ptr_type();
         } else if (type_is_fp(vt)) {
-            lt = llvm_type(vt); stored_vt = vt;
+            lt = "double"; stored_vt = default_fp_type();
         } else {
-            lt = "i64"; stored_vt = vt;  /* keep original: TY_INT, TY_LONG, TY_CHAR etc. */
+            lt = "i64"; stored_vt = vt;
         }
         int r = new_reg(cg);
         __c0c_emit(cg->out, "  %%t%d = alloca %s\n", r, lt);
